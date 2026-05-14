@@ -11,6 +11,8 @@ use super::events::{
 };
 use super::exceptions::VectorIndexCatalogError;
 
+const VECTOR_INDEX_CATALOG_ID: Uuid = uuid::uuid!("8a17e2f1-3a9d-4e58-a9c9-0a0f61d4a003");
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VectorIndexCatalog {
     pub catalog_id: Uuid,
@@ -19,7 +21,7 @@ pub struct VectorIndexCatalog {
 
 impl VectorIndexCatalog {
     pub fn singleton_id() -> Uuid {
-        Uuid::nil()
+        VECTOR_INDEX_CATALOG_ID
     }
 
     fn empty(catalog_id: Uuid) -> Self {

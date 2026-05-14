@@ -21,7 +21,7 @@ use crate::server::application::configuration::{
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::evaluation::query_service::EvaluationQueryService;
 use crate::server::application::indexing::VectorIndexResolver;
-use crate::server::application::llm::ChatService;
+use crate::server::application::llm::GenerationService;
 use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::query::QueryService;
 use crate::server::application::source_document::ports::SourceAdapterRegistry;
@@ -61,7 +61,7 @@ pub struct App {
     pub evaluation_run_command_processor: Arc<CommandProcessor<EvaluationRun>>,
     pub evaluation_query_service: Arc<EvaluationQueryService>,
     pub embedding_service: Arc<EmbeddingService>,
-    pub chat_service: Arc<ChatService>,
+    pub generation_service: Arc<GenerationService>,
     pub pipeline_resolver: Arc<PipelineResolver>,
     pub vector_index_resolver: Arc<VectorIndexResolver>,
     pub evaluation_defaults_store: Arc<dyn EvaluationDefaultsStore>,
@@ -137,7 +137,7 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         evaluation_run_command_processor: Arc::clone(&wirings.run.command_processor),
         evaluation_query_service: services.evaluation_query_service,
         embedding_service: services.embedding_service,
-        chat_service: services.chat_service,
+        generation_service: services.generation_service,
         pipeline_resolver: services.pipeline_resolver,
         vector_index_resolver: services.vector_index_resolver,
         evaluation_defaults_store: services.evaluation_defaults_store,
@@ -170,7 +170,7 @@ impl App {
         provide_context(Arc::clone(&self.evaluation_run_command_processor));
         provide_context(Arc::clone(&self.evaluation_query_service));
         provide_context(Arc::clone(&self.embedding_service));
-        provide_context(Arc::clone(&self.chat_service));
+        provide_context(Arc::clone(&self.generation_service));
         provide_context(Arc::clone(&self.pipeline_resolver));
         provide_context(Arc::clone(&self.vector_index_resolver));
         provide_context(Arc::clone(&self.evaluation_defaults_store));

@@ -1,4 +1,3 @@
-pub mod blog;
 pub mod clients;
 pub mod configuration;
 pub mod embedding;

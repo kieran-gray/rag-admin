@@ -4,7 +4,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::server::application::ports::{
-    ChatClient, ChatRequest, ChatResponse, ChatResponseFormat,
+    GenerationClient, GenerationRequest, GenerationResponse, GenerationResponseFormat,
 };
 use crate::server::application::AppError;
 use crate::server::domain::configuration::generation_model::GenerationModelRepository;
@@ -18,21 +18,21 @@ pub struct ResolvedGenerationModel {
 }
 
 #[derive(Debug, Clone)]
-pub struct ChatPrompt {
+pub struct GenerationPrompt {
     pub system: String,
     pub user: String,
     pub temperature: f32,
-    pub response_format: ChatResponseFormat,
+    pub response_format: GenerationResponseFormat,
 }
 
-pub struct ChatService {
-    clients: HashMap<AiProviderKind, Arc<dyn ChatClient>>,
+pub struct GenerationService {
+    clients: HashMap<AiProviderKind, Arc<dyn GenerationClient>>,
     generation_models: Arc<dyn GenerationModelRepository>,
 }
 
-impl ChatService {
+impl GenerationService {
     pub fn new(
-        clients: HashMap<AiProviderKind, Arc<dyn ChatClient>>,
+        clients: HashMap<AiProviderKind, Arc<dyn GenerationClient>>,
         generation_models: Arc<dyn GenerationModelRepository>,
     ) -> Arc<Self> {
         Arc::new(Self {
@@ -41,20 +41,20 @@ impl ChatService {
         })
     }
 
-    pub async fn chat(
+    pub async fn generate(
         &self,
         generation_model_id: Uuid,
-        prompt: ChatPrompt,
-    ) -> Result<ChatResponse, AppError> {
+        prompt: GenerationPrompt,
+    ) -> Result<GenerationResponse, AppError> {
         let resolved = self.resolve(generation_model_id).await?;
         let client = self.clients.get(&resolved.kind).ok_or_else(|| {
             AppError::Internal(format!(
-                "no chat client registered for provider kind {}",
+                "no generation client registered for provider kind {}",
                 resolved.kind.as_str()
             ))
         })?;
         client
-            .chat(ChatRequest {
+            .generate(GenerationRequest {
                 model: resolved.model,
                 system: prompt.system,
                 user: prompt.user,

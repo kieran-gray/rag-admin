@@ -1,9 +1,11 @@
 use leptos::prelude::*;
 use uuid::Uuid;
 
+#[cfg(feature = "ssr")]
+use crate::shared::BestVariantDto;
 use crate::shared::{
     EvaluationDatasetDto, EvaluationDatasetSummaryDto, EvaluationJobInfo, EvaluationRunDto,
-    EvaluationRunSummaryDto, RunEvaluationRequestDto,
+    EvaluationRunSummaryDto, RecentEvaluationRunDto, RunEvaluationRequestDto,
 };
 
 #[cfg(feature = "ssr")]
@@ -34,6 +36,8 @@ use crate::server::event_sourcing::command_processor::CommandProcessor;
 use crate::server::infrastructure::{id::UuidGenerator, time::SystemClock};
 #[cfg(feature = "ssr")]
 use crate::server_functions::error::ctx;
+#[cfg(feature = "ssr")]
+use std::collections::HashMap;
 #[cfg(feature = "ssr")]
 use std::sync::Arc;
 
@@ -291,4 +295,58 @@ pub async fn get_run(run_id: Uuid) -> Result<Option<EvaluationRunDto>, ServerFnE
         variants: r.variant_results.into_iter().map(|v| v.into()).collect(),
         created_at: r.created_at.to_string(),
     }))
+}
+
+#[server(name = GetRecentRuns, prefix = "/api", endpoint = "get_recent_runs")]
+pub async fn get_recent_runs(limit: u32) -> Result<Vec<RecentEvaluationRunDto>, ServerFnError> {
+    let limit = limit.clamp(1, 100);
+    let query = ctx::<Arc<EvaluationQueryService>>()?;
+    let documents = ctx::<Arc<SourceDocumentQueryService>>()?;
+
+    let runs = query
+        .list_recent_runs(limit)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let doc_index: HashMap<Uuid, String> = documents
+        .list()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .into_iter()
+        .map(|d| (d.document_id, d.title))
+        .collect();
+
+    Ok(runs
+        .into_iter()
+        .map(|r| {
+            let policy = r.scoring_policy;
+            let best = r
+                .variant_results
+                .iter()
+                .max_by(|a, b| {
+                    policy
+                        .score(&a.metrics())
+                        .partial_cmp(&policy.score(&b.metrics()))
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .map(|v| BestVariantDto {
+                    label: v.variant_label.clone(),
+                    config: v.variant_config,
+                    options: v.options.clone(),
+                    score: policy.score(&v.metrics()),
+                    metrics: v.metrics(),
+                });
+
+            RecentEvaluationRunDto {
+                run_id: r.run_id,
+                dataset_id: r.dataset_id,
+                document_id: r.document_id,
+                document_title: doc_index.get(&r.document_id).cloned(),
+                status: r.status.as_str().to_string(),
+                variant_count: r.variants_count,
+                created_at: r.created_at.to_string(),
+                best,
+            }
+        })
+        .collect())
 }

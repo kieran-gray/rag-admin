@@ -4,7 +4,9 @@ use async_trait::async_trait;
 
 use crate::server::application::chunking::{ChunkOutput, DocumentChunker, TokenBudget};
 use crate::server::application::markdown::{Document, TextUnit};
-use crate::server::application::ports::{ChatClient, ChatRequest, ChatResponseFormat, Tokenizer};
+use crate::server::application::ports::{
+    GenerationClient, GenerationRequest, GenerationResponseFormat, Tokenizer,
+};
 use crate::server::application::AppError;
 use crate::server::domain::configuration::generation_model::GenerationModelRepository;
 use crate::shared::{ChunkStrategy, ChunkingConfig};
@@ -33,17 +35,17 @@ struct MicroChunk {
 }
 
 pub struct LlmChunker {
-    chat_client: Arc<dyn ChatClient>,
+    generation_client: Arc<dyn GenerationClient>,
     generation_models: Arc<dyn GenerationModelRepository>,
 }
 
 impl LlmChunker {
     pub fn create(
-        chat_client: Arc<dyn ChatClient>,
+        generation_client: Arc<dyn GenerationClient>,
         generation_models: Arc<dyn GenerationModelRepository>,
     ) -> Self {
         Self {
-            chat_client,
+            generation_client,
             generation_models,
         }
     }
@@ -81,7 +83,7 @@ impl DocumentChunker for LlmChunker {
 
         let split_points = find_split_points(
             &micro_chunks,
-            self.chat_client.as_ref(),
+            self.generation_client.as_ref(),
             &model_name,
             &budget,
         )
@@ -290,7 +292,7 @@ fn last_whitespace_after_half(chars: &[char]) -> Option<usize> {
 
 async fn find_split_points(
     micro_chunks: &[MicroChunk],
-    client: &dyn ChatClient,
+    client: &dyn GenerationClient,
     model: &str,
     budget: &TokenBudget<'_>,
 ) -> Result<Vec<usize>, AppError> {
@@ -326,12 +328,12 @@ async fn find_split_points(
         );
 
         let response = client
-            .chat(ChatRequest {
+            .generate(GenerationRequest {
                 model: model.to_string(),
                 system: SYSTEM_PROMPT.to_string(),
                 user: user_msg,
                 temperature: 0.2,
-                response_format: ChatResponseFormat::Text,
+                response_format: GenerationResponseFormat::Text,
             })
             .await?;
         let numbers = parse_split_response(&response.content, current + 1);

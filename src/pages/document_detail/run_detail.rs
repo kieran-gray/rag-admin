@@ -104,6 +104,7 @@ fn RunView(run: EvaluationRunDto) -> impl IntoView {
 
     let bests = best_per_metric(&variants);
     let leader_score = variants.first().map(|v| evaluation_score(&v.metrics));
+    let retrieval_summary = summarise_retrieval(&variants);
 
     let variant_count = variants.len();
     let created_at = run.created_at.clone();
@@ -123,7 +124,11 @@ fn RunView(run: EvaluationRunDto) -> impl IntoView {
                 <A href="/evaluations" attr:class="muted text-sm">"← Back to evaluations"</A>
             </div>
 
-            <RunSummary leader_score=leader_score variants_count=variant_count />
+            <RunSummary
+                leader_score=leader_score
+                variants_count=variant_count
+                retrieval=retrieval_summary
+            />
 
             <MetricLegend />
 
@@ -137,34 +142,86 @@ fn RunView(run: EvaluationRunDto) -> impl IntoView {
                     </Surface>
                 }.into_any()
             } else {
-                view! {
-                    <Surface title="Variants".to_string()>
-                        <div class="space-y-5">
-                            {variants.into_iter().enumerate().map(|(i, v)| view! {
-                                <VariantCard
-                                    variant=v
-                                    leader=i == 0
-                                    bests=bests
-                                />
-                            }).collect_view()}
-                        </div>
-                        <AxisLegend />
-                    </Surface>
-                }.into_any()
+                view! { <VariantsSection variants=variants bests=bests /> }.into_any()
             }}
         </div>
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum VariantsView {
+    Bars,
+    Table,
+}
+
 #[component]
-fn RunSummary(leader_score: Option<f32>, variants_count: usize) -> impl IntoView {
+fn VariantsSection(variants: Vec<EvaluationVariantResult>, bests: MetricBests) -> impl IntoView {
+    let variants = StoredValue::new(variants);
+    let (mode, set_mode) = signal(VariantsView::Bars);
+
+    let actions: Box<dyn Fn() -> leptos::prelude::AnyView + Send + Sync> = Box::new(move || {
+        view! {
+            <div class="seg-toggle" role="tablist" aria-label="Result view">
+                <button
+                    type="button"
+                    role="tab"
+                    class:is-active=move || mode.get() == VariantsView::Bars
+                    aria-selected=move || (mode.get() == VariantsView::Bars).to_string()
+                    on:click=move |_| set_mode.set(VariantsView::Bars)
+                >"Bars"</button>
+                <button
+                    type="button"
+                    role="tab"
+                    class:is-active=move || mode.get() == VariantsView::Table
+                    aria-selected=move || (mode.get() == VariantsView::Table).to_string()
+                    on:click=move |_| set_mode.set(VariantsView::Table)
+                >"Table"</button>
+            </div>
+        }
+        .into_any()
+    });
+
+    let body = move || match mode.get() {
+        VariantsView::Bars => view! {
+            <div class="space-y-5">
+                {variants.with_value(|vs| {
+                    vs.iter().cloned().enumerate().map(|(i, v)| view! {
+                        <VariantCard variant=v leader=i == 0 bests=bests />
+                    }).collect_view()
+                })}
+            </div>
+            <AxisLegend />
+        }
+        .into_any(),
+        VariantsView::Table => view! {
+            <VariantTable
+                variants=variants.with_value(|vs| vs.clone())
+                bests=bests
+            />
+        }
+        .into_any(),
+    };
+
+    view! {
+        <Surface title="Variants".to_string() actions=actions>
+            {body}
+        </Surface>
+    }
+}
+
+#[component]
+fn RunSummary(
+    leader_score: Option<f32>,
+    variants_count: usize,
+    retrieval: RetrievalSummary,
+) -> impl IntoView {
     let weights = crate::shared::EvaluationScoreWeights::default();
     let score_str = leader_score
         .map(|s| format!("{:.1}%", s * 100.0))
         .unwrap_or_else(|| "—".to_string());
     view! {
         <Surface flush=true>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-px bg-[var(--color-border)]">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-px bg-[var(--color-border)]">
                 <div class="bg-[var(--color-surface-1)] p-4">
                     <div class="eyebrow">"Variants compared"</div>
                     <div class="text-lg mt-1 font-mono">{variants_count}</div>
@@ -173,6 +230,11 @@ fn RunSummary(leader_score: Option<f32>, variants_count: usize) -> impl IntoView
                     <div class="eyebrow">"Leader score"</div>
                     <div class="text-lg mt-1 font-mono text-[var(--color-accent)]">{score_str}</div>
                     <div class="text-xs muted mt-1">"Weighted composite of all four metrics"</div>
+                </div>
+                <div class="bg-[var(--color-surface-1)] p-4">
+                    <div class="eyebrow">"Retrieval"</div>
+                    <div class="text-lg mt-1 font-mono">{retrieval.headline}</div>
+                    <div class="text-xs muted mt-1">{retrieval.detail}</div>
                 </div>
                 <div class="bg-[var(--color-surface-1)] p-4">
                     <div class="eyebrow">"Score weights"</div>
@@ -188,6 +250,63 @@ fn RunSummary(leader_score: Option<f32>, variants_count: usize) -> impl IntoView
                 </div>
             </div>
         </Surface>
+    }
+}
+
+#[derive(Clone)]
+struct RetrievalSummary {
+    headline: String,
+    detail: String,
+}
+
+fn summarise_retrieval(variants: &[EvaluationVariantResult]) -> RetrievalSummary {
+    if variants.is_empty() {
+        return RetrievalSummary {
+            headline: "—".into(),
+            detail: "No variants".into(),
+        };
+    }
+
+    let mut top_ks: Vec<u32> = variants.iter().map(|v| v.options.top_k).collect();
+    top_ks.sort_unstable();
+    top_ks.dedup();
+
+    let mut min_scores_milli: Vec<u32> =
+        variants.iter().map(|v| v.options.min_score_milli).collect();
+    min_scores_milli.sort_unstable();
+    min_scores_milli.dedup();
+
+    let top_k_part = match top_ks.as_slice() {
+        [k] => format!("topK {k}"),
+        ks => format!(
+            "topK {{{}}}",
+            ks.iter()
+                .map(|k| k.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    };
+    let min_part = match min_scores_milli.as_slice() {
+        [m] => format!("min {:.2}", (*m as f32) / 1000.0),
+        ms => format!(
+            "min {{{}}}",
+            ms.iter()
+                .map(|m| format!("{:.2}", (*m as f32) / 1000.0))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    };
+
+    let combinations = top_ks.len() * min_scores_milli.len();
+    let detail = if combinations <= 1 {
+        "Shared across all variants".to_string()
+    } else {
+        format!("Swept across {combinations} combinations")
+    };
+
+    RetrievalSummary {
+        headline: format!("{top_k_part} · {min_part}"),
+        detail,
     }
 }
 
@@ -244,6 +363,8 @@ fn VariantCard(
     let chunk_count = variant.chunk_count;
     let avg_tokens = variant.average_chunk_tokens;
     let selected = variant.selected;
+    let top_k = variant.options.top_k;
+    let min_score = variant.options.min_score();
     let m = variant.metrics;
 
     view! {
@@ -255,7 +376,11 @@ fn VariantCard(
                 <div class="flex items-center gap-3 min-w-0">
                     {leader.then(|| view! { <span class="text-[var(--color-accent)]">"★"</span> })}
                     <span class="font-mono text-base truncate">{label}</span>
-                    <span class="text-xs muted">{format!("{chunk_count} chunks · avg {avg_tokens} tok")}</span>
+                    <span class="text-xs muted">
+                        {format!(
+                            "topK {top_k} · min {min_score:.2} · {chunk_count} chunks · avg {avg_tokens} tok"
+                        )}
+                    </span>
                 </div>
                 <div class="flex items-center gap-3">
                     <span class="text-xs muted">{format!("split: {split}")}</span>
@@ -344,4 +469,80 @@ fn best_per_metric(variants: &[EvaluationVariantResult]) -> MetricBests {
         b.precision_omega = b.precision_omega.max(v.metrics.precision_omega_mean);
     }
     b
+}
+
+#[component]
+fn VariantTable(variants: Vec<EvaluationVariantResult>, bests: MetricBests) -> impl IntoView {
+    view! {
+        <div class="variants-table-scroll">
+            <table class="variants-table">
+                <thead>
+                    <tr>
+                        <th class="num">"#"</th>
+                        <th>"Variant"</th>
+                        <th class="num">"TopK"</th>
+                        <th class="num">"Min score"</th>
+                        <th class="num">"Chunks"</th>
+                        <th class="num">"Avg tok"</th>
+                        <th>"Split"</th>
+                        <th class="num" title="Recall (mean ± σ)">"Recall"</th>
+                        <th class="num" title="Precision (mean ± σ)">"Precision"</th>
+                        <th class="num" title="Intersection-over-Union (mean ± σ)">"IoU"</th>
+                        <th class="num" title="Precision-ω (mean ± σ)">"Pω"</th>
+                        <th class="num" title="Weighted composite score">"Score"</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {variants.into_iter().enumerate().map(|(i, v)| {
+                        let leader = i == 0;
+                        let score = evaluation_score(&v.metrics);
+                        let m = v.metrics.clone();
+                        let row_class = if leader { "is-leader" } else { "" };
+                        view! {
+                            <tr class=row_class>
+                                <td class="num muted">{i + 1}</td>
+                                <td>
+                                    <span class="flex items-center gap-2">
+                                        {leader.then(|| view! {
+                                            <span class="text-[var(--color-accent)]" title="Leader">"★"</span>
+                                        })}
+                                        <span class="font-mono">{v.variant.label.clone()}</span>
+                                        {v.selected.then(|| view! {
+                                            <span class="pill pill-ok">"selected"</span>
+                                        })}
+                                    </span>
+                                </td>
+                                <td class="num">{v.options.top_k}</td>
+                                <td class="num">{format!("{:.2}", v.options.min_score())}</td>
+                                <td class="num">{v.chunk_count}</td>
+                                <td class="num">{v.average_chunk_tokens}</td>
+                                <td class="muted">{v.split.as_str()}</td>
+                                {metric_cell(m.recall_mean, m.recall_std, bests.recall)}
+                                {metric_cell(m.precision_mean, m.precision_std, bests.precision)}
+                                {metric_cell(m.iou_mean, m.iou_std, bests.iou)}
+                                {metric_cell(m.precision_omega_mean, m.precision_omega_std, bests.precision_omega)}
+                                <td class="num"><strong>{format!("{:.1}%", score * 100.0)}</strong></td>
+                            </tr>
+                        }
+                    }).collect_view()}
+                </tbody>
+            </table>
+        </div>
+    }
+}
+
+fn metric_cell(value: f32, stddev: f32, best: f32) -> impl IntoView {
+    let is_best = (value - best).abs() < 0.0005 && best > 0.0;
+    let cell_class = if is_best { "num cell-best" } else { "num" };
+    let stddev_view = (stddev > 0.0005).then(|| {
+        view! {
+            <span class="cell-stddev">{format!(" ± {:.1}", stddev * 100.0)}</span>
+        }
+    });
+    view! {
+        <td class=cell_class>
+            {format!("{:.1}%", value * 100.0)}
+            {stddev_view}
+        </td>
+    }
 }

@@ -41,13 +41,14 @@ pub use embedding::{
     CLOUDFLARE_EMBEDDING_MODELS, OLLAMA_EMBEDDING_MODELS,
 };
 pub use evaluation::{
-    evaluation_score, ordered_f32_vec, plain_f32_vec, ChunkingVariant, EvaluationAutotuneRequest,
-    EvaluationAutotuneSummary, EvaluationDatasetDto, EvaluationDatasetSummaryDto,
-    EvaluationGenerationBackend, EvaluationJobInfo, EvaluationMetrics, EvaluationQuestionDto,
-    EvaluationQuestionResult, EvaluationReferenceDto, EvaluationReferenceResult,
-    EvaluationResultSplit, EvaluationRunDto, EvaluationRunOptions, EvaluationRunResult,
-    EvaluationRunSummary, EvaluationRunSummaryDto, EvaluationScorePolicy, EvaluationScoreWeights,
-    EvaluationSettings, EvaluationVariantResult, RunEvaluationRequestDto,
+    evaluation_score, ordered_f32_vec, plain_f32_vec, BestVariantDto, ChunkingVariant,
+    EvaluationAutotuneRequest, EvaluationAutotuneSummary, EvaluationDatasetDto,
+    EvaluationDatasetSummaryDto, EvaluationGenerationBackend, EvaluationJobInfo, EvaluationMetrics,
+    EvaluationQuestionDto, EvaluationQuestionResult, EvaluationReferenceDto,
+    EvaluationReferenceResult, EvaluationResultSplit, EvaluationRunDto, EvaluationRunOptions,
+    EvaluationRunResult, EvaluationRunSummary, EvaluationRunSummaryDto, EvaluationScorePolicy,
+    EvaluationScoreWeights, EvaluationSettings, EvaluationVariantResult, RecentEvaluationRunDto,
+    RunEvaluationRequestDto,
 };
 pub use events::{aggregate as aggregate_type, PublishedEvent};
 pub use ingest::{IngestOptions, LogEvent, LogLevel};

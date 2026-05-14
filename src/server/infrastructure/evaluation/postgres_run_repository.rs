@@ -114,6 +114,33 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             .collect::<Result<Vec<_>, _>>()
     }
 
+    async fn list_recent(
+        &self,
+        limit: u32,
+    ) -> Result<Vec<EvaluationRunReadModel>, EvaluationRunRepositoryError> {
+        let rows: Vec<RunRow> = sqlx::query_as(
+            r#"
+            SELECT
+                run_id, dataset_id, pipeline_configuration_id, document_id, document_version,
+                variants, options, autotune_request,
+                status, variants_count, variants_prepared, variants_scored, failure_reason,
+                scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
+                scoring_precision_omega_weight, created_at
+            FROM evaluation_runs
+            ORDER BY created_at DESC
+            LIMIT $1
+            "#,
+        )
+        .bind(limit as i64)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| EvaluationRunRepositoryError::Internal(format!("list_recent: {e}")))?;
+
+        rows.into_iter()
+            .map(EvaluationRunReadModel::try_from)
+            .collect::<Result<Vec<_>, _>>()
+    }
+
     async fn load_variant_results(
         &self,
         run_id: Uuid,

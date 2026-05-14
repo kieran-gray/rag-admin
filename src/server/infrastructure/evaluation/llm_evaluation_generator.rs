@@ -8,17 +8,18 @@ use uuid::Uuid;
 use crate::server::application::evaluation::ports::{
     EvaluationGenerator, EvaluationPrompt, GeneratedEvaluationQuestion,
 };
-use crate::server::application::llm::ChatService;
-use crate::server::application::ports::ChatResponseFormat;
+use crate::server::application::llm::service::GenerationPrompt;
+use crate::server::application::llm::GenerationService;
+use crate::server::application::ports::GenerationResponseFormat;
 use crate::server::application::AppError;
 
-pub struct ChatBasedEvaluationGenerator {
-    chat_service: Arc<ChatService>,
+pub struct LlmEvaluationGenerator {
+    generation_service: Arc<GenerationService>,
 }
 
-impl ChatBasedEvaluationGenerator {
-    pub fn new(chat_service: Arc<ChatService>) -> Arc<Self> {
-        Arc::new(Self { chat_service })
+impl LlmEvaluationGenerator {
+    pub fn new(generation_service: Arc<GenerationService>) -> Arc<Self> {
+        Arc::new(Self { generation_service })
     }
 }
 
@@ -29,21 +30,21 @@ struct GeneratedQuestionWire {
 }
 
 #[async_trait]
-impl EvaluationGenerator for ChatBasedEvaluationGenerator {
+impl EvaluationGenerator for LlmEvaluationGenerator {
     async fn generate_question(
         &self,
         generation_model_id: Uuid,
         prompt: EvaluationPrompt,
     ) -> Result<GeneratedEvaluationQuestion, AppError> {
         let response = self
-            .chat_service
-            .chat(
+            .generation_service
+            .generate(
                 generation_model_id,
-                crate::server::application::llm::service::ChatPrompt {
+                GenerationPrompt {
                     system: prompt.system,
                     user: prompt.user,
                     temperature: 1.0,
-                    response_format: ChatResponseFormat::Json,
+                    response_format: GenerationResponseFormat::Text,
                 },
             )
             .await?;

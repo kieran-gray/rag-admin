@@ -445,3 +445,24 @@ pub struct EvaluationRunDto {
     pub variants: Vec<EvaluationVariantResult>,
     pub created_at: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BestVariantDto {
+    pub label: String,
+    pub config: ChunkingConfig,
+    pub options: EvaluationRunOptions,
+    pub score: f32,
+    pub metrics: EvaluationMetrics,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecentEvaluationRunDto {
+    pub run_id: Uuid,
+    pub dataset_id: Uuid,
+    pub document_id: Uuid,
+    pub document_title: Option<String>,
+    pub status: String,
+    pub variant_count: u32,
+    pub created_at: String,
+    pub best: Option<BestVariantDto>,
+}

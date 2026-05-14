@@ -624,6 +624,103 @@ header::before {
 .metric-bar-axis-scale span:first-child { transform: none; }
 .metric-bar-axis-scale span:last-child { transform: translateX(-100%); }
 
+/* ── Segmented toggle (Bars / Table view switch) ───────────────────────── */
+
+.seg-toggle {
+    display: inline-flex;
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-1);
+    background-color: var(--color-surface-1);
+    padding: 2px;
+    gap: 2px;
+}
+
+.seg-toggle button {
+    background: transparent;
+    border: 0;
+    color: var(--color-text-muted);
+    font-family: inherit;
+    font-size: 0.75rem;
+    padding: 0.25rem 0.625rem;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.seg-toggle button:hover {
+    color: var(--color-text);
+}
+
+.seg-toggle button.is-active {
+    background-color: var(--color-surface-3);
+    color: var(--color-text);
+}
+
+/* ── Variant results table (run-detail) ────────────────────────────────── */
+
+.variants-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.variants-table thead th {
+    text-align: left;
+    padding: 0.5rem 0.625rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    border-bottom: 1px solid var(--color-border);
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    background-color: var(--color-surface-1);
+}
+
+.variants-table thead th.num,
+.variants-table tbody td.num {
+    text-align: right;
+}
+
+.variants-table tbody td {
+    padding: 0.5rem 0.625rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.variants-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.variants-table tbody tr.is-leader td:first-child {
+    border-left: 2px solid var(--color-accent);
+    padding-left: calc(0.625rem - 2px);
+}
+
+.variants-table tbody tr.is-leader td {
+    background-color: color-mix(in srgb, var(--color-accent-soft) 35%, transparent);
+}
+
+.variants-table .cell-best {
+    color: var(--color-accent);
+}
+
+.variants-table .cell-stddev {
+    color: var(--color-text-faint);
+    font-size: 0.6875rem;
+    margin-left: 0.125rem;
+}
+
+.variants-table-scroll {
+    overflow-x: auto;
+    margin: 0 -0.25rem;
+    padding: 0 0.25rem;
+}
+
 /* ── LogStream (SSE-backed per-row log) ───────────────────────────────── */
 
 .log-stream {

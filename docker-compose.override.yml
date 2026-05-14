@@ -1,0 +1,23 @@
+services:
+  rag-admin:
+    image: 'rag-admin:dev'
+    build:
+      target: dev
+    environment:
+      - LEPTOS_SITE_ADDR=0.0.0.0:3000
+      - LEPTOS_RELOAD_PORT=3001
+      - RUST_LOG=info
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./:/app
+      - target-cache:/app/target
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+    healthcheck:
+      disable: true
+
+volumes:
+  target-cache:
+  cargo-registry:
+  cargo-git:

@@ -92,6 +92,22 @@ impl EvaluationQueryService {
             .map_err(|e| AppError::Internal(format!("failed to list evaluation runs: {e}")))
     }
 
+    pub async fn list_recent_runs(
+        &self,
+        limit: u32,
+    ) -> Result<Vec<EvaluationRunReadModel>, AppError> {
+        let mut runs = self
+            .run_repository
+            .list_recent(limit)
+            .await
+            .map_err(|e| AppError::Internal(format!("failed to list recent runs: {e}")))?;
+
+        for run in &mut runs {
+            run.variant_results = self.load_variant_results(run.run_id).await?;
+        }
+        Ok(runs)
+    }
+
     async fn load_variant_results(
         &self,
         run_id: Uuid,

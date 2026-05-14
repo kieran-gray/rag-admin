@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::server::application::embedding::{EmbeddingService, ResolvedEmbeddingModel};
 use crate::server::application::indexing::{ResolvedVectorIndex, VectorIndexResolver};
-use crate::server::application::llm::{ChatService, ResolvedGenerationModel};
+use crate::server::application::llm::{GenerationService, ResolvedGenerationModel};
 use crate::server::application::AppError;
 use crate::server::domain::configuration::pipeline_configuration::PipelineConfigurationRepository;
 
@@ -20,7 +20,7 @@ pub struct ResolvedPipeline {
 pub struct PipelineResolver {
     pipeline_repository: Arc<dyn PipelineConfigurationRepository>,
     embedding_service: Arc<EmbeddingService>,
-    chat_service: Arc<ChatService>,
+    generation_service: Arc<GenerationService>,
     vector_index_resolver: Arc<VectorIndexResolver>,
 }
 
@@ -28,13 +28,13 @@ impl PipelineResolver {
     pub fn new(
         pipeline_repository: Arc<dyn PipelineConfigurationRepository>,
         embedding_service: Arc<EmbeddingService>,
-        chat_service: Arc<ChatService>,
+        generation_service: Arc<GenerationService>,
         vector_index_resolver: Arc<VectorIndexResolver>,
     ) -> Arc<Self> {
         Arc::new(Self {
             pipeline_repository,
             embedding_service,
-            chat_service,
+            generation_service,
             vector_index_resolver,
         })
     }
@@ -57,7 +57,10 @@ impl PipelineResolver {
             .embedding_service
             .resolve(pc.embedding_model_id)
             .await?;
-        let generation_model = self.chat_service.resolve(pc.generation_model_id).await?;
+        let generation_model = self
+            .generation_service
+            .resolve(pc.generation_model_id)
+            .await?;
         let vector_index = self
             .vector_index_resolver
             .resolve(pc.vector_index_id)

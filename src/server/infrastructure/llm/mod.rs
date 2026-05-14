@@ -1,3 +1,3 @@
-pub mod ollama_chat_client;
+pub mod ollama_generation_client;
 
-pub use ollama_chat_client::OllamaChatClient;
+pub use ollama_generation_client::OllamaGenerationClient;

@@ -1,0 +1,17 @@
+target/
+node_modules/
+data/
+local_docs/
+.env
+.env.*
+!.env.example
+.git/
+.github/
+.vscode/
+.codex
+**/*.rs.bk
+end2end/
+playwright-report/
+test-results/
+Dockerfile
+.dockerignore

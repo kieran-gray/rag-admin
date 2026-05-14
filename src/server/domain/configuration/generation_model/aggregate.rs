@@ -12,6 +12,8 @@ use super::events::{
 };
 use super::exceptions::GenerationModelCatalogError;
 
+const GENERATION_MODEL_CATALOG_ID: Uuid = uuid::uuid!("8a17e2f1-3a9d-4e58-a9c9-0a0f61d4a002");
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GenerationModelCatalog {
     pub catalog_id: Uuid,
@@ -20,7 +22,7 @@ pub struct GenerationModelCatalog {
 
 impl GenerationModelCatalog {
     pub fn singleton_id() -> Uuid {
-        Uuid::nil()
+        GENERATION_MODEL_CATALOG_ID
     }
 
     fn empty(catalog_id: Uuid) -> Self {

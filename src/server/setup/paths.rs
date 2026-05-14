@@ -2,8 +2,8 @@ use std::path::PathBuf;
 
 pub fn data_dir() -> PathBuf {
     std::env::current_dir()
-        .map(|p| p.join("rag-admin").join("data"))
-        .unwrap_or_else(|_| PathBuf::from("rag-admin/data"))
+        .map(|p| p.join("data"))
+        .unwrap_or_else(|_| PathBuf::from("/data"))
 }
 
 pub fn tokenizer_path() -> PathBuf {

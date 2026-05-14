@@ -1,3 +1,3 @@
 pub mod service;
 
-pub use service::{ChatService, ResolvedGenerationModel};
+pub use service::{GenerationService, ResolvedGenerationModel};

@@ -27,6 +27,11 @@ pub trait EvaluationRunRepository: Send + Sync {
         dataset_id: Uuid,
     ) -> Result<Vec<EvaluationRunReadModel>, EvaluationRunRepositoryError>;
 
+    async fn list_recent(
+        &self,
+        limit: u32,
+    ) -> Result<Vec<EvaluationRunReadModel>, EvaluationRunRepositoryError>;
+
     async fn load_variant_results(
         &self,
         run_id: Uuid,

@@ -25,6 +25,7 @@ pub struct CloudflareConfig {
 #[derive(Clone)]
 pub struct OllamaConfig {
     pub base_url: String,
+    pub num_ctx: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -60,6 +61,7 @@ impl FromEnv for OllamaConfig {
         Ok(Self {
             base_url: Config::parse_optional("OLLAMA_BASE_URL")
                 .unwrap_or_else(|| "http://localhost:11434".into()),
+            num_ctx: Config::parse_optional("OLLAMA_NUM_CTX").unwrap_or(16384),
         })
     }
 }

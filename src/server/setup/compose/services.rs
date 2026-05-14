@@ -18,8 +18,8 @@ use crate::server::application::evaluation::ports::{EvaluationGenerator, Retriev
 use crate::server::application::evaluation::query_service::EvaluationQueryService;
 use crate::server::application::indexing::IndexingCommandHandler;
 use crate::server::application::indexing::VectorIndexResolver;
-use crate::server::application::llm::ChatService;
-use crate::server::application::ports::{ChatClient, Clock, IdGenerator, MarkdownParser};
+use crate::server::application::llm::GenerationService;
+use crate::server::application::ports::{Clock, GenerationClient, IdGenerator, MarkdownParser};
 use crate::server::application::query::QueryService;
 use crate::server::application::source_document::ports::VectorIndexProvider;
 use crate::server::application::source_document::{
@@ -30,9 +30,9 @@ use crate::server::domain::configuration::kinds::{AiProviderKind, VectorStoreKin
 use crate::server::infrastructure::clients::{CloudflareApi, OllamaApi};
 use crate::server::infrastructure::configuration::FileEvaluationDefaultsStore;
 use crate::server::infrastructure::embedding::{OllamaEmbedder, WorkersAiEmbedder};
-use crate::server::infrastructure::evaluation::{ChatBasedEvaluationGenerator, PgvectorRetriever};
+use crate::server::infrastructure::evaluation::{LlmEvaluationGenerator, PgvectorRetriever};
 use crate::server::infrastructure::http_client::ReqwestHttpClient;
-use crate::server::infrastructure::llm::OllamaChatClient;
+use crate::server::infrastructure::llm::OllamaGenerationClient;
 use crate::server::infrastructure::markdown::MarkdownRsParser;
 use crate::server::infrastructure::tokenizer::HuggingFaceTokenizer;
 use crate::server::infrastructure::vector::{
@@ -66,7 +66,7 @@ pub struct Services {
     pub query_service: Arc<QueryService>,
 
     pub embedding_service: Arc<EmbeddingService>,
-    pub chat_service: Arc<ChatService>,
+    pub generation_service: Arc<GenerationService>,
     pub vector_index_resolver: Arc<VectorIndexResolver>,
     pub pipeline_resolver: Arc<PipelineResolver>,
 
@@ -122,13 +122,17 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
     ]);
     let embedding_service = EmbeddingService::new(embedders, Arc::clone(&repos.embedding_model));
 
-    let ollama_chat_client: Arc<dyn ChatClient> =
-        OllamaChatClient::new(Arc::clone(&http), config.ollama.base_url.clone());
-    let chat_clients: HashMap<AiProviderKind, Arc<dyn ChatClient>> = HashMap::from([(
+    let ollama_generation_client: Arc<dyn GenerationClient> = OllamaGenerationClient::new(
+        Arc::clone(&http),
+        config.ollama.base_url.clone(),
+        config.ollama.num_ctx,
+    );
+    let generation_clients: HashMap<AiProviderKind, Arc<dyn GenerationClient>> = HashMap::from([(
         AiProviderKind::Ollama,
-        Arc::clone(&ollama_chat_client) as Arc<dyn ChatClient>,
+        Arc::clone(&ollama_generation_client) as Arc<dyn GenerationClient>,
     )]);
-    let chat_service = ChatService::new(chat_clients, Arc::clone(&repos.generation_model));
+    let generation_service =
+        GenerationService::new(generation_clients, Arc::clone(&repos.generation_model));
 
     let vector_providers: HashMap<VectorStoreKind, Arc<dyn VectorIndexProvider>> = HashMap::from([
         (
@@ -146,7 +150,7 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
     let pipeline_resolver = PipelineResolver::new(
         Arc::clone(&repos.pipeline_configuration),
         Arc::clone(&embedding_service),
-        Arc::clone(&chat_service),
+        Arc::clone(&generation_service),
         Arc::clone(&vector_index_resolver),
     );
 
@@ -154,13 +158,13 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         FileEvaluationDefaultsStore::new(evaluation_defaults_path());
 
     let evaluation_generator: Arc<dyn EvaluationGenerator> =
-        ChatBasedEvaluationGenerator::new(Arc::clone(&chat_service));
+        LlmEvaluationGenerator::new(Arc::clone(&generation_service));
     let evaluation_retriever: Arc<dyn Retriever> = Arc::new(PgvectorRetriever::new(pool));
 
     let chunking_engine = build_chunking_engine(
         tokenizer,
         Arc::clone(&markdown_parser),
-        Arc::clone(&ollama_chat_client),
+        Arc::clone(&ollama_generation_client),
         Arc::clone(&repos.generation_model),
     );
 
@@ -243,7 +247,7 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         source_document_query_service,
         query_service,
         embedding_service,
-        chat_service,
+        generation_service,
         vector_index_resolver,
         pipeline_resolver,
         evaluation_defaults_store,
@@ -259,7 +263,7 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
 fn build_chunking_engine(
     tokenizer: Arc<HuggingFaceTokenizer>,
     markdown_parser: Arc<dyn MarkdownParser>,
-    chat_client: Arc<dyn ChatClient>,
+    generation_client: Arc<dyn GenerationClient>,
     generation_models: Arc<
         dyn crate::server::domain::configuration::generation_model::GenerationModelRepository,
     >,
@@ -268,7 +272,7 @@ fn build_chunking_engine(
     register_builtin_chunkers(
         &mut chunking_engine,
         BuiltinChunkerDeps {
-            chat_client,
+            generation_client,
             generation_models,
         },
     );
