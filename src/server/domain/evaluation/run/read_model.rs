@@ -28,6 +28,9 @@ pub struct EvaluationVariantResultDto {
     pub precision_omega_std: f32,
     pub chunk_set_id: Uuid,
     pub embedding_set_id: Uuid,
+    pub chunk_count: u32,
+    pub average_chunk_tokens: u32,
+    pub average_retrieved_tokens: u32,
     pub selected: bool,
     pub retrieval_traces: Vec<RetrievalTraceEntry>,
 }
@@ -43,6 +46,9 @@ impl EvaluationVariantResultDto {
             iou_std: self.iou_std,
             precision_omega_mean: self.precision_omega_mean,
             precision_omega_std: self.precision_omega_std,
+            chunk_count: self.chunk_count,
+            average_chunk_tokens: self.average_chunk_tokens,
+            average_retrieved_tokens: self.average_retrieved_tokens,
         }
     }
 }
@@ -101,10 +107,10 @@ impl From<EvaluationVariantResultDto> for crate::shared::EvaluationVariantResult
                 iou_std: v.iou_std,
                 precision_omega_mean: v.precision_omega_mean,
                 precision_omega_std: v.precision_omega_std,
+                chunk_count: v.chunk_count,
+                average_chunk_tokens: v.average_chunk_tokens,
+                average_retrieved_tokens: v.average_retrieved_tokens,
             },
-            chunk_count: 0,
-            average_chunk_tokens: 0,
-            average_retrieved_tokens: 0,
             question_results: Vec::new(),
         }
     }

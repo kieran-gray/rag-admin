@@ -320,6 +320,9 @@ CREATE TABLE evaluation_variant_results (
     precision_omega_std REAL NOT NULL,
     chunk_set_id UUID NOT NULL,
     embedding_set_id UUID NOT NULL,
+    chunk_count INTEGER NOT NULL DEFAULT 0,
+    average_chunk_tokens INTEGER NOT NULL DEFAULT 0,
+    average_retrieved_tokens INTEGER NOT NULL DEFAULT 0,
     selected BOOLEAN NOT NULL DEFAULT FALSE,
     PRIMARY KEY (run_id, variant_label, split)
 );

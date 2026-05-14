@@ -70,6 +70,9 @@ impl Projector<EvaluationRunEvent> for EvaluationRunProjector {
                             precision_omega_std: e.metrics.precision_omega_std,
                             chunk_set_id: e.chunk_set_id,
                             embedding_set_id: e.embedding_set_id,
+                            chunk_count: e.metrics.chunk_count,
+                            average_chunk_tokens: e.metrics.average_chunk_tokens,
+                            average_retrieved_tokens: e.metrics.average_retrieved_tokens,
                             selected: e.selected,
                             retrieval_traces: e.retrieval_traces.clone(),
                         })

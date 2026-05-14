@@ -195,6 +195,15 @@ impl EvaluationRunEffectExecutor {
                 )
                 .await?;
 
+            let chunk_token_counts: std::collections::HashMap<Uuid, u32> = {
+                let tokenizer = self.chunker_registry.tokenizer();
+                let mut map = std::collections::HashMap::with_capacity(chunks.len());
+                for chunk in &chunks {
+                    map.insert(chunk.chunk_id, tokenizer.count(&chunk.text)?);
+                }
+                map
+            };
+
             let embedding_set_id = self
                 .find_or_create_embedding_set(chunk_set_id, &chunks, embedding_model)
                 .await?;
@@ -234,6 +243,7 @@ impl EvaluationRunEffectExecutor {
                             embedding_set_id,
                             &questions,
                             &chunks,
+                            &chunk_token_counts,
                             &question_embeddings,
                             options,
                         )
@@ -427,6 +437,7 @@ impl EvaluationRunEffectExecutor {
         embedding_set_id: Uuid,
         questions: &[EvaluationQuestion],
         chunks: &[Chunk],
+        chunk_token_counts: &std::collections::HashMap<Uuid, u32>,
         question_embeddings: &[Vec<f32>],
         options: &EvaluationRunOptions,
     ) -> Result<(EvaluationMetrics, Vec<RetrievalTraceEntry>), AppError> {
@@ -481,6 +492,30 @@ impl EvaluationRunEffectExecutor {
             });
         }
 
+        let average_chunk_tokens = if chunk_token_counts.is_empty() {
+            0
+        } else {
+            let total: u64 = chunk_token_counts.values().map(|n| *n as u64).sum();
+            (total / chunk_token_counts.len() as u64) as u32
+        };
+
+        let average_retrieved_tokens = {
+            let mut total: u64 = 0;
+            let mut count: u64 = 0;
+            for trace in &traces {
+                for id in &trace.retrieved_chunk_ids {
+                    if let Some(&n) = chunk_token_counts.get(id) {
+                        total += n as u64;
+                        count += 1;
+                    }
+                }
+            }
+            match total.checked_div(count) {
+                Some(tok) => tok as u32,
+                _ => 0,
+            }
+        };
+
         let metrics = EvaluationMetrics {
             recall_mean: mean(&recall_scores),
             recall_std: std_dev(&recall_scores),
@@ -490,6 +525,9 @@ impl EvaluationRunEffectExecutor {
             iou_std: std_dev(&iou_scores),
             precision_omega_mean: mean(&omega_scores),
             precision_omega_std: std_dev(&omega_scores),
+            chunk_count: chunks.len() as u32,
+            average_chunk_tokens,
+            average_retrieved_tokens,
         };
 
         Ok((metrics, traces))

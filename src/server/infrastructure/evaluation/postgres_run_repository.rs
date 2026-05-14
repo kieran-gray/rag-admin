@@ -152,7 +152,9 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
                 recall_mean, recall_std,
                 precision_mean, precision_std, iou_mean, iou_std,
                 precision_omega_mean, precision_omega_std,
-                chunk_set_id, embedding_set_id, selected
+                chunk_set_id, embedding_set_id,
+                chunk_count, average_chunk_tokens, average_retrieved_tokens,
+                selected
             FROM evaluation_variant_results
             WHERE run_id = $1
             "#,
@@ -208,6 +210,9 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
                 precision_omega_std: row.precision_omega_std,
                 chunk_set_id: row.chunk_set_id,
                 embedding_set_id: row.embedding_set_id,
+                chunk_count: row.chunk_count.max(0) as u32,
+                average_chunk_tokens: row.average_chunk_tokens.max(0) as u32,
+                average_retrieved_tokens: row.average_retrieved_tokens.max(0) as u32,
                 selected: row.selected,
                 retrieval_traces: trace_rows
                     .into_iter()
@@ -309,9 +314,11 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
                 recall_mean, recall_std,
                 precision_mean, precision_std, iou_mean, iou_std,
                 precision_omega_mean, precision_omega_std,
-                chunk_set_id, embedding_set_id, selected
+                chunk_set_id, embedding_set_id,
+                chunk_count, average_chunk_tokens, average_retrieved_tokens,
+                selected
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
             ON CONFLICT (run_id, variant_label, split) DO UPDATE SET
                 variant_config = EXCLUDED.variant_config,
                 options = EXCLUDED.options,
@@ -323,6 +330,9 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
                 iou_std = EXCLUDED.iou_std,
                 precision_omega_mean = EXCLUDED.precision_omega_mean,
                 precision_omega_std = EXCLUDED.precision_omega_std,
+                chunk_count = EXCLUDED.chunk_count,
+                average_chunk_tokens = EXCLUDED.average_chunk_tokens,
+                average_retrieved_tokens = EXCLUDED.average_retrieved_tokens,
                 selected = EXCLUDED.selected
             RETURNING (xmax = 0) AS is_new
             "#,
@@ -342,6 +352,9 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         .bind(result.precision_omega_std)
         .bind(result.chunk_set_id)
         .bind(result.embedding_set_id)
+        .bind(result.chunk_count as i32)
+        .bind(result.average_chunk_tokens as i32)
+        .bind(result.average_retrieved_tokens as i32)
         .bind(result.selected)
         .fetch_one(&mut *tx)
         .await
@@ -521,6 +534,9 @@ struct VariantResultRow {
     precision_omega_std: f32,
     chunk_set_id: Uuid,
     embedding_set_id: Uuid,
+    chunk_count: i32,
+    average_chunk_tokens: i32,
+    average_retrieved_tokens: i32,
     selected: bool,
 }
 

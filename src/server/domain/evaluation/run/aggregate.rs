@@ -445,6 +445,9 @@ mod tests {
             iou_std: 0.05,
             precision_omega_mean: 0.75,
             precision_omega_std: 0.1,
+            chunk_count: 0,
+            average_chunk_tokens: 0,
+            average_retrieved_tokens: 0,
         };
         let score_cmd = ScoreVariant {
             run_id,
@@ -544,6 +547,9 @@ mod tests {
             iou_std: 0.05,
             precision_omega_mean: 0.75,
             precision_omega_std: 0.1,
+            chunk_count: 0,
+            average_chunk_tokens: 0,
+            average_retrieved_tokens: 0,
         };
         events.extend(
             EvaluationRun::handle_command(

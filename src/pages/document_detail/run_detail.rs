@@ -360,8 +360,8 @@ fn VariantCard(
     let score = evaluation_score(&variant.metrics);
     let label = variant.variant.label.clone();
     let split = variant.split.as_str().to_string();
-    let chunk_count = variant.chunk_count;
-    let avg_tokens = variant.average_chunk_tokens;
+    let chunk_count = variant.metrics.chunk_count;
+    let avg_tokens = variant.metrics.average_chunk_tokens;
     let selected = variant.selected;
     let top_k = variant.options.top_k;
     let min_score = variant.options.min_score();
@@ -514,8 +514,8 @@ fn VariantTable(variants: Vec<EvaluationVariantResult>, bests: MetricBests) -> i
                                 </td>
                                 <td class="num">{v.options.top_k}</td>
                                 <td class="num">{format!("{:.2}", v.options.min_score())}</td>
-                                <td class="num">{v.chunk_count}</td>
-                                <td class="num">{v.average_chunk_tokens}</td>
+                                <td class="num">{v.metrics.chunk_count}</td>
+                                <td class="num">{v.metrics.average_chunk_tokens}</td>
                                 <td class="muted">{v.split.as_str()}</td>
                                 {metric_cell(m.recall_mean, m.recall_std, bests.recall)}
                                 {metric_cell(m.precision_mean, m.precision_std, bests.precision)}

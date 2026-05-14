@@ -28,6 +28,10 @@ impl ChunkerRegistry {
         self.chunkers.insert(chunker.strategy(), chunker);
     }
 
+    pub fn tokenizer(&self) -> &dyn Tokenizer {
+        self.tokenizer.as_ref()
+    }
+
     pub async fn chunk_markdown(
         &self,
         config: &ChunkingConfig,

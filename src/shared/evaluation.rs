@@ -217,6 +217,9 @@ pub struct EvaluationMetrics {
     pub iou_std: f32,
     pub precision_omega_mean: f32,
     pub precision_omega_std: f32,
+    pub chunk_count: u32,
+    pub average_chunk_tokens: u32,
+    pub average_retrieved_tokens: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -298,11 +301,6 @@ pub struct EvaluationVariantResult {
     #[serde(default)]
     pub selected: bool,
     pub metrics: EvaluationMetrics,
-    pub chunk_count: u32,
-    #[serde(default, alias = "average_chunk_chars")]
-    pub average_chunk_tokens: u32,
-    #[serde(default, alias = "average_retrieved_chars")]
-    pub average_retrieved_tokens: u32,
     pub question_results: Vec<EvaluationQuestionResult>,
 }
 
