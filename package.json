@@ -1,0 +1,29 @@
+{
+  "name": "rag-admin",
+  "description": "Retrieval Augmented Generation Admin app for chunking, embedding, and indexing documents, with evaluations and autotuning to find optimal settings.",
+  "author": {
+    "name": "Kieran Gray",
+    "email": "gray.kieran@protonmail.com",
+    "url": "https://github.com/kieran-gray"
+  },
+  "version": "0.1.0",
+  "keywords": [],
+  "license": "MIT",
+  "main": "index.js",
+  "dependencies": {
+    "tailwindcss": "^4.0.17"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.0.17",
+    "dotenv-cli": "^11.0.0"
+  },
+  "scripts": {
+    "dev": "dotenv -e .env -- cargo leptos watch --project rag-admin",
+    "build": "npx tailwindcss -i ./src/styles/global.css -o ./style/output.css",
+    "watch": "npx tailwindcss -i ./src/styles/global.css -o ./style/output.css --watch",
+    "lint": "cargo clippy --features ssr -- -D warnings && cargo clippy --target wasm32-unknown-unknown --features hydrate -- -D warnings",
+    "lint:check": "cargo clippy --target wasm32-unknown-unknown -- -D warnings",
+    "format": "cargo fmt",
+    "format:check": "cargo fmt --check"
+  }
+}
