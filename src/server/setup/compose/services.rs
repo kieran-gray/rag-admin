@@ -32,7 +32,7 @@ use crate::server::infrastructure::configuration::FileEvaluationDefaultsStore;
 use crate::server::infrastructure::embedding::{OllamaEmbedder, WorkersAiEmbedder};
 use crate::server::infrastructure::evaluation::{LlmEvaluationGenerator, PgvectorRetriever};
 use crate::server::infrastructure::http_client::ReqwestHttpClient;
-use crate::server::infrastructure::llm::OllamaGenerationClient;
+use crate::server::infrastructure::llm::{OllamaGenerationClient, WorkersAiGenerationClient};
 use crate::server::infrastructure::markdown::MarkdownRsParser;
 use crate::server::infrastructure::tokenizer::HuggingFaceTokenizer;
 use crate::server::infrastructure::vector::{
@@ -127,10 +127,18 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         config.ollama.base_url.clone(),
         config.ollama.num_ctx,
     );
-    let generation_clients: HashMap<AiProviderKind, Arc<dyn GenerationClient>> = HashMap::from([(
-        AiProviderKind::Ollama,
-        Arc::clone(&ollama_generation_client) as Arc<dyn GenerationClient>,
-    )]);
+    let workers_ai_generation_client: Arc<dyn GenerationClient> =
+        WorkersAiGenerationClient::new(Arc::clone(&cf_api));
+    let generation_clients: HashMap<AiProviderKind, Arc<dyn GenerationClient>> = HashMap::from([
+        (
+            AiProviderKind::Ollama,
+            Arc::clone(&ollama_generation_client) as Arc<dyn GenerationClient>,
+        ),
+        (
+            AiProviderKind::Cloudflare,
+            Arc::clone(&workers_ai_generation_client) as Arc<dyn GenerationClient>,
+        ),
+    ]);
     let generation_service =
         GenerationService::new(generation_clients, Arc::clone(&repos.generation_model));
 

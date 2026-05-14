@@ -117,14 +117,17 @@ fn RunRow(run: RecentEvaluationRunDto) -> impl IntoView {
         .document_title
         .clone()
         .unwrap_or_else(|| "Unknown document".to_string());
+    let title_attr = title.clone();
     let document_short = run.document_id.to_string()[..8].to_string();
     let variant_count = run.variant_count;
 
     view! {
         <tr>
             <td>
-                <A href=href.clone() attr:class="block">
-                    <div class="text-text font-medium truncate">{title}</div>
+                <A href=href.clone() attr:class="block" attr:title=title_attr>
+                    <div class="text-text font-medium line-clamp-2 break-words">
+                        {title}
+                    </div>
                     <div class="faint text-xs mt-0.5 font-mono">
                         {format!("doc {document_short}")}
                     </div>
