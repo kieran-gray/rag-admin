@@ -6,6 +6,16 @@ use crate::components::primitives::{EmptyState, PageHeader, Status, StatusPill, 
 use crate::server_functions::evaluation::get_recent_runs;
 use crate::shared::{aggregate_type, BestVariantDto, RecentEvaluationRunDto};
 
+mod dataset_detail;
+mod optimize_progress;
+mod replicate_compare;
+mod run_detail;
+
+pub use dataset_detail::DatasetDetailPage;
+pub use optimize_progress::OptimizeProgressPage;
+pub use replicate_compare::ReplicateComparePage;
+pub use run_detail::RunDetailPage;
+
 const RECENT_LIMIT: u32 = 25;
 
 #[component]

@@ -3,31 +3,13 @@ use leptos::task::spawn_local;
 use leptos_router::hooks::{use_location, use_navigate, use_params_map};
 use leptos_router::NavigateOptions;
 
-mod chunk_card;
-mod chunks_tab;
-mod dataset_detail;
-mod eval_launcher;
-mod eval_parser;
-mod evaluation_tab;
-mod indexings_tab;
-mod optimize_launcher;
-mod optimize_progress;
 mod redirect_by_id;
-mod replicate_compare;
-mod run_detail;
-mod source_tab;
-mod utils;
+mod tabs;
 
-use chunks_tab::ChunksTab;
-pub use dataset_detail::DatasetDetailPage;
-use evaluation_tab::EvaluationTab;
-use indexings_tab::IndexingsTab;
-pub use optimize_progress::OptimizeProgressPage;
 pub use redirect_by_id::DocumentByIdRedirect;
-pub use replicate_compare::ReplicateComparePage;
-pub use run_detail::RunDetailPage;
-use source_tab::SourceTab;
-use utils::short_hash;
+use tabs::{ChunksTab, EvaluationTab, IndexingsTab, SourceTab};
+
+use super::shared::short_hash;
 
 use crate::components::event_bus::use_invalidator;
 use crate::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};

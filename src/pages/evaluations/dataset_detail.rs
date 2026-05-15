@@ -12,7 +12,7 @@ use crate::shared::{
     aggregate_type, EvaluationDatasetDto, EvaluationQuestionDto, EvaluationReferenceDto,
 };
 
-use super::utils::short_hash;
+use crate::pages::shared::short_hash;
 
 #[component]
 pub fn DatasetDetailPage() -> impl IntoView {

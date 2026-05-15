@@ -1,6 +1,8 @@
 use leptos::prelude::*;
 
-use super::chunk_card::ChunkCard;
+mod chunk_card;
+
+use chunk_card::ChunkCard;
 use crate::components::primitives::{EmptyState, Surface};
 use crate::server_functions::source_document::get_chunks;
 use crate::shared::SourceDocumentDetailDto;

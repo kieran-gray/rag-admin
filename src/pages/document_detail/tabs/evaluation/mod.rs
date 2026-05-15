@@ -15,8 +15,12 @@ use crate::shared::{
     PipelineConfigurationDto, RunEvaluationRequestDto, SourceDocumentDetailDto, SweepTemplateDto,
 };
 
-use super::eval_launcher::{EvaluationLauncher, LauncherCallbacks};
-use super::optimize_launcher::OptimizeLauncher;
+mod eval_launcher;
+mod eval_parser;
+mod optimize_launcher;
+
+use eval_launcher::{EvaluationLauncher, LauncherCallbacks};
+use optimize_launcher::OptimizeLauncher;
 
 #[component]
 pub fn EvaluationTab(

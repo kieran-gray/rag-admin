@@ -9,12 +9,12 @@ use crate::components::event_bus::provide_event_bus;
 use crate::components::shell::AppShell;
 use crate::pages::{
     chunking::ChunkingPage,
-    document_detail::{
-        DatasetDetailPage, DocumentByIdRedirect, DocumentDetailPage, OptimizeProgressPage,
-        ReplicateComparePage, RunDetailPage,
-    },
+    document_detail::{DocumentByIdRedirect, DocumentDetailPage},
     embed_test::EmbedTestPage,
-    evaluations::EvaluationsPage,
+    evaluations::{
+        DatasetDetailPage, EvaluationsPage, OptimizeProgressPage, ReplicateComparePage,
+        RunDetailPage,
+    },
     pipelines::PipelinesPage,
     playground::PlaygroundPage,
     posts_list::PostsListPage,
