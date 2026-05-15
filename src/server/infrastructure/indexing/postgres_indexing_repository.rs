@@ -2,12 +2,12 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::core::ChunkingConfig;
 use crate::server::domain::indexing::{
     read_model::IndexingReadModel,
     repository::{IndexingRepository, IndexingRepositoryError},
     status::{IndexingStatus, IngestStage},
 };
-use crate::shared::ChunkingConfig;
 
 pub struct PostgresIndexingRepository {
     pool: PgPool,

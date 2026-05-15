@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
+use crate::core::{ChunkingConfig, EvaluationMetrics, EvaluationRunOptions, EvaluationScorePolicy};
 use crate::server::application::chunking::ChunkerRegistry;
 use crate::server::application::configuration::PipelineResolver;
 use crate::server::application::embedding::{EmbeddingService, ResolvedEmbeddingModel};
@@ -22,9 +23,6 @@ use crate::server::domain::evaluation::scoring::{
     bootstrap_ci, mean, precision_omega, score_question, score_trick_question, std_dev,
 };
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
-use crate::shared::{
-    ChunkingConfig, EvaluationMetrics, EvaluationRunOptions, EvaluationScorePolicy,
-};
 
 pub struct RunContext {
     pub document_id: Uuid,

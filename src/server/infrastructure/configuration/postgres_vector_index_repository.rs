@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::server::domain::configuration::kinds::VectorStoreKind;
+use crate::catalog::VectorStoreKind;
 use crate::server::domain::configuration::vector_index::{
     VectorIndex, VectorIndexRepository, VectorIndexRepositoryError,
 };

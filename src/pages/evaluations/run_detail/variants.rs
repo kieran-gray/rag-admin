@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 
 use crate::components::primitives::{MetricBar, MetricKind, Surface};
-use crate::shared::{evaluation_score, EvaluationVariantResult};
+use crate::core::{evaluation_score, EvaluationVariantResult};
 
 use super::promote::{PromoteHandle, VariantSaveButton};
 use super::shared::{ci_half, metric_cell, row_key, variant_display, MetricBests, METRIC_DEFS};

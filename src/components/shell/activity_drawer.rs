@@ -2,7 +2,7 @@ use leptos::prelude::*;
 
 use crate::components::activity::{toggle_drawer, use_activity_state};
 use crate::components::log_stream::LogStream;
-use crate::shared::{ActivityJobDto, ActivityKind, ActivityStatus};
+use crate::contracts::{ActivityJobDto, ActivityKind, ActivityStatus};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Filter {

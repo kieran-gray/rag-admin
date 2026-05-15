@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
+use crate::contracts::SourceDocumentDto;
+use crate::core::ChunkingConfig;
 use crate::server::application::configuration::PipelineResolver;
 use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::AppError;
@@ -13,7 +15,6 @@ use crate::server::domain::source_document::commands::{
 use crate::server::domain::source_document::document_type::DocumentType;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::server::domain::source_document::source_ref::SourceRef;
-use crate::shared::{ChunkingConfig, SourceDocumentDto};
 
 use super::{
     command_handler::SourceDocumentCommandHandler,

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::catalog::{AiProviderKind, VectorStoreKind};
 use crate::server::application::chunking::chunkers::{
     register_builtin_chunkers, BuiltinChunkerDeps,
 };
@@ -26,7 +27,6 @@ use crate::server::application::source_document::{
     SourceDocumentCommandHandler, SourceDocumentQueryService,
 };
 use crate::server::application::{ActivityRegistry, JobRegistry};
-use crate::server::domain::configuration::kinds::{AiProviderKind, VectorStoreKind};
 use crate::server::infrastructure::clients::{CloudflareApi, OllamaApi};
 use crate::server::infrastructure::configuration::FileEvaluationDefaultsStore;
 use crate::server::infrastructure::embedding::{OllamaEmbedder, WorkersAiEmbedder};

@@ -5,8 +5,9 @@ use uuid::Uuid;
 
 use crate::components::event_bus::use_invalidator;
 use crate::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
+use crate::contracts::{aggregate_type, EvaluationRunDto};
+use crate::core::{evaluation_score, EvaluationVariantResult};
 use crate::server_functions::evaluation::get_run;
-use crate::shared::{aggregate_type, evaluation_score, EvaluationRunDto, EvaluationVariantResult};
 
 #[component]
 pub fn OptimizeProgressPage() -> impl IntoView {

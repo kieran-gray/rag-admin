@@ -1,5 +1,5 @@
+use crate::contracts::{EvaluationQuestionDto, EvaluationReferenceDto};
 use crate::server::application::AppError;
-use crate::shared::{EvaluationQuestionDto, EvaluationReferenceDto};
 
 use super::ports::GeneratedEvaluationQuestion;
 

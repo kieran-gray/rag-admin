@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::server::domain::configuration::kinds::AiProviderKind;
+use crate::catalog::AiProviderKind;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GenerationModel {

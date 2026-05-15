@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 
 use crate::components::primitives::Surface;
-use crate::shared::{EvaluationResultSplit, EvaluationVariantResult};
+use crate::core::{EvaluationResultSplit, EvaluationVariantResult};
 
 use super::shared::METRIC_DEFS;
 
@@ -100,7 +100,7 @@ pub(super) fn RunSummary(
     variants_count: usize,
     retrieval: RetrievalSummary,
 ) -> impl IntoView {
-    let weights = crate::shared::EvaluationScoreWeights::default();
+    let weights = crate::core::EvaluationScoreWeights::default();
     let score_str = leader_score
         .map(|s| format!("{:.1}%", s * 100.0))
         .unwrap_or_else(|| "—".to_string());

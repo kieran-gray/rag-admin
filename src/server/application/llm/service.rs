@@ -3,12 +3,12 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
+use crate::catalog::AiProviderKind;
 use crate::server::application::ports::{
     GenerationClient, GenerationRequest, GenerationResponse, GenerationResponseFormat,
 };
 use crate::server::application::AppError;
 use crate::server::domain::configuration::generation_model::GenerationModelRepository;
-use crate::server::domain::configuration::kinds::AiProviderKind;
 
 #[derive(Debug, Clone)]
 pub struct ResolvedGenerationModel {

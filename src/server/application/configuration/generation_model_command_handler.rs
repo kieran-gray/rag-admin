@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
+use crate::contracts::GenerationModelCommandDto;
 use crate::server::application::AppError;
 use crate::server::domain::configuration::generation_model::{
     GenerationModelCatalog, GenerationModelCatalogCommand,
 };
 use crate::server::event_sourcing::CommandProcessor;
-use crate::shared::GenerationModelCommandDto;
 
 pub struct GenerationModelCatalogCommandHandler {
     processor: Arc<CommandProcessor<GenerationModelCatalog>>,

@@ -2,8 +2,8 @@ use leptos::prelude::*;
 use leptos_router::hooks::use_query_map;
 
 use crate::components::primitives::{EmptyState, Surface};
+use crate::contracts::{MarkdownBlockDto, MarkdownBlockKindDto, SourceDocumentMarkdownDto};
 use crate::server_functions::source_document::get_document_source;
-use crate::shared::{MarkdownBlockDto, MarkdownBlockKindDto, SourceDocumentMarkdownDto};
 
 #[component]
 pub fn SourceTab(source_ref: String) -> impl IntoView {

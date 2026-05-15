@@ -1,21 +1,22 @@
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
+use crate::catalog::{AiProviderKind, VectorStoreKind};
 use crate::components::event_bus::use_invalidator;
 use crate::components::primitives::{Dialog, EmptyState, PageHeader, Surface};
+use crate::contracts::{
+    aggregate_type, AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto,
+    ConfigurationDto, EmbeddingModelCommandDto, EmbeddingModelDto, GenerationModelCommandDto,
+    GenerationModelDto, RemoveEmbeddingModelDto, RemoveGenerationModelDto, RemoveVectorIndexDto,
+    SettingsDto, UpdateEmbeddingModelDto, UpdateGenerationModelDto, UpdateVectorIndexDto,
+    VectorIndexCommandDto, VectorIndexDto,
+};
+use crate::core::EvaluationGenerationBackend;
 use crate::pages::configuration::commands::{
     run_embedding_model_command, run_generation_model_command, run_vector_index_command, short_uuid,
 };
 use crate::server_functions::configuration::get_configuration;
 use crate::server_functions::settings::{load_settings, save_settings};
-use crate::shared::{
-    aggregate_type, AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto,
-    AiProviderKindDto, ConfigurationDto, EmbeddingModelCommandDto, EmbeddingModelDto,
-    EvaluationGenerationBackend, GenerationModelCommandDto, GenerationModelDto,
-    RemoveEmbeddingModelDto, RemoveGenerationModelDto, RemoveVectorIndexDto, SettingsDto,
-    UpdateEmbeddingModelDto, UpdateGenerationModelDto, UpdateVectorIndexDto, VectorIndexCommandDto,
-    VectorIndexDto, VectorStoreKindDto,
-};
 
 #[derive(Clone)]
 enum CatalogCommand {
@@ -422,8 +423,8 @@ fn RegistryFormDialog(
     let (dialog_error, set_dialog_error) = signal::<Option<String>>(None);
 
     let (name, set_name) = signal(String::new());
-    let (ai_kind, set_ai_kind) = signal(AiProviderKindDto::Cloudflare);
-    let (vector_kind, set_vector_kind) = signal(VectorStoreKindDto::CloudflareVectorize);
+    let (ai_kind, set_ai_kind) = signal(AiProviderKind::Cloudflare);
+    let (vector_kind, set_vector_kind) = signal(VectorStoreKind::CloudflareVectorize);
     let (model_id, set_model_id) = signal(String::new());
     let (dims, set_dims) = signal(1024u32);
 
@@ -432,7 +433,7 @@ fn RegistryFormDialog(
         match form.get() {
             None => {}
             Some(RegistryForm::AddEmbeddingModel) => {
-                set_ai_kind.set(AiProviderKindDto::Cloudflare);
+                set_ai_kind.set(AiProviderKind::Cloudflare);
                 set_model_id.set(String::new());
                 set_dims.set(1024);
             }
@@ -442,7 +443,7 @@ fn RegistryFormDialog(
                 set_dims.set(m.dimensions);
             }
             Some(RegistryForm::AddGenerationModel) => {
-                set_ai_kind.set(AiProviderKindDto::Cloudflare);
+                set_ai_kind.set(AiProviderKind::Cloudflare);
                 set_model_id.set(String::new());
             }
             Some(RegistryForm::EditGenerationModel(m)) => {
@@ -450,7 +451,7 @@ fn RegistryFormDialog(
                 set_model_id.set(m.model);
             }
             Some(RegistryForm::AddVectorIndex) => {
-                set_vector_kind.set(VectorStoreKindDto::CloudflareVectorize);
+                set_vector_kind.set(VectorStoreKind::CloudflareVectorize);
                 set_name.set(String::new());
                 set_dims.set(1024);
             }
@@ -569,8 +570,8 @@ fn RegistryFormDialog(
 
 #[component]
 fn AiKindSelect(
-    value: ReadSignal<AiProviderKindDto>,
-    set_value: WriteSignal<AiProviderKindDto>,
+    value: ReadSignal<AiProviderKind>,
+    set_value: WriteSignal<AiProviderKind>,
 ) -> impl IntoView {
     view! {
         <label class="block space-y-1.5">
@@ -579,15 +580,15 @@ fn AiKindSelect(
                 class="input"
                 on:change=move |e| {
                     let v = event_target_value(&e);
-                    let kind = AiProviderKindDto::all()
+                    let kind = AiProviderKind::all()
                         .iter()
                         .copied()
                         .find(|k| k.as_str() == v)
-                        .unwrap_or(AiProviderKindDto::Cloudflare);
+                        .unwrap_or(AiProviderKind::Cloudflare);
                     set_value.set(kind);
                 }
             >
-                {AiProviderKindDto::all().iter().copied().map(|k| {
+                {AiProviderKind::all().iter().copied().map(|k| {
                     let key = k.as_str();
                     let label = k.display_label();
                     view! {
@@ -601,8 +602,8 @@ fn AiKindSelect(
 
 #[component]
 fn VectorKindSelect(
-    value: ReadSignal<VectorStoreKindDto>,
-    set_value: WriteSignal<VectorStoreKindDto>,
+    value: ReadSignal<VectorStoreKind>,
+    set_value: WriteSignal<VectorStoreKind>,
 ) -> impl IntoView {
     view! {
         <label class="block space-y-1.5">
@@ -611,15 +612,15 @@ fn VectorKindSelect(
                 class="input"
                 on:change=move |e| {
                     let v = event_target_value(&e);
-                    let kind = VectorStoreKindDto::all()
+                    let kind = VectorStoreKind::all()
                         .iter()
                         .copied()
                         .find(|k| k.as_str() == v)
-                        .unwrap_or(VectorStoreKindDto::CloudflareVectorize);
+                        .unwrap_or(VectorStoreKind::CloudflareVectorize);
                     set_value.set(kind);
                 }
             >
-                {VectorStoreKindDto::all().iter().copied().map(|k| {
+                {VectorStoreKind::all().iter().copied().map(|k| {
                     let key = k.as_str();
                     let label = k.display_label();
                     view! {
@@ -932,8 +933,8 @@ fn LabelledNumDirect(
 fn build_command(
     form: RegistryForm,
     name: String,
-    ai_kind: AiProviderKindDto,
-    vector_kind: VectorStoreKindDto,
+    ai_kind: AiProviderKind,
+    vector_kind: VectorStoreKind,
     model_id: String,
     dims: u32,
 ) -> Result<CatalogCommand, String> {

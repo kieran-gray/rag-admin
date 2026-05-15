@@ -3,10 +3,10 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
+use crate::catalog::VectorStoreKind;
 use crate::server::application::indexing::ports::VectorIndex;
 use crate::server::application::source_document::ports::VectorIndexProvider;
 use crate::server::application::AppError;
-use crate::server::domain::configuration::kinds::VectorStoreKind;
 use crate::server::domain::configuration::vector_index::VectorIndexRepository;
 
 #[derive(Debug, Clone)]

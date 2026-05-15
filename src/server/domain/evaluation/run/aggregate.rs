@@ -3,12 +3,12 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::server::domain::shared::Timestamp;
-use crate::server::event_sourcing::Aggregate;
-use crate::shared::{
+use crate::core::{
     ChunkingVariant, EvaluationAutotuneRequest, EvaluationResultSplit, EvaluationRunOptions,
     OptimizationConfig,
 };
+use crate::server::domain::shared::Timestamp;
+use crate::server::event_sourcing::Aggregate;
 
 use super::{
     commands::EvaluationRunCommand,
@@ -20,8 +20,8 @@ use super::{
     scoring_policy::ScoringPolicy,
 };
 
+use crate::core::OptimizationBudget;
 use crate::server::domain::evaluation::optimizer::SearchBudget;
-use crate::shared::OptimizationBudget;
 
 const EVAL_RUN_NAMESPACE: Uuid = uuid::uuid!("b2e4f6a8-c0d2-4e6f-8012-3456789abcde");
 
@@ -81,7 +81,7 @@ pub struct EvaluationRun {
     pub variants: Vec<ChunkingVariant>,
     pub options: Vec<EvaluationRunOptions>,
     pub autotune_request: Option<EvaluationAutotuneRequest>,
-    pub optimization: Option<crate::shared::OptimizationConfig>,
+    pub optimization: Option<crate::core::OptimizationConfig>,
     pub scoring_policy: ScoringPolicy,
     pub prepared_labels: BTreeSet<String>,
     pub scored_keys: BTreeSet<ScoredVariantKey>,
@@ -410,11 +410,11 @@ impl Aggregate for EvaluationRun {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::{ChunkingConfig, ChunkingVariant, EvaluationRunOptions};
+    use crate::core::{ChunkingConfig, ChunkingVariant, EvaluationRunOptions};
     use uuid::Uuid;
 
     fn section_config() -> ChunkingConfig {
-        use crate::shared::SectionChunkingConfig;
+        use crate::core::SectionChunkingConfig;
         ChunkingConfig::Section(SectionChunkingConfig {
             max_section_tokens: 512,
         })
@@ -520,7 +520,7 @@ mod tests {
     #[test]
     fn score_variant_is_idempotent() {
         use super::super::commands::{MarkVariantPrepared, ScoreVariant};
-        use crate::shared::{EvaluationMetrics, EvaluationResultSplit};
+        use crate::core::{EvaluationMetrics, EvaluationResultSplit};
 
         let run_id = Uuid::new_v4();
         let dataset_id = Uuid::new_v4();
@@ -631,7 +631,7 @@ mod tests {
     #[test]
     fn complete_after_all_scored_succeeds_and_is_idempotent() {
         use super::super::commands::{CompleteRun, MarkVariantPrepared, ScoreVariant};
-        use crate::shared::{EvaluationMetrics, EvaluationResultSplit};
+        use crate::core::{EvaluationMetrics, EvaluationResultSplit};
 
         let run_id = Uuid::new_v4();
         let dataset_id = Uuid::new_v4();
@@ -772,7 +772,7 @@ mod tests {
             pipeline_id,
             &variants,
             &options,
-            Option::<&crate::shared::EvaluationAutotuneRequest>::None,
+            Option::<&crate::core::EvaluationAutotuneRequest>::None,
             Option::<&OptimizationConfig>::None,
         ))
         .unwrap();
@@ -814,7 +814,7 @@ mod tests {
         }];
         let variants_b = vec![ChunkingVariant {
             label: "section-256".to_string(),
-            config: ChunkingConfig::Section(crate::shared::SectionChunkingConfig {
+            config: ChunkingConfig::Section(crate::core::SectionChunkingConfig {
                 max_section_tokens: 256,
             }),
         }];
@@ -829,7 +829,7 @@ mod tests {
 
     #[test]
     fn compute_id_differs_for_different_optimization_configs() {
-        use crate::shared::{OptimizationBudget, OptimizationConfig, OptimizationScope};
+        use crate::core::{OptimizationBudget, OptimizationConfig, OptimizationScope};
 
         let dataset_id = Uuid::new_v4();
         let pipeline_id = Uuid::new_v4();

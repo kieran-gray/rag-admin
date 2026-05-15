@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::shared::EvaluationMetrics;
+use crate::core::EvaluationMetrics;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ScoringWeights {

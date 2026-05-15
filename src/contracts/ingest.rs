@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::chunking::ChunkingConfig;
+use crate::core::chunking::ChunkingConfig;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]

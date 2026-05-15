@@ -4,15 +4,15 @@ use uuid::Uuid;
 
 use crate::components::event_bus::use_invalidator;
 use crate::components::primitives::{Dialog, EmptyState, PageHeader, Surface};
-use crate::pages::configuration::commands::{
-    parse_uuid_or_none, run_pipeline_configuration_command,
-};
-use crate::server_functions::configuration::{get_configuration, get_pipeline_configurations};
-use crate::shared::{
+use crate::contracts::{
     aggregate_type, ConfigurationDto, CreatePipelineConfigurationDto,
     DeletePipelineConfigurationDto, PipelineConfigurationCommandDto, PipelineConfigurationDto,
     UpdatePipelineConfigurationDto,
 };
+use crate::pages::configuration::commands::{
+    parse_uuid_or_none, run_pipeline_configuration_command,
+};
+use crate::server_functions::configuration::{get_configuration, get_pipeline_configurations};
 
 #[derive(Clone)]
 enum FormMode {

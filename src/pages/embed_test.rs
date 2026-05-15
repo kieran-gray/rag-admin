@@ -2,8 +2,8 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::hooks::use_query_map;
 
+use crate::core::EmbedResult;
 use crate::server_functions::embed::embed_texts;
-use crate::shared::EmbedResult;
 
 #[component]
 pub fn EmbedTestPage() -> impl IntoView {

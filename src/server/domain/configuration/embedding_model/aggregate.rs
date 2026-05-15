@@ -10,7 +10,7 @@ use super::events::{
     EmbeddingModelRemoved, EmbeddingModelUpdated,
 };
 use super::exceptions::EmbeddingModelCatalogError;
-use crate::server::domain::configuration::kinds::AiProviderKind;
+use crate::catalog::AiProviderKind;
 
 const EMBEDDING_MODEL_CATALOG_ID: Uuid = uuid::uuid!("8a17e2f1-3a9d-4e58-a9c9-0a0f61d4a001");
 
@@ -204,7 +204,7 @@ fn validate_model_id_format(
 mod tests {
     use super::super::commands::AddEmbeddingModel;
     use super::*;
-    use crate::server::domain::configuration::kinds::AiProviderKind;
+    use crate::catalog::AiProviderKind;
 
     fn add_cmd(model: &str, dim: u32) -> EmbeddingModelCatalogCommand {
         EmbeddingModelCatalogCommand::AddEmbeddingModel(AddEmbeddingModel {

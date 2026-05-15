@@ -2,10 +2,10 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::catalog::AiProviderKind;
 use crate::server::domain::configuration::embedding_model::{
     EmbeddingModel, EmbeddingModelRepository, EmbeddingModelRepositoryError,
 };
-use crate::server::domain::configuration::kinds::AiProviderKind;
 
 pub struct PostgresEmbeddingModelRepository {
     pool: PgPool,

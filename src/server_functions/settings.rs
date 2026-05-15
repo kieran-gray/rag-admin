@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use crate::shared::SettingsDto;
+use crate::contracts::SettingsDto;
 
 #[cfg(feature = "ssr")]
 use crate::server::application::configuration::ports::EvaluationDefaultsStore;

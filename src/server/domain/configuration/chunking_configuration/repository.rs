@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::shared::ChunkingConfig;
+use crate::core::ChunkingConfig;
 
 use super::read_model::ChunkingConfigurationReadModel;
 

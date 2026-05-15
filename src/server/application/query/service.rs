@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
+use crate::contracts::{QueryHit, QueryRequest, QueryResult};
 use crate::server::application::configuration::PipelineResolver;
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::indexing::ports::vector_index::VectorQuery;
@@ -9,7 +10,6 @@ use crate::server::application::indexing::VectorIndexResolver;
 use crate::server::application::AppError;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::server::domain::source_document::version::DocumentMetadata;
-use crate::shared::{QueryHit, QueryRequest, QueryResult};
 
 const SNIPPET_MAX_CHARS: usize = 320;
 

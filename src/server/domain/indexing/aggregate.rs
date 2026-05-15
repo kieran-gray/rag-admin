@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{server::event_sourcing::Aggregate, shared::ChunkingConfig};
+use crate::{core::ChunkingConfig, server::event_sourcing::Aggregate};
 
 use super::{
     commands::IndexingCommand,
@@ -284,10 +284,10 @@ impl Aggregate for Indexing {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::SectionChunkingConfig;
     use crate::server::domain::indexing::commands::*;
     use crate::server::domain::indexing::events::*;
     use crate::server::domain::shared::Timestamp;
-    use crate::shared::SectionChunkingConfig;
 
     fn now() -> Timestamp {
         "2024-01-01T00:00:00Z".into()

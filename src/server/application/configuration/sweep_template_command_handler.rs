@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
+use crate::contracts::SweepTemplateCommandDto;
 use crate::server::application::ports::IdGenerator;
 use crate::server::application::AppError;
 use crate::server::domain::configuration::sweep_template::{SweepTemplate, SweepTemplateCommand};
 use crate::server::event_sourcing::CommandProcessor;
-use crate::shared::SweepTemplateCommandDto;
 
 pub struct SweepTemplateCommandHandler {
     processor: Arc<CommandProcessor<SweepTemplate>>,

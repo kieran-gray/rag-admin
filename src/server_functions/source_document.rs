@@ -1,9 +1,10 @@
 use leptos::prelude::*;
 
-use crate::shared::{
-    ChunkDto, ChunkingConfig, DocumentListItemDto, SourceDocumentDetailDto, SourceDocumentDto,
+use crate::contracts::{
+    ChunkDto, DocumentListItemDto, SourceDocumentDetailDto, SourceDocumentDto,
     SourceDocumentMarkdownDto,
 };
+use crate::core::ChunkingConfig;
 
 #[cfg(feature = "ssr")]
 use crate::server::application::source_document::{

@@ -1,11 +1,12 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::shared::{AiProviderKindDto, ChunkingConfig, VectorStoreKindDto};
+use crate::catalog::{AiProviderKind, VectorStoreKind};
+use crate::core::ChunkingConfig;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddEmbeddingModelDto {
-    pub kind: AiProviderKindDto,
+    pub kind: AiProviderKind,
     pub model: String,
     pub dimensions: u32,
 }
@@ -13,7 +14,7 @@ pub struct AddEmbeddingModelDto {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateEmbeddingModelDto {
     pub model_id: Uuid,
-    pub kind: AiProviderKindDto,
+    pub kind: AiProviderKind,
     pub model: String,
     pub dimensions: u32,
 }
@@ -25,14 +26,14 @@ pub struct RemoveEmbeddingModelDto {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddGenerationModelDto {
-    pub kind: AiProviderKindDto,
+    pub kind: AiProviderKind,
     pub model: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateGenerationModelDto {
     pub model_id: Uuid,
-    pub kind: AiProviderKindDto,
+    pub kind: AiProviderKind,
     pub model: String,
 }
 
@@ -43,7 +44,7 @@ pub struct RemoveGenerationModelDto {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddVectorIndexDto {
-    pub kind: VectorStoreKindDto,
+    pub kind: VectorStoreKind,
     pub name: String,
     pub dimensions: u32,
 }
@@ -51,7 +52,7 @@ pub struct AddVectorIndexDto {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateVectorIndexDto {
     pub index_id: Uuid,
-    pub kind: VectorStoreKindDto,
+    pub kind: VectorStoreKind,
     pub name: String,
     pub dimensions: u32,
 }

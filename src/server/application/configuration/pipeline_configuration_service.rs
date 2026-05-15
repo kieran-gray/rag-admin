@@ -2,16 +2,16 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
+use crate::contracts::{
+    CreatePipelineConfigurationDto, DeletePipelineConfigurationDto,
+    PipelineConfigurationCommandDto, UpdatePipelineConfigurationDto,
+};
 use crate::server::application::AppError;
 use crate::server::domain::configuration::embedding_model::EmbeddingModelRepository;
 use crate::server::domain::configuration::pipeline_configuration::{
     NewPipelineConfiguration, PipelineConfigurationRepository, PipelineConfigurationUpdate,
 };
 use crate::server::domain::configuration::vector_index::VectorIndexRepository;
-use crate::shared::{
-    CreatePipelineConfigurationDto, DeletePipelineConfigurationDto,
-    PipelineConfigurationCommandDto, UpdatePipelineConfigurationDto,
-};
 
 pub struct PipelineConfigurationService {
     repository: Arc<dyn PipelineConfigurationRepository>,

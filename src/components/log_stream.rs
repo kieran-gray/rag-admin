@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use crate::shared::{LogEvent, LogLevel};
+use crate::contracts::{LogEvent, LogLevel};
 
 #[component]
 pub fn LogStream(#[prop(into)] url: Signal<Option<String>>) -> impl IntoView {
@@ -69,7 +69,7 @@ mod hydrate {
     use wasm_bindgen::JsCast;
     use web_sys::{EventSource, MessageEvent};
 
-    use crate::shared::{LogEvent, LogLevel};
+    use crate::contracts::{LogEvent, LogLevel};
 
     pub struct StreamHandle {
         source: EventSource,

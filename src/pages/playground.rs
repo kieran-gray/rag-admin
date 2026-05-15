@@ -3,9 +3,9 @@ use leptos::task::spawn_local;
 use uuid::Uuid;
 
 use crate::components::primitives::{EmptyState, PageHeader, Surface};
+use crate::contracts::{PipelineConfigurationDto, QueryHit, QueryRequest, QueryResult};
 use crate::server_functions::configuration::get_pipeline_configurations;
 use crate::server_functions::query::query_documents;
-use crate::shared::{PipelineConfigurationDto, QueryHit, QueryRequest, QueryResult};
 
 #[derive(Clone)]
 struct HistoryEntry {

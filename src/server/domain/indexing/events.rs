@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::core::ChunkingConfig;
 use crate::server::domain::shared::Timestamp;
-use crate::shared::ChunkingConfig;
 
 use super::status::IngestStage;
 

@@ -1,11 +1,14 @@
 use leptos::prelude::*;
 use uuid::Uuid;
 
+use crate::catalog::ChunkStrategy;
 use crate::components::primitives::Surface;
-use crate::shared::{
-    BertChunkingConfig, ChunkStrategy, ChunkingConfig, ChunkingConfigurationDto, ChunkingVariant,
-    EvaluationAutotuneRequest, EvaluationRunOptions, LlmChunkingConfig, PipelineConfigurationDto,
-    RunEvaluationRequestDto, SectionChunkingConfig, SweepTemplateDto,
+use crate::contracts::{
+    ChunkingConfigurationDto, PipelineConfigurationDto, RunEvaluationRequestDto, SweepTemplateDto,
+};
+use crate::core::{
+    BertChunkingConfig, ChunkingConfig, ChunkingVariant, EvaluationAutotuneRequest,
+    EvaluationRunOptions, LlmChunkingConfig, SectionChunkingConfig,
 };
 
 use super::eval_parser::parse_u32_values;

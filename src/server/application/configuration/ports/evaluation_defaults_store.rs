@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
+use crate::contracts::SettingsDto;
 use crate::server::application::AppError;
-use crate::shared::SettingsDto;
 
 #[async_trait]
 pub trait EvaluationDefaultsStore: Send + Sync {

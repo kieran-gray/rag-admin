@@ -2,17 +2,18 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
+use crate::catalog::{AiProviderKind, VectorStoreKind};
+use crate::contracts::{
+    AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto,
+    ChunkingConfigurationCommandDto, CreateChunkingConfigurationDto, CreateSweepTemplateDto,
+    EmbeddingModelCommandDto, GenerationModelCommandDto, SetDefaultSweepTemplateDto,
+    SweepTemplateCommandDto, VectorIndexCommandDto,
+};
+use crate::core::{BertChunkingConfig, ChunkingConfig, LlmChunkingConfig, SectionChunkingConfig};
 use crate::server::application::configuration::{
     ChunkingConfigurationQueryService, ChunkingConfigurationService, ConfigurationQueryService,
     EmbeddingModelCatalogCommandHandler, GenerationModelCatalogCommandHandler,
     SweepTemplateCommandHandler, SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
-};
-use crate::shared::{
-    AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto, AiProviderKindDto,
-    BertChunkingConfig, ChunkingConfig, ChunkingConfigurationCommandDto,
-    CreateChunkingConfigurationDto, CreateSweepTemplateDto, EmbeddingModelCommandDto,
-    GenerationModelCommandDto, LlmChunkingConfig, SectionChunkingConfig,
-    SetDefaultSweepTemplateDto, SweepTemplateCommandDto, VectorIndexCommandDto, VectorStoreKindDto,
 };
 
 const DEFAULT_SWEEP_NAME: &str = "default-sweep";
@@ -23,35 +24,35 @@ pub struct ChunkingSeed {
 }
 
 struct EmbeddingSeed {
-    kind: AiProviderKindDto,
+    kind: AiProviderKind,
     model: &'static str,
     dimensions: u32,
 }
 
 struct GenerationSeed {
-    kind: AiProviderKindDto,
+    kind: AiProviderKind,
     model: &'static str,
 }
 
 struct VectorIndexSeed {
-    kind: VectorStoreKindDto,
+    kind: VectorStoreKind,
     name: &'static str,
     dimensions: u32,
 }
 
 const EMBEDDING_SEEDS: &[EmbeddingSeed] = &[
     EmbeddingSeed {
-        kind: AiProviderKindDto::Cloudflare,
+        kind: AiProviderKind::Cloudflare,
         model: "@cf/baai/bge-base-en-v1.5",
         dimensions: 768,
     },
     EmbeddingSeed {
-        kind: AiProviderKindDto::Cloudflare,
+        kind: AiProviderKind::Cloudflare,
         model: "@cf/qwen/qwen3-embedding-0.6b",
         dimensions: 1024,
     },
     EmbeddingSeed {
-        kind: AiProviderKindDto::Ollama,
+        kind: AiProviderKind::Ollama,
         model: "qwen3-embedding:0.6b",
         dimensions: 1024,
     },
@@ -59,21 +60,21 @@ const EMBEDDING_SEEDS: &[EmbeddingSeed] = &[
 
 const GENERATION_SEEDS: &[GenerationSeed] = &[
     GenerationSeed {
-        kind: AiProviderKindDto::Cloudflare,
+        kind: AiProviderKind::Cloudflare,
         model: "@cf/zai-org/glm-4.7-flash",
     },
     GenerationSeed {
-        kind: AiProviderKindDto::Cloudflare,
+        kind: AiProviderKind::Cloudflare,
         model: "@cf/google/gemma-4-26b-a4b-it",
     },
     GenerationSeed {
-        kind: AiProviderKindDto::Ollama,
+        kind: AiProviderKind::Ollama,
         model: "ministral-3:14b",
     },
 ];
 
 const VECTOR_INDEX_SEEDS: &[VectorIndexSeed] = &[VectorIndexSeed {
-    kind: VectorStoreKindDto::CloudflareVectorize,
+    kind: VectorStoreKind::CloudflareVectorize,
     name: "blog-chunks",
     dimensions: 1024,
 }];

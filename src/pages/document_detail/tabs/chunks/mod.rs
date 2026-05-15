@@ -3,8 +3,8 @@ use leptos::prelude::*;
 mod chunk_card;
 
 use crate::components::primitives::{EmptyState, Surface};
+use crate::contracts::SourceDocumentDetailDto;
 use crate::server_functions::source_document::get_chunks;
-use crate::shared::SourceDocumentDetailDto;
 use chunk_card::ChunkCard;
 
 #[component]

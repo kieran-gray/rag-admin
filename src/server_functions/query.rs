@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use crate::shared::{QueryRequest, QueryResult};
+use crate::contracts::{QueryRequest, QueryResult};
 
 #[cfg(feature = "ssr")]
 use crate::server::application::query::QueryService;

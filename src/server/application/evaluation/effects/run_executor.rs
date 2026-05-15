@@ -3,6 +3,9 @@ use std::sync::Arc;
 use serde_json::json;
 use uuid::Uuid;
 
+use crate::core::{
+    evaluation_score, EvaluationMetrics, EvaluationResultSplit, EvaluationRunOptions,
+};
 use crate::server::application::evaluation::scoring::{
     PreparedVariant, QuestionSubset, RunContext, TrialScorer,
 };
@@ -15,9 +18,6 @@ use crate::server::domain::evaluation::run::commands::{
 use crate::server::domain::evaluation::run::events::RetrievalTraceEntry;
 use crate::server::domain::evaluation::split::{split_questions, DatasetSplit};
 use crate::server::event_sourcing::command_processor::CommandProcessor;
-use crate::shared::{
-    evaluation_score, EvaluationMetrics, EvaluationResultSplit, EvaluationRunOptions,
-};
 
 use super::run::ExecuteRunEffect;
 use super::run_session::RunSession;

@@ -8,8 +8,8 @@ use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::Extension;
 use futures_util::stream::Stream;
 
+use crate::contracts::LogEvent;
 use crate::server::application::{JobMessage, JobRegistry};
-use crate::shared::LogEvent;
 
 pub async fn job_logs_handler(
     Path(job_id): Path<String>,
@@ -27,7 +27,7 @@ fn stream_for_job(
         let job = jobs.get(&job_id).await;
         let Some(job) = job else {
             let payload = serde_json::to_string(&LogEvent {
-                level: crate::shared::LogLevel::Error,
+                level: crate::contracts::LogLevel::Error,
                 message: format!("unknown job id: {job_id}"),
             })
             .unwrap_or_default();

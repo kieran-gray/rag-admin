@@ -2,13 +2,13 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
+use crate::contracts::{
+    ChunkingConfigurationCommandDto, CreateChunkingConfigurationDto,
+    DeleteChunkingConfigurationDto, UpdateChunkingConfigurationDto,
+};
 use crate::server::application::AppError;
 use crate::server::domain::configuration::chunking_configuration::{
     ChunkingConfigurationRepository, ChunkingConfigurationUpdate, NewChunkingConfiguration,
-};
-use crate::shared::{
-    ChunkingConfigurationCommandDto, CreateChunkingConfigurationDto,
-    DeleteChunkingConfigurationDto, UpdateChunkingConfigurationDto,
 };
 
 pub struct ChunkingConfigurationService {

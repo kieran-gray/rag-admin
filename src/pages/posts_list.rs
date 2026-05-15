@@ -3,8 +3,8 @@ use leptos_router::components::A;
 
 use crate::components::event_bus::use_invalidator;
 use crate::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
+use crate::contracts::{aggregate_type, DocumentListItemDto};
 use crate::server_functions::source_document::list_documents_with_status;
-use crate::shared::{aggregate_type, DocumentListItemDto};
 
 #[component]
 pub fn PostsListPage() -> impl IntoView {

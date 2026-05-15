@@ -2,6 +2,10 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
+use crate::contracts::{
+    ChunkDto, IndexingDto, MarkdownBlockDto, MarkdownBlockKindDto, SourceDocumentDetailDto,
+    SourceDocumentDto, SourceDocumentMarkdownDto,
+};
 use crate::server::application::markdown::{Block, BlockKind};
 use crate::server::application::ports::MarkdownParser;
 use crate::server::application::source_document::ports::BlobStore;
@@ -11,10 +15,6 @@ use crate::server::domain::indexing::repository::IndexingRepository;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::server::domain::source_document::source_ref::SourceRef;
 use crate::server::domain::source_document::version::DocumentMetadata;
-use crate::shared::{
-    ChunkDto, IndexingDto, MarkdownBlockDto, MarkdownBlockKindDto, SourceDocumentDetailDto,
-    SourceDocumentDto, SourceDocumentMarkdownDto,
-};
 
 pub struct SourceDocumentQueryService {
     source_document_repository: Arc<dyn SourceDocumentRepository>,

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::shared::SweepTemplateCommandDto;
+use crate::contracts::SweepTemplateCommandDto;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateSweepTemplate {

@@ -2,8 +2,8 @@ use leptos::prelude::*;
 use uuid::Uuid;
 
 #[cfg(feature = "ssr")]
-use crate::shared::BestVariantDto;
-use crate::shared::{
+use crate::contracts::BestVariantDto;
+use crate::contracts::{
     EvaluationDatasetDto, EvaluationDatasetSummaryDto, EvaluationJobInfo, EvaluationRunDto,
     EvaluationRunSummaryDto, RecentEvaluationRunDto, RunEvaluationRequestDto,
 };
@@ -205,7 +205,7 @@ pub async fn delete_dataset(dataset_id: Uuid) -> Result<(), ServerFnError> {
     endpoint = "start_run_optimization"
 )]
 pub async fn start_run_optimization(
-    request: crate::shared::RunOptimizationRequestDto,
+    request: crate::contracts::RunOptimizationRequestDto,
 ) -> Result<EvaluationJobInfo, ServerFnError> {
     let datasets = ctx::<Arc<EvaluationQueryService>>()?;
     let run_processor = ctx::<Arc<CommandProcessor<EvaluationRun>>>()?;
@@ -334,7 +334,7 @@ pub async fn get_runs_for_document(
     endpoint = "replicate_optimization_run"
 )]
 pub async fn replicate_optimization_run(run_id: Uuid) -> Result<Uuid, ServerFnError> {
-    use crate::shared::EvaluationRunOptions;
+    use crate::core::EvaluationRunOptions;
 
     let query = ctx::<Arc<EvaluationQueryService>>()?;
     let run_processor = ctx::<Arc<CommandProcessor<EvaluationRun>>>()?;
@@ -349,7 +349,7 @@ pub async fn replicate_optimization_run(run_id: Uuid) -> Result<Uuid, ServerFnEr
         .optimization
         .clone()
         .ok_or_else(|| ServerFnError::new("run was not an optimization run".to_string()))?;
-    let optimization = crate::shared::OptimizationConfig {
+    let optimization = crate::core::OptimizationConfig {
         budget: original.budget,
         scope: original.scope,
         judges_enabled: original.judges_enabled,
@@ -369,7 +369,7 @@ pub async fn replicate_optimization_run(run_id: Uuid) -> Result<Uuid, ServerFnEr
                 pipeline_configuration_id: run.pipeline_configuration_id,
                 document_id: run.document_id,
                 document_version: run.document_version,
-                variants: Vec::<crate::shared::ChunkingVariant>::new(),
+                variants: Vec::<crate::core::ChunkingVariant>::new(),
                 options: Vec::<EvaluationRunOptions>::new(),
                 autotune_request: None,
                 optimization: Some(optimization),
@@ -393,8 +393,8 @@ pub async fn promote_variant_to_chunking_config(
     variant_label: String,
     name: String,
 ) -> Result<Uuid, ServerFnError> {
+    use crate::contracts::{ChunkingConfigurationCommandDto, CreateChunkingConfigurationDto};
     use crate::server::application::configuration::ChunkingConfigurationService;
-    use crate::shared::{ChunkingConfigurationCommandDto, CreateChunkingConfigurationDto};
 
     let trimmed_label = variant_label.trim();
     if trimmed_label.is_empty() {

@@ -4,9 +4,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use tokio::sync::Mutex;
 
+use crate::contracts::SettingsDto;
 use crate::server::application::configuration::ports::EvaluationDefaultsStore;
 use crate::server::application::AppError;
-use crate::shared::SettingsDto;
 
 pub struct FileEvaluationDefaultsStore {
     path: PathBuf,

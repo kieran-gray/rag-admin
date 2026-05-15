@@ -2,10 +2,10 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::catalog::AiProviderKind;
 use crate::server::domain::configuration::generation_model::{
     GenerationModel, GenerationModelRepository, GenerationModelRepositoryError,
 };
-use crate::server::domain::configuration::kinds::AiProviderKind;
 
 pub struct PostgresGenerationModelRepository {
     pool: PgPool,

@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::server::domain::evaluation::run::scoring_policy::ScoringPolicy;
-use crate::shared::{
+use crate::core::{
     ChunkingVariant, EvaluationAutotuneRequest, EvaluationRunOptions, OptimizationConfig,
 };
+use crate::server::domain::evaluation::run::scoring_policy::ScoringPolicy;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecuteRunEffect {

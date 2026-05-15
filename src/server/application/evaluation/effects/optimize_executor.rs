@@ -4,6 +4,10 @@ use std::sync::Arc;
 use serde_json::json;
 use uuid::Uuid;
 
+use crate::core::{
+    evaluation_score, ChunkingConfig, EvaluationMetrics, EvaluationResultSplit,
+    EvaluationRunOptions, OptimizationBudget, OptimizationScope,
+};
 use crate::server::application::evaluation::ports::LlmJudge;
 use crate::server::application::evaluation::scoring::{
     PreparedVariant, QuestionSubset, RunContext, TrialScorer,
@@ -24,10 +28,6 @@ use crate::server::domain::evaluation::run::events::EvaluationRunEvent;
 use crate::server::domain::evaluation::split::{three_way, ThreeWayRatios};
 use crate::server::event_sourcing::command_processor::CommandProcessor;
 use crate::server::event_sourcing::event_store::EventStore;
-use crate::shared::{
-    evaluation_score, ChunkingConfig, EvaluationMetrics, EvaluationResultSplit,
-    EvaluationRunOptions, OptimizationBudget, OptimizationScope,
-};
 
 use super::run::OptimizeRunEffect;
 use super::run_session::RunSession;

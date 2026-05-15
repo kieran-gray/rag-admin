@@ -4,8 +4,8 @@ use leptos_router::hooks::{use_params_map, use_query_map};
 use uuid::Uuid;
 
 use crate::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
+use crate::core::{evaluation_score, EvaluationResultSplit, EvaluationVariantResult};
 use crate::server_functions::evaluation::get_run;
-use crate::shared::{evaluation_score, EvaluationResultSplit, EvaluationVariantResult};
 
 #[component]
 pub fn ReplicateComparePage() -> impl IntoView {
@@ -64,8 +64,8 @@ pub fn ReplicateComparePage() -> impl IntoView {
 
 #[component]
 fn CompareView(
-    left: crate::shared::EvaluationRunDto,
-    right: crate::shared::EvaluationRunDto,
+    left: crate::contracts::EvaluationRunDto,
+    right: crate::contracts::EvaluationRunDto,
 ) -> impl IntoView {
     let left_id = left.run_id;
     let right_id = right.run_id;

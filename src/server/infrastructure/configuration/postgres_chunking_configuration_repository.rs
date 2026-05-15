@@ -2,11 +2,11 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::core::ChunkingConfig;
 use crate::server::domain::configuration::chunking_configuration::{
     ChunkingConfigurationReadModel, ChunkingConfigurationRepository,
     ChunkingConfigurationRepositoryError, ChunkingConfigurationUpdate, NewChunkingConfiguration,
 };
-use crate::shared::ChunkingConfig;
 
 pub struct PostgresChunkingConfigurationRepository {
     pool: PgPool,

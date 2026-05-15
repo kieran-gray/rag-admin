@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 
 use crate::components::primitives::Surface;
-use crate::shared::{
+use crate::core::{
     evaluation_score, pareto_frontier, EvaluationResultSplit, EvaluationVariantResult, ParetoPoint,
 };
 

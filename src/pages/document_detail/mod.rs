@@ -13,15 +13,15 @@ use super::shared::short_hash;
 
 use crate::components::event_bus::use_invalidator;
 use crate::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
+use crate::contracts::{
+    aggregate_type, ChunkingConfigurationDto, PipelineConfigurationDto, SourceDocumentDetailDto,
+    SourceDocumentDto, SweepTemplateDto,
+};
 use crate::server_functions::configuration::{
     get_chunking_configurations, get_pipeline_configurations, get_sweep_templates,
 };
 use crate::server_functions::source_document::{
     get_document_detail_by_source_ref, import_source_document,
-};
-use crate::shared::{
-    aggregate_type, ChunkingConfigurationDto, PipelineConfigurationDto, SourceDocumentDetailDto,
-    SourceDocumentDto, SweepTemplateDto,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -252,7 +252,7 @@ fn TabButton(
 
 fn derive_header(
     doc: &SourceDocumentDto,
-    indexings: &[crate::shared::IndexingDto],
+    indexings: &[crate::contracts::IndexingDto],
 ) -> (String, String, Option<String>, (Status, String)) {
     let type_label = document_type_label(&doc.document_type);
     let eyebrow = format!("Documents / {} / {}", type_label, doc.source_ref_key);
@@ -266,7 +266,7 @@ fn derive_header(
     (eyebrow, title, subtitle, status)
 }
 
-fn derive_status(indexings: &[crate::shared::IndexingDto]) -> (Status, String) {
+fn derive_status(indexings: &[crate::contracts::IndexingDto]) -> (Status, String) {
     if indexings.is_empty() {
         return (Status::Info, "Registered".to_string());
     }

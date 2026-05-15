@@ -1,21 +1,21 @@
 use leptos::prelude::*;
 use uuid::Uuid;
 
+use crate::catalog::ChunkStrategy;
 use crate::components::event_bus::use_invalidator;
 use crate::components::primitives::{Dialog, EmptyState, PageHeader, Surface};
+use crate::contracts::{
+    aggregate_type, ChunkingConfigurationCommandDto, ChunkingConfigurationDto, ConfigurationDto,
+    CreateChunkingConfigurationDto, CreateSweepTemplateDto, DeleteChunkingConfigurationDto,
+    DeleteSweepTemplateDto, SetDefaultSweepTemplateDto, SweepTemplateCommandDto, SweepTemplateDto,
+    UpdateChunkingConfigurationDto, UpdateSweepTemplateDto,
+};
+use crate::core::{BertChunkingConfig, ChunkingConfig, LlmChunkingConfig, SectionChunkingConfig};
 use crate::pages::configuration::commands::{
     parse_uuid_or_none, run_chunking_configuration_command, run_sweep_template_command,
 };
 use crate::server_functions::configuration::{
     get_chunking_configurations, get_configuration, get_sweep_templates,
-};
-use crate::shared::{
-    aggregate_type, BertChunkingConfig, ChunkStrategy, ChunkingConfig,
-    ChunkingConfigurationCommandDto, ChunkingConfigurationDto, ConfigurationDto,
-    CreateChunkingConfigurationDto, CreateSweepTemplateDto, DeleteChunkingConfigurationDto,
-    DeleteSweepTemplateDto, LlmChunkingConfig, SectionChunkingConfig, SetDefaultSweepTemplateDto,
-    SweepTemplateCommandDto, SweepTemplateDto, UpdateChunkingConfigurationDto,
-    UpdateSweepTemplateDto,
 };
 
 #[derive(Clone)]

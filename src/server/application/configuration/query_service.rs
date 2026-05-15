@@ -1,20 +1,18 @@
 use std::sync::Arc;
 
+use crate::contracts::{
+    ChunkingConfigurationDto, ConfigurationDto, EmbeddingModelDto, GenerationModelDto,
+    PipelineConfigurationDto, SweepTemplateDto, VectorIndexDto,
+};
 use crate::server::application::AppError;
 use crate::server::domain::configuration::chunking_configuration::ChunkingConfigurationRepository;
 use crate::server::domain::configuration::embedding_model::EmbeddingModelRepository;
 use crate::server::domain::configuration::generation_model::GenerationModelRepository;
-use crate::server::domain::configuration::kinds::{AiProviderKind, VectorStoreKind};
 use crate::server::domain::configuration::pipeline_configuration::PipelineConfigurationRepository;
 use crate::server::domain::configuration::sweep_template::{
     SweepTemplateRepository, SweepTemplateRepositoryError,
 };
 use crate::server::domain::configuration::vector_index::VectorIndexRepository;
-use crate::shared::{
-    AiProviderKindDto, ChunkingConfigurationDto, ConfigurationDto, EmbeddingModelDto,
-    GenerationModelDto, PipelineConfigurationDto, SweepTemplateDto, VectorIndexDto,
-    VectorStoreKindDto,
-};
 use uuid::Uuid;
 
 pub struct ConfigurationQueryService {
@@ -47,7 +45,7 @@ impl ConfigurationQueryService {
                 .into_iter()
                 .map(|m| EmbeddingModelDto {
                     embedding_model_id: m.embedding_model_id,
-                    kind: ai_provider_kind_dto(m.kind),
+                    kind: m.kind,
                     model: m.model,
                     dimensions: m.dimensions,
                 })
@@ -56,7 +54,7 @@ impl ConfigurationQueryService {
                 .into_iter()
                 .map(|m| GenerationModelDto {
                     generation_model_id: m.generation_model_id,
-                    kind: ai_provider_kind_dto(m.kind),
+                    kind: m.kind,
                     model: m.model,
                 })
                 .collect(),
@@ -64,7 +62,7 @@ impl ConfigurationQueryService {
                 .into_iter()
                 .map(|i| VectorIndexDto {
                     index_id: i.index_id,
-                    kind: vector_store_kind_dto(i.kind),
+                    kind: i.kind,
                     name: i.name,
                     dimensions: i.dimensions,
                 })
@@ -172,19 +170,5 @@ impl SweepTemplateQueryService {
                 is_default: st.is_default,
             })
             .collect())
-    }
-}
-
-fn ai_provider_kind_dto(kind: AiProviderKind) -> AiProviderKindDto {
-    match kind {
-        AiProviderKind::Cloudflare => AiProviderKindDto::Cloudflare,
-        AiProviderKind::Ollama => AiProviderKindDto::Ollama,
-    }
-}
-
-fn vector_store_kind_dto(kind: VectorStoreKind) -> VectorStoreKindDto {
-    match kind {
-        VectorStoreKind::CloudflareVectorize => VectorStoreKindDto::CloudflareVectorize,
-        VectorStoreKind::Postgres => VectorStoreKindDto::Postgres,
     }
 }

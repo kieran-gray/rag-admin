@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
+use crate::catalog::ChunkStrategy;
+use crate::core::ChunkingConfig;
 use crate::server::application::chunking::{ChunkOutput, DocumentChunker, TokenBudget};
 use crate::server::application::markdown::{Document, TextUnit};
 use crate::server::application::ports::{
@@ -9,7 +11,6 @@ use crate::server::application::ports::{
 };
 use crate::server::application::AppError;
 use crate::server::domain::configuration::generation_model::GenerationModelRepository;
-use crate::shared::{ChunkStrategy, ChunkingConfig};
 
 const SYSTEM_PROMPT: &str = "You split blog text into compact, self-contained retrieval chunks. \
     The text has been divided into numbered micro-chunks marked with <|start_chunk_X|> and \

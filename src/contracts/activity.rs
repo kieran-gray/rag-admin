@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::shared::{aggregate_type, PublishedEvent};
+use crate::contracts::events::{aggregate as aggregate_type, PublishedEvent};
 
 pub fn classify(
     stream_id: Uuid,

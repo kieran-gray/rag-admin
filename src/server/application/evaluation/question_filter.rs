@@ -1,7 +1,8 @@
+use crate::contracts::EvaluationQuestionDto;
+use crate::core::ordered_f32_vec;
 use crate::server::application::embedding::{EmbeddingService, ResolvedEmbeddingModel};
 use crate::server::application::AppError;
 use crate::server::domain::evaluation::question::QuestionCategory;
-use crate::shared::{ordered_f32_vec, EvaluationQuestionDto};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct QuestionFilterStats {
@@ -296,7 +297,7 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::EvaluationReferenceDto;
+    use crate::contracts::EvaluationReferenceDto;
 
     fn question(text: &str, reference: &str) -> EvaluationQuestionDto {
         EvaluationQuestionDto {

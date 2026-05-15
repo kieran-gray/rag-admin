@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::shared::ChunkingConfig;
+use crate::core::ChunkingConfig;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChunkSet {

@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::server::domain::shared::Timestamp;
-use crate::shared::{
+use crate::core::{
     ChunkingConfig, ChunkingVariant, EvaluationAutotuneRequest, EvaluationMetrics,
     EvaluationResultSplit, EvaluationRunOptions, OptimizationConfig,
 };
+use crate::server::domain::shared::Timestamp;
 
 use super::{
     aggregate::EvaluationRunStatus, events::RetrievalTraceEntry, scoring_policy::ScoringPolicy,
@@ -112,12 +112,12 @@ pub struct NewRunSummary {
     pub created_at: Timestamp,
 }
 
-impl From<EvaluationVariantResultDto> for crate::shared::EvaluationVariantResult {
+impl From<EvaluationVariantResultDto> for crate::core::EvaluationVariantResult {
     fn from(v: EvaluationVariantResultDto) -> Self {
-        let question_results: Vec<crate::shared::EvaluationQuestionResult> = v
+        let question_results: Vec<crate::core::EvaluationQuestionResult> = v
             .retrieval_traces
             .iter()
-            .map(|t| crate::shared::EvaluationQuestionResult {
+            .map(|t| crate::core::EvaluationQuestionResult {
                 question: format!("Q{}", t.question_sequence + 1),
                 recall: t.recall,
                 precision: t.precision,

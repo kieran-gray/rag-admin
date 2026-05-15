@@ -25,23 +25,23 @@ pub struct EvaluationQuestion {
     pub paraphrase_of: Option<u32>,
 }
 
-impl From<EvaluationReference> for crate::shared::EvaluationReferenceDto {
+impl From<EvaluationReference> for crate::contracts::EvaluationReferenceDto {
     fn from(r: EvaluationReference) -> Self {
         Self {
             content: r.content,
             char_start: r.char_start,
             char_end: r.char_end,
-            embedding: r.embedding.map(crate::shared::ordered_f32_vec),
+            embedding: r.embedding.map(crate::core::ordered_f32_vec),
         }
     }
 }
 
-impl From<EvaluationQuestion> for crate::shared::EvaluationQuestionDto {
+impl From<EvaluationQuestion> for crate::contracts::EvaluationQuestionDto {
     fn from(q: EvaluationQuestion) -> Self {
         Self {
             question: q.question,
             references: q.references.into_iter().map(Into::into).collect(),
-            embedding: q.embedding.map(crate::shared::ordered_f32_vec),
+            embedding: q.embedding.map(crate::core::ordered_f32_vec),
             category: q.category.as_str().into(),
             grammar_variant: q.grammar_variant.as_str().into(),
             paraphrase_of: q.paraphrase_of,

@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use crate::shared::{
+use crate::contracts::{
     ChunkingConfigurationCommandDto, ChunkingConfigurationDto, ConfigurationDto,
     EmbeddingModelCommandDto, GenerationModelCommandDto, PipelineConfigurationCommandDto,
     PipelineConfigurationDto, SweepTemplateCommandDto, SweepTemplateDto, VectorIndexCommandDto,

@@ -7,10 +7,10 @@ use uuid::Uuid;
 
 use crate::components::event_bus::use_invalidator;
 use crate::components::primitives::{EmptyState, Kv, PageHeader, Status, StatusPill, Surface};
-use crate::server_functions::evaluation::{delete_dataset, get_dataset, rename_dataset};
-use crate::shared::{
+use crate::contracts::{
     aggregate_type, EvaluationDatasetDto, EvaluationQuestionDto, EvaluationReferenceDto,
 };
+use crate::server_functions::evaluation::{delete_dataset, get_dataset, rename_dataset};
 
 use crate::pages::shared::short_hash;
 

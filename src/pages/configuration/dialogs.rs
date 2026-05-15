@@ -1,4 +1,4 @@
-use crate::shared::{
+use crate::contracts::{
     EmbeddingModelDto, GenerationModelDto, PipelineConfigurationDto, VectorIndexDto,
 };
 

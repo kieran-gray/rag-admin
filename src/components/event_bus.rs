@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use crate::shared::PublishedEvent;
+use crate::contracts::PublishedEvent;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectionState {

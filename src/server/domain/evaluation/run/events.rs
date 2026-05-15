@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::server::domain::shared::Timestamp;
-use crate::shared::{
+use crate::core::{
     ChunkingConfig, ChunkingVariant, EvaluationAutotuneRequest, EvaluationMetrics,
     EvaluationResultSplit, EvaluationRunOptions, OptimizationConfig,
 };
+use crate::server::domain::shared::Timestamp;
 
 use super::scoring_policy::ScoringPolicy;
 

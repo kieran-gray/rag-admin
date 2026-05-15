@@ -5,13 +5,14 @@ use uuid::Uuid;
 use crate::components::activity::toggle_drawer;
 use crate::components::event_bus::use_invalidator;
 use crate::components::primitives::{EmptyState, Status, StatusPill, Surface};
+use crate::contracts::{
+    aggregate_type, ChunkingConfigurationDto, IndexingDto, PipelineConfigurationDto,
+    SourceDocumentDetailDto,
+};
+use crate::core::ChunkingConfig;
 use crate::server_functions::source_document::{
     request_indexing, requeue_chunking, requeue_embedding, requeue_indexing,
     start_source_document_ingest,
-};
-use crate::shared::{
-    aggregate_type, ChunkingConfig, ChunkingConfigurationDto, IndexingDto,
-    PipelineConfigurationDto, SourceDocumentDetailDto,
 };
 
 #[component]

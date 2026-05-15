@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::server::domain::configuration::kinds::AiProviderKind;
-use crate::shared::EmbeddingModelCommandDto;
+use crate::catalog::AiProviderKind;
+use crate::contracts::EmbeddingModelCommandDto;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AddEmbeddingModel {
@@ -34,16 +34,10 @@ pub enum EmbeddingModelCatalogCommand {
 
 impl EmbeddingModelCatalogCommand {
     pub fn from_dto(dto: EmbeddingModelCommandDto) -> Self {
-        use crate::server::domain::configuration::kinds::AiProviderKind as Kind;
-        use crate::shared::AiProviderKindDto;
-        let kind = |k: AiProviderKindDto| match k {
-            AiProviderKindDto::Cloudflare => Kind::Cloudflare,
-            AiProviderKindDto::Ollama => Kind::Ollama,
-        };
         match dto {
             EmbeddingModelCommandDto::AddEmbeddingModel(d) => {
                 Self::AddEmbeddingModel(AddEmbeddingModel {
-                    kind: kind(d.kind),
+                    kind: d.kind,
                     model: d.model,
                     dimensions: d.dimensions,
                 })
@@ -51,7 +45,7 @@ impl EmbeddingModelCatalogCommand {
             EmbeddingModelCommandDto::UpdateEmbeddingModel(d) => {
                 Self::UpdateEmbeddingModel(UpdateEmbeddingModel {
                     model_id: d.model_id,
-                    kind: kind(d.kind),
+                    kind: d.kind,
                     model: d.model,
                     dimensions: d.dimensions,
                 })

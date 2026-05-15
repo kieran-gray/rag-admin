@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
+use crate::contracts::EmbeddingModelCommandDto;
 use crate::server::application::AppError;
 use crate::server::domain::configuration::embedding_model::{
     EmbeddingModelCatalog, EmbeddingModelCatalogCommand,
 };
 use crate::server::event_sourcing::CommandProcessor;
-use crate::shared::EmbeddingModelCommandDto;
 
 pub struct EmbeddingModelCatalogCommandHandler {
     processor: Arc<CommandProcessor<EmbeddingModelCatalog>>,

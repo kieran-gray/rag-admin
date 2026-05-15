@@ -3,6 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::json;
 
+use crate::core::plain_f32_vec;
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::evaluation::ports::EvaluationGenerator;
 use crate::server::application::evaluation::question_filter::{
@@ -20,7 +21,6 @@ use crate::server::domain::evaluation::question::EvaluationReference;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::server::event_sourcing::command_processor::CommandProcessor;
 use crate::server::event_sourcing::process_manager::EffectExecutor;
-use crate::shared::plain_f32_vec;
 
 use crate::server::application::ports::Clock;
 
@@ -498,7 +498,7 @@ fn recent_previous_coverage(previous_coverage: &[String]) -> &[String] {
     &previous_coverage[start..]
 }
 
-fn question_coverage_entry(question: &crate::shared::EvaluationQuestionDto) -> String {
+fn question_coverage_entry(question: &crate::contracts::EvaluationQuestionDto) -> String {
     let refs = question
         .references
         .iter()

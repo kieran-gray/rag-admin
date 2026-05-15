@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use crate::shared::ActivityJobDto;
+use crate::contracts::ActivityJobDto;
 
 #[cfg(feature = "ssr")]
 use crate::server::application::ActivityRegistry;

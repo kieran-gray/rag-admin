@@ -2,14 +2,14 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use uuid::Uuid;
 
+use crate::contracts::{
+    ChunkingConfigurationCommandDto, EmbeddingModelCommandDto, GenerationModelCommandDto,
+    PipelineConfigurationCommandDto, SweepTemplateCommandDto, VectorIndexCommandDto,
+};
 use crate::server_functions::configuration::{
     apply_chunking_configuration_command, apply_embedding_model_command,
     apply_generation_model_command, apply_pipeline_configuration_command,
     apply_sweep_template_command, apply_vector_index_command,
-};
-use crate::shared::{
-    ChunkingConfigurationCommandDto, EmbeddingModelCommandDto, GenerationModelCommandDto,
-    PipelineConfigurationCommandDto, SweepTemplateCommandDto, VectorIndexCommandDto,
 };
 
 pub fn parse_uuid_or_none(value: &str) -> Option<Uuid> {

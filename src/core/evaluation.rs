@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
-use super::ChunkingConfig;
+use crate::core::chunking::ChunkingConfig;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
@@ -28,27 +27,27 @@ pub struct EvaluationSettings {
     pub generation_model: String,
     #[serde(
         default = "default_question_count",
-        deserialize_with = "crate::shared::serde_compat::u32_from_string"
+        deserialize_with = "crate::core::serde_compat::u32_from_string"
     )]
     pub question_count: u32,
     #[serde(
         default = "default_excerpt_similarity_threshold_milli",
-        deserialize_with = "crate::shared::serde_compat::u32_from_string"
+        deserialize_with = "crate::core::serde_compat::u32_from_string"
     )]
     pub excerpt_similarity_threshold_milli: u32,
     #[serde(
         default = "default_duplicate_similarity_threshold_milli",
-        deserialize_with = "crate::shared::serde_compat::u32_from_string"
+        deserialize_with = "crate::core::serde_compat::u32_from_string"
     )]
     pub duplicate_similarity_threshold_milli: u32,
     #[serde(
         default = "default_top_k",
-        deserialize_with = "crate::shared::serde_compat::u32_from_string"
+        deserialize_with = "crate::core::serde_compat::u32_from_string"
     )]
     pub top_k: u32,
     #[serde(
         default,
-        deserialize_with = "crate::shared::serde_compat::u32_from_string"
+        deserialize_with = "crate::core::serde_compat::u32_from_string"
     )]
     pub min_score_milli: u32,
 }
@@ -81,28 +80,6 @@ impl EvaluationSettings {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct EvaluationReferenceDto {
-    pub content: String,
-    #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
-    pub char_start: u32,
-    #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
-    pub char_end: u32,
-    #[serde(default)]
-    pub embedding: Option<Vec<OrderedF32>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct EvaluationQuestionDto {
-    pub question: String,
-    pub references: Vec<EvaluationReferenceDto>,
-    #[serde(default)]
-    pub embedding: Option<Vec<OrderedF32>>,
-    pub category: String,
-    pub grammar_variant: String,
-    pub paraphrase_of: Option<u32>,
-}
-
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub struct OrderedF32(pub f32);
 
@@ -128,17 +105,11 @@ pub fn plain_f32_vec(values: &[OrderedF32]) -> Vec<f32> {
     values.iter().copied().map(f32::from).collect()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EvaluationJobInfo {
-    pub job_id: String,
-    pub stream_url: String,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct EvaluationRunOptions {
-    #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
+    #[serde(deserialize_with = "crate::core::serde_compat::u32_from_string")]
     pub top_k: u32,
-    #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
+    #[serde(deserialize_with = "crate::core::serde_compat::u32_from_string")]
     pub min_score_milli: u32,
 }
 
@@ -148,6 +119,12 @@ impl Default for EvaluationRunOptions {
             top_k: default_top_k(),
             min_score_milli: 0,
         }
+    }
+}
+
+impl EvaluationRunOptions {
+    pub fn min_score(&self) -> f32 {
+        milli_to_f32(self.min_score_milli)
     }
 }
 
@@ -191,12 +168,12 @@ pub struct OptimizationConfig {
 pub struct EvaluationAutotuneRequest {
     #[serde(
         default = "default_tuning_fraction_milli",
-        deserialize_with = "crate::shared::serde_compat::u32_from_string"
+        deserialize_with = "crate::core::serde_compat::u32_from_string"
     )]
     pub tuning_fraction_milli: u32,
     #[serde(
         default = "default_holdout_top_n",
-        deserialize_with = "crate::shared::serde_compat::u32_from_string"
+        deserialize_with = "crate::core::serde_compat::u32_from_string"
     )]
     pub holdout_top_n: u32,
 }
@@ -287,12 +264,6 @@ pub struct EvaluationAutotuneSummary {
     pub selected_config: ChunkingConfig,
     pub tuning_score: f32,
     pub holdout_score: f32,
-}
-
-impl EvaluationRunOptions {
-    pub fn min_score(&self) -> f32 {
-        milli_to_f32(self.min_score_milli)
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -501,88 +472,4 @@ fn default_duplicate_similarity_threshold_milli() -> u32 {
 
 fn default_top_k() -> u32 {
     5
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EvaluationDatasetSummaryDto {
-    pub dataset_id: Uuid,
-    pub label: String,
-    pub question_count: u32,
-    pub status: String,
-    pub created_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EvaluationDatasetDto {
-    pub dataset_id: Uuid,
-    pub document_id: Uuid,
-    pub document_version: u32,
-    pub content_hash: String,
-    pub label: String,
-    pub status: String,
-    pub target_question_count: u32,
-    pub question_count: u32,
-    pub rejection_count: u32,
-    pub generation_model_id: Uuid,
-    pub generation_model: String,
-    pub embedding_model_id: Uuid,
-    pub failure_reason: Option<String>,
-    pub questions: Vec<EvaluationQuestionDto>,
-    pub created_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EvaluationRunSummaryDto {
-    pub run_id: Uuid,
-    pub dataset_id: Uuid,
-    pub status: String,
-    pub variant_count: u32,
-    pub created_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RunEvaluationRequestDto {
-    pub dataset_id: Uuid,
-    pub pipeline_configuration_id: Uuid,
-    pub variants: Vec<ChunkingVariant>,
-    pub options: Vec<EvaluationRunOptions>,
-    #[serde(default)]
-    pub autotune: Option<EvaluationAutotuneRequest>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RunOptimizationRequestDto {
-    pub dataset_id: Uuid,
-    pub pipeline_configuration_id: Uuid,
-    pub optimization: OptimizationConfig,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EvaluationRunDto {
-    pub run_id: Uuid,
-    pub dataset_id: Uuid,
-    pub status: String,
-    pub variants: Vec<EvaluationVariantResult>,
-    pub created_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BestVariantDto {
-    pub label: String,
-    pub config: ChunkingConfig,
-    pub options: EvaluationRunOptions,
-    pub score: f32,
-    pub metrics: EvaluationMetrics,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RecentEvaluationRunDto {
-    pub run_id: Uuid,
-    pub dataset_id: Uuid,
-    pub document_id: Uuid,
-    pub document_title: Option<String>,
-    pub status: String,
-    pub variant_count: u32,
-    pub created_at: String,
-    pub best: Option<BestVariantDto>,
 }

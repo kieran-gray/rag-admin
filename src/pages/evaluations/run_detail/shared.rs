@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use crate::shared::{evaluation_score, EvaluationResultSplit, EvaluationVariantResult};
+use crate::core::{evaluation_score, EvaluationResultSplit, EvaluationVariantResult};
 
 #[derive(Clone, Copy)]
 pub(super) struct MetricDef {

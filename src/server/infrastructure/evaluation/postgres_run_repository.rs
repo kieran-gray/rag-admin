@@ -3,6 +3,10 @@ use sqlx::PgPool;
 use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
 
+use crate::core::{
+    ChunkingVariant, EvaluationAutotuneRequest, EvaluationResultSplit, EvaluationRunOptions,
+    OptimizationConfig,
+};
 use crate::server::domain::evaluation::run::aggregate::EvaluationRunStatus;
 use crate::server::domain::evaluation::run::read_model::{
     EvaluationRunReadModel, EvaluationVariantResultDto, NewRunSummary,
@@ -13,10 +17,6 @@ use crate::server::domain::evaluation::run::repository::{
 use crate::server::domain::evaluation::run::scoring_policy::{ScoringPolicy, ScoringWeights};
 use crate::server::domain::shared::Timestamp;
 use crate::server::infrastructure::postgres::timestamps::to_offset_datetime;
-use crate::shared::{
-    ChunkingVariant, EvaluationAutotuneRequest, EvaluationResultSplit, EvaluationRunOptions,
-    OptimizationConfig,
-};
 
 pub struct PostgresEvaluationRunRepository {
     pool: PgPool,

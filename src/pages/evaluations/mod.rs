@@ -3,8 +3,8 @@ use leptos_router::components::A;
 
 use crate::components::event_bus::use_invalidator;
 use crate::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
+use crate::contracts::{aggregate_type, BestVariantDto, RecentEvaluationRunDto};
 use crate::server_functions::evaluation::get_recent_runs;
-use crate::shared::{aggregate_type, BestVariantDto, RecentEvaluationRunDto};
 
 mod dataset_detail;
 mod optimize_progress;

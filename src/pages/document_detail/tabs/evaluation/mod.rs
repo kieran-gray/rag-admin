@@ -6,13 +6,13 @@ use uuid::Uuid;
 use crate::components::activity::toggle_drawer;
 use crate::components::event_bus::use_invalidator;
 use crate::components::primitives::{EmptyState, Status, StatusPill, Surface};
+use crate::contracts::{
+    aggregate_type, ChunkingConfigurationDto, EvaluationDatasetSummaryDto, EvaluationRunSummaryDto,
+    PipelineConfigurationDto, RunEvaluationRequestDto, SourceDocumentDetailDto, SweepTemplateDto,
+};
 use crate::server_functions::evaluation::{
     get_datasets_for_document, get_runs_for_document, start_generate_synthetic_dataset,
     start_run_evaluation,
-};
-use crate::shared::{
-    aggregate_type, ChunkingConfigurationDto, EvaluationDatasetSummaryDto, EvaluationRunSummaryDto,
-    PipelineConfigurationDto, RunEvaluationRequestDto, SourceDocumentDetailDto, SweepTemplateDto,
 };
 
 mod eval_launcher;
