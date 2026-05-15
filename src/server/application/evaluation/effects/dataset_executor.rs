@@ -77,8 +77,9 @@ impl EvaluationDatasetEffectExecutor {
         embedding_model: &crate::server::application::embedding::ResolvedEmbeddingModel,
         new_sequence: u32,
     ) -> Result<bool, AppError> {
-        let prompt =
-            crate::server::application::evaluation::generator::build_paraphrase_prompt(clean_question);
+        let prompt = crate::server::application::evaluation::generator::build_paraphrase_prompt(
+            clean_question,
+        );
         let paraphrase = self
             .generator
             .paraphrase_question(effect.generation_model_id, prompt)
@@ -94,9 +95,7 @@ impl EvaluationDatasetEffectExecutor {
 
         if let Some(original_embedding) = clean_embedding {
             let cosine = cosine_similarity(original_embedding, &paraphrase_embedding);
-            if cosine
-                < crate::server::application::evaluation::generator::PARAPHRASE_MIN_COSINE
-            {
+            if cosine < crate::server::application::evaluation::generator::PARAPHRASE_MIN_COSINE {
                 job.emit(
                     InternalLogEvent::info(format!(
                         "Paraphrase rejected (cosine {:.2} < min)",
@@ -129,12 +128,9 @@ impl EvaluationDatasetEffectExecutor {
             .await?;
 
         job.emit(
-            InternalLogEvent::info(format!(
-                "Accepted broken paraphrase of Q{}",
-                clean_sequence,
-            ))
-            .with_meta("clean_sequence", json!(clean_sequence))
-            .with_meta("paraphrase_preview", json!(truncate_str(&paraphrase, 200))),
+            InternalLogEvent::info(format!("Accepted broken paraphrase of Q{}", clean_sequence,))
+                .with_meta("clean_sequence", json!(clean_sequence))
+                .with_meta("paraphrase_preview", json!(truncate_str(&paraphrase, 200))),
         )
         .await;
 
@@ -171,9 +167,10 @@ impl EvaluationDatasetEffectExecutor {
         let mut rejection_attempt: u32 = 0;
         let mut accepted_sequence: u32 = 0;
 
-        let plan = crate::server::application::evaluation::generator::GenerationPlan::default_for_count(
-            effect.target_question_count,
-        );
+        let plan =
+            crate::server::application::evaluation::generator::GenerationPlan::default_for_count(
+                effect.target_question_count,
+            );
         let mut remaining_by_category: std::collections::HashMap<
             crate::server::domain::evaluation::question::QuestionCategory,
             u32,
@@ -221,11 +218,12 @@ impl EvaluationDatasetEffectExecutor {
                 .unwrap_or(
                     crate::server::domain::evaluation::question::QuestionCategory::FactRetrieval,
                 );
-            let prompt = crate::server::application::evaluation::generator::build_question_prompt_for(
-                &plain_text,
-                recent_previous_coverage(&previous_coverage),
-                category,
-            );
+            let prompt =
+                crate::server::application::evaluation::generator::build_question_prompt_for(
+                    &plain_text,
+                    recent_previous_coverage(&previous_coverage),
+                    category,
+                );
             let generated_result = self
                 .generator
                 .generate_question(effect.generation_model_id, prompt, category)

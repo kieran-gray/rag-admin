@@ -5,9 +5,7 @@ use leptos_router::NavigateOptions;
 
 use crate::components::event_bus::use_event_bus;
 use crate::server_functions::jobs::list_active_jobs;
-use crate::shared::{
-    classify_event, ActivityDelta, ActivityJobDto, ActivityStart, ActivityStatus,
-};
+use crate::shared::{classify_event, ActivityDelta, ActivityJobDto, ActivityStart, ActivityStatus};
 
 #[derive(Clone, Copy)]
 pub struct ActivityState {

@@ -114,10 +114,7 @@ pub(super) fn composite_ci_bounds(variant: &EvaluationVariantResult) -> (f32, f3
     }
 }
 
-pub(super) fn ci_overlaps(
-    a: &EvaluationVariantResult,
-    b: &EvaluationVariantResult,
-) -> bool {
+pub(super) fn ci_overlaps(a: &EvaluationVariantResult, b: &EvaluationVariantResult) -> bool {
     let (a_lo, a_hi) = composite_ci_bounds(a);
     let (b_lo, b_hi) = composite_ci_bounds(b);
     a_hi.min(b_hi) >= a_lo.max(b_lo)
@@ -127,12 +124,7 @@ pub(super) fn ci_half(low: f32, high: f32) -> f32 {
     ((high - low) / 2.0).max(0.0)
 }
 
-pub(super) fn metric_cell(
-    value: f32,
-    ci_low: f32,
-    ci_high: f32,
-    best: f32,
-) -> impl IntoView {
+pub(super) fn metric_cell(value: f32, ci_low: f32, ci_high: f32, best: f32) -> impl IntoView {
     let is_best = (value - best).abs() < 0.0005 && best > 0.0;
     let cell_class = if is_best { "num cell-best" } else { "num" };
     let half = ((ci_high - ci_low) / 2.0).max(0.0);

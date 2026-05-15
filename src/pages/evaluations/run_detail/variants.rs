@@ -4,9 +4,7 @@ use crate::components::primitives::{MetricBar, MetricKind, Surface};
 use crate::shared::{evaluation_score, EvaluationVariantResult};
 
 use super::promote::{PromoteHandle, VariantSaveButton};
-use super::shared::{
-    ci_half, metric_cell, row_key, variant_display, MetricBests, METRIC_DEFS,
-};
+use super::shared::{ci_half, metric_cell, row_key, variant_display, MetricBests, METRIC_DEFS};
 use super::summary::AxisLegend;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -49,7 +47,8 @@ pub(super) fn VariantsSection(
         .into_any()
     });
 
-    let body = move || match mode.get() {
+    let body = move || {
+        match mode.get() {
         VariantsView::Bars => view! {
             <div class="space-y-5">
                 {variants.with_value(|vs| {
@@ -73,16 +72,21 @@ pub(super) fn VariantsSection(
             />
         }
         .into_any(),
+    }
     };
 
-    let status_banner = move || promote_status.get().map(|r| match r {
-        Ok(msg) => view! {
-            <div class="promote-status promote-status-ok mb-3">{msg}</div>
-        }.into_any(),
-        Err(e) => view! {
-            <div class="promote-status promote-status-err mb-3">{e}</div>
-        }.into_any(),
-    });
+    let status_banner = move || {
+        promote_status.get().map(|r| match r {
+            Ok(msg) => view! {
+                <div class="promote-status promote-status-ok mb-3">{msg}</div>
+            }
+            .into_any(),
+            Err(e) => view! {
+                <div class="promote-status promote-status-err mb-3">{e}</div>
+            }
+            .into_any(),
+        })
+    };
 
     view! {
         <Surface title="Variants".to_string() actions=actions sticky_header=true>
@@ -422,11 +426,7 @@ fn SortableTh(
             ""
         }
     };
-    let class = if numeric {
-        "num sortable"
-    } else {
-        "sortable"
-    };
+    let class = if numeric { "num sortable" } else { "sortable" };
     let title_attr = if title.is_empty() { label } else { title };
     view! {
         <th

@@ -2,10 +2,10 @@ use leptos::prelude::*;
 
 mod chunk_card;
 
-use chunk_card::ChunkCard;
 use crate::components::primitives::{EmptyState, Surface};
 use crate::server_functions::source_document::get_chunks;
 use crate::shared::SourceDocumentDetailDto;
+use chunk_card::ChunkCard;
 
 #[component]
 pub fn ChunksTab(detail: Option<SourceDocumentDetailDto>) -> impl IntoView {

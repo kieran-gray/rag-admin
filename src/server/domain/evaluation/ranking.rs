@@ -71,11 +71,7 @@ mod tests {
 
     #[test]
     fn leader_alone_when_ci_disjoint() {
-        let v = vec![
-            e(0.9, 0.85, 0.95),
-            e(0.3, 0.25, 0.35),
-            e(0.5, 0.45, 0.55),
-        ];
+        let v = vec![e(0.9, 0.85, 0.95), e(0.3, 0.25, 0.35), e(0.5, 0.45, 0.55)];
         assert_eq!(equivalence_class(&v), vec![0]);
     }
 

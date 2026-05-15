@@ -260,46 +260,44 @@ impl OptimizeRunEffectExecutor {
                             .await?;
                     }
 
-                    let (metrics, composite, traces) = if resume
-                        .scored_tuning
-                        .contains(&(trial.trial_id, rung_num))
-                    {
-                        let m = resume
-                            .scored_metrics
-                            .get(&(trial.trial_id, rung_num))
-                            .cloned()
-                            .unwrap_or_else(empty_metrics);
-                        let c = evaluation_score(&m);
-                        (m, c, Vec::new())
-                    } else {
-                        let (m, t) = self
-                            .trial_scorer
-                            .score_variant(effect.run_id, &prepared, &subset, &options)
-                            .await?;
-                        let c = evaluation_score(&m);
-                        self.command_processor
-                            .handle(
-                                effect.run_id,
-                                EvaluationRunCommand::ScoreVariant(ScoreVariant {
-                                    run_id: effect.run_id,
-                                    variant_label: encoding::trial_rung_label(
-                                        trial.trial_id,
-                                        rung_num,
-                                    ),
-                                    variant_config: prepared.config,
-                                    options: options.clone(),
-                                    split: EvaluationResultSplit::Tuning,
-                                    chunk_set_id: prepared.chunk_set_id,
-                                    embedding_set_id: prepared.embedding_set_id,
-                                    metrics: m.clone(),
-                                    retrieval_traces: t.clone(),
-                                    selected: false,
-                                    occurred_at: self.clock.now(),
-                                }),
-                            )
-                            .await?;
-                        (m, c, t)
-                    };
+                    let (metrics, composite, traces) =
+                        if resume.scored_tuning.contains(&(trial.trial_id, rung_num)) {
+                            let m = resume
+                                .scored_metrics
+                                .get(&(trial.trial_id, rung_num))
+                                .cloned()
+                                .unwrap_or_else(empty_metrics);
+                            let c = evaluation_score(&m);
+                            (m, c, Vec::new())
+                        } else {
+                            let (m, t) = self
+                                .trial_scorer
+                                .score_variant(effect.run_id, &prepared, &subset, &options)
+                                .await?;
+                            let c = evaluation_score(&m);
+                            self.command_processor
+                                .handle(
+                                    effect.run_id,
+                                    EvaluationRunCommand::ScoreVariant(ScoreVariant {
+                                        run_id: effect.run_id,
+                                        variant_label: encoding::trial_rung_label(
+                                            trial.trial_id,
+                                            rung_num,
+                                        ),
+                                        variant_config: prepared.config,
+                                        options: options.clone(),
+                                        split: EvaluationResultSplit::Tuning,
+                                        chunk_set_id: prepared.chunk_set_id,
+                                        embedding_set_id: prepared.embedding_set_id,
+                                        metrics: m.clone(),
+                                        retrieval_traces: t.clone(),
+                                        selected: false,
+                                        occurred_at: self.clock.now(),
+                                    }),
+                                )
+                                .await?;
+                            (m, c, t)
+                        };
                     let _ = traces;
 
                     let fitness = Fitness {

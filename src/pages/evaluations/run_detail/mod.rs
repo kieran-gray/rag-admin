@@ -4,9 +4,7 @@ use leptos_router::hooks::use_params_map;
 use uuid::Uuid;
 
 use crate::components::event_bus::use_invalidator;
-use crate::components::primitives::{
-    EmptyState, PageHeader, Status, StatusPill, Surface,
-};
+use crate::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
 use crate::server_functions::evaluation::get_run;
 use crate::shared::{
     aggregate_type, evaluation_score, EvaluationResultSplit, EvaluationRunDto,

@@ -10,7 +10,6 @@ use crate::server::application::evaluation::effects::{
 };
 use crate::server::application::evaluation::ports::LlmJudge;
 use crate::server::application::evaluation::scoring::TrialScorer;
-use crate::server::infrastructure::evaluation::LlmJudgeAdapter;
 use crate::server::application::indexing::{IndexingEffect, IndexingEffectExecutor};
 use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::source_document::ports::SourceAdapterRegistry;
@@ -42,6 +41,7 @@ use crate::server::domain::source_document::projector::SourceDocumentProjector;
 use crate::server::event_sourcing::effect::EffectLedger;
 use crate::server::event_sourcing::event_bus::EventBus;
 use crate::server::event_sourcing::process_manager::ProcessManager;
+use crate::server::infrastructure::evaluation::LlmJudgeAdapter;
 use crate::server::infrastructure::event_sourcing::{
     spawn_postgres_event_listener, PostgresEffectLedger,
 };
@@ -234,10 +234,8 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
         Some(judge_adapter),
     );
 
-    let run_effect_dispatcher = EvaluationRunEffectDispatcher::new(
-        run_effect_executor,
-        optimize_effect_executor,
-    );
+    let run_effect_dispatcher =
+        EvaluationRunEffectDispatcher::new(run_effect_executor, optimize_effect_executor);
 
     let dataset_process_manager = Arc::new(ProcessManager::new(
         Arc::clone(&wirings.dataset.aggregate_repository),

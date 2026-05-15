@@ -131,7 +131,11 @@ pub fn bootstrap_ci(per_question: &[f32], seed: u64, samples: usize, alpha: f32)
     let samples = samples.max(1);
     let alpha = alpha.clamp(0.0, 1.0);
 
-    let mut state = if seed == 0 { 0x9E37_79B9_7F4A_7C15 } else { seed };
+    let mut state = if seed == 0 {
+        0x9E37_79B9_7F4A_7C15
+    } else {
+        seed
+    };
     let mut means: Vec<f32> = Vec::with_capacity(samples);
     for _ in 0..samples {
         let mut sum = 0.0f64;
@@ -297,7 +301,10 @@ mod tests {
         let wide = vec![0.0, 0.0, 0.5, 1.0, 1.0];
         let (lt, ht) = bootstrap_ci(&tight, 7, 500, 0.05);
         let (lw, hw) = bootstrap_ci(&wide, 7, 500, 0.05);
-        assert!((hw - lw) > (ht - lt), "wide CI should be wider than tight CI");
+        assert!(
+            (hw - lw) > (ht - lt),
+            "wide CI should be wider than tight CI"
+        );
     }
 
     #[test]
@@ -305,6 +312,9 @@ mod tests {
         let v = vec![0.1, 0.4, 0.5, 0.7, 0.9, 0.95, 0.2, 0.6, 0.55, 0.8];
         let (l1, _) = bootstrap_ci(&v, 1, 200, 0.05);
         let (l2, _) = bootstrap_ci(&v, 99, 200, 0.05);
-        assert!((l1 - l2).abs() > 1e-6, "different seeds should yield different draws");
+        assert!(
+            (l1 - l2).abs() > 1e-6,
+            "different seeds should yield different draws"
+        );
     }
 }

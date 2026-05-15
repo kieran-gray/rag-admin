@@ -86,7 +86,7 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
     ) -> Result<Vec<EvaluationQuestion>, EvaluationDatasetRepositoryError> {
         let question_rows: Vec<QuestionRow> = sqlx::query_as(
             "SELECT sequence, question, embedding, category, grammar_variant, paraphrase_of \
-             FROM evaluation_questions WHERE dataset_id = $1 ORDER BY sequence ASC"
+             FROM evaluation_questions WHERE dataset_id = $1 ORDER BY sequence ASC",
         )
         .bind(dataset_id)
         .fetch_all(&self.pool)

@@ -76,7 +76,7 @@ pub(super) fn VariantSaveButton(
             type="button"
             class=class
             title=title
-            prop:disabled=move || any_busy()
+            prop:disabled=any_busy
             on:click=move |_| promote.save(label_for_save.clone())
         >
             {move || if is_busy() { "Saving…" } else { "Save" }}
@@ -97,8 +97,8 @@ pub(super) fn ReplicatePanel(run_id: uuid::Uuid) -> impl IntoView {
             match replicate_optimization_run(run_id).await {
                 Ok(new_run_id) => {
                     let url = format!("/runs/{new_run_id}/replicate?with={run_id}");
-                    let _ = leptos::web_sys::window()
-                        .and_then(|w| w.location().set_href(&url).ok());
+                    let _ =
+                        leptos::web_sys::window().and_then(|w| w.location().set_href(&url).ok());
                 }
                 Err(e) => {
                     set_replicating.set(false);

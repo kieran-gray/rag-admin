@@ -45,7 +45,8 @@ impl EvaluationPlan {
     fn for_run(effect: &ExecuteRunEffect, question_count: usize) -> Result<Self, AppError> {
         match &effect.autotune_request {
             Some(req) => {
-                let split = split_questions(effect.run_id, question_count, req.tuning_fraction_milli);
+                let split =
+                    split_questions(effect.run_id, question_count, req.tuning_fraction_milli);
                 if !split.is_usable() {
                     return Err(AppError::Validation(format!(
                         "autotune needs at least 2 questions for a {:.0}/{:.0} split (got {question_count})",
@@ -250,17 +251,8 @@ impl EvaluationRunEffectExecutor {
                     options: options.clone(),
                     score,
                 });
-                self.record_scored(
-                    run_id,
-                    job,
-                    variant,
-                    options,
-                    split,
-                    metrics,
-                    traces,
-                    false,
-                )
-                .await?;
+                self.record_scored(run_id, job, variant, options, split, metrics, traces, false)
+                    .await?;
             }
         }
         Ok(scored)

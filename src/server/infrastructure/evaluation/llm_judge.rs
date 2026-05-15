@@ -89,8 +89,9 @@ mod tests {
 
     #[test]
     fn parses_plain_verdict() {
-        let v = parse_verdict(r#"{"sufficient":true,"confidence":0.92,"reason":"covers the fact"}"#)
-            .unwrap();
+        let v =
+            parse_verdict(r#"{"sufficient":true,"confidence":0.92,"reason":"covers the fact"}"#)
+                .unwrap();
         assert!(v.sufficient);
         assert!((v.confidence - 0.92).abs() < 1e-4);
         assert_eq!(v.reason, "covers the fact");
@@ -98,8 +99,10 @@ mod tests {
 
     #[test]
     fn parses_fenced_verdict() {
-        let v = parse_verdict("```json\n{\"sufficient\":false,\"confidence\":0.1,\"reason\":\"empty\"}\n```")
-            .unwrap();
+        let v = parse_verdict(
+            "```json\n{\"sufficient\":false,\"confidence\":0.1,\"reason\":\"empty\"}\n```",
+        )
+        .unwrap();
         assert!(!v.sufficient);
         assert!((v.confidence - 0.1).abs() < 1e-4);
     }

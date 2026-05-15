@@ -5,9 +5,7 @@ use crate::shared::{
     evaluation_score, EvaluationResultSplit, EvaluationVariantResult, ReliabilityFlag,
 };
 
-use super::shared::{
-    ci_overlaps, composite_ci_bounds, extract_trial_id, primary_leader, row_key,
-};
+use super::shared::{ci_overlaps, composite_ci_bounds, extract_trial_id, primary_leader, row_key};
 
 const SMALL_SAMPLE_THRESHOLD: u32 = 25;
 const WINNERS_CURSE_TRIAL_THRESHOLD: usize = 16;

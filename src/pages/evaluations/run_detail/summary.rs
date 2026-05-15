@@ -3,7 +3,7 @@ use leptos::prelude::*;
 use crate::components::primitives::Surface;
 use crate::shared::{EvaluationResultSplit, EvaluationVariantResult};
 
-use super::shared::{METRIC_DEFS};
+use super::shared::METRIC_DEFS;
 
 #[derive(Clone)]
 pub(super) struct RetrievalSummary {

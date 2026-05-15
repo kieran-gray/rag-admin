@@ -304,7 +304,8 @@ struct RungRow {
 fn rung_summary(variants: &[EvaluationVariantResult]) -> Vec<RungRow> {
     use std::collections::BTreeMap;
     let mut by_rung: BTreeMap<u32, (Vec<f32>, std::collections::HashSet<u32>)> = BTreeMap::new();
-    let mut max_rung_by_trial: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
+    let mut max_rung_by_trial: std::collections::HashMap<u32, u32> =
+        std::collections::HashMap::new();
 
     for v in variants {
         let Some((trial_id, rung)) = parse_trial_rung(&v.variant.label) else {
@@ -367,11 +368,9 @@ fn retired_trials(variants: &[EvaluationVariantResult]) -> Vec<RetiredRow> {
         if rung > overall_max_rung {
             overall_max_rung = rung;
         }
-        let entry = max_rung_by_trial.entry(trial_id).or_insert((
-            0,
-            0.0,
-            v.variant.label.clone(),
-        ));
+        let entry = max_rung_by_trial
+            .entry(trial_id)
+            .or_insert((0, 0.0, v.variant.label.clone()));
         if rung > entry.0 {
             *entry = (rung, evaluation_score(&v.metrics), v.variant.label.clone());
         }
