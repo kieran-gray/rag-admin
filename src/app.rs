@@ -5,9 +5,9 @@ use leptos_router::{
     ParamSegment, StaticSegment,
 };
 
-use crate::components::event_bus::provide_event_bus;
-use crate::components::shell::AppShell;
-use crate::pages::{
+use crate::ui::components::event_bus::provide_event_bus;
+use crate::ui::components::shell::AppShell;
+use crate::ui::pages::{
     chunking::ChunkingPage,
     document_detail::{DocumentByIdRedirect, DocumentDetailPage},
     embed_test::EmbedTestPage,

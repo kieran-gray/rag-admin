@@ -2,11 +2,10 @@
 
 pub mod app;
 pub mod catalog;
-pub mod components;
 pub mod contracts;
 pub mod core;
-pub mod pages;
 pub mod server_functions;
+pub mod ui;
 
 #[cfg(feature = "ssr")]
 pub mod server;
