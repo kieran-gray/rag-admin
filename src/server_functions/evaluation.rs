@@ -200,6 +200,58 @@ pub async fn delete_dataset(dataset_id: Uuid) -> Result<(), ServerFnError> {
 }
 
 #[server(
+    name = StartRunOptimization,
+    prefix = "/api",
+    endpoint = "start_run_optimization"
+)]
+pub async fn start_run_optimization(
+    request: crate::shared::RunOptimizationRequestDto,
+) -> Result<EvaluationJobInfo, ServerFnError> {
+    let datasets = ctx::<Arc<EvaluationQueryService>>()?;
+    let run_processor = ctx::<Arc<CommandProcessor<EvaluationRun>>>()?;
+
+    let dataset = datasets
+        .get_dataset(request.dataset_id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .ok_or_else(|| {
+            ServerFnError::new(format!(
+                "evaluation dataset {} not found",
+                request.dataset_id
+            ))
+        })?;
+
+    let scoring_policy = ScoringPolicy::default();
+    let run_id = UuidGenerator.new_uuid();
+    let occurred_at = SystemClock.now();
+
+    run_processor
+        .handle(
+            run_id,
+            EvaluationRunCommand::RequestRun(RequestRun {
+                run_id,
+                dataset_id: request.dataset_id,
+                pipeline_configuration_id: request.pipeline_configuration_id,
+                document_id: dataset.document_id,
+                document_version: dataset.document_version,
+                variants: Vec::new(),
+                options: Vec::new(),
+                autotune_request: None,
+                optimization: Some(request.optimization),
+                scoring_policy,
+                occurred_at,
+            }),
+        )
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(EvaluationJobInfo {
+        job_id: run_id.to_string(),
+        stream_url: format!("/api/events/ws?stream_id={run_id}"),
+    })
+}
+
+#[server(
     name = StartRunEvaluation,
     prefix = "/api",
     endpoint = "start_run_evaluation"
@@ -222,13 +274,7 @@ pub async fn start_run_evaluation(
         })?;
 
     let scoring_policy = ScoringPolicy::default();
-    let run_id = EvaluationRun::compute_id(
-        request.dataset_id,
-        request.pipeline_configuration_id,
-        &request.variants,
-        &request.options,
-        request.autotune.as_ref(),
-    );
+    let run_id = UuidGenerator.new_uuid();
     let occurred_at = SystemClock.now();
 
     run_processor
@@ -243,6 +289,7 @@ pub async fn start_run_evaluation(
                 variants: request.variants,
                 options: request.options,
                 autotune_request: request.autotune,
+                optimization: None,
                 scoring_policy,
                 occurred_at,
             }),
@@ -279,6 +326,125 @@ pub async fn get_runs_for_document(
             created_at: r.created_at.to_string(),
         })
         .collect())
+}
+
+#[server(
+    name = ReplicateOptimizationRun,
+    prefix = "/api",
+    endpoint = "replicate_optimization_run"
+)]
+pub async fn replicate_optimization_run(run_id: Uuid) -> Result<Uuid, ServerFnError> {
+    use crate::shared::EvaluationRunOptions;
+
+    let query = ctx::<Arc<EvaluationQueryService>>()?;
+    let run_processor = ctx::<Arc<CommandProcessor<EvaluationRun>>>()?;
+
+    let run = query
+        .get_run(run_id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .ok_or_else(|| ServerFnError::new(format!("run {run_id} not found")))?;
+
+    let original = run
+        .optimization
+        .clone()
+        .ok_or_else(|| ServerFnError::new("run was not an optimization run".to_string()))?;
+    let optimization = crate::shared::OptimizationConfig {
+        budget: original.budget,
+        scope: original.scope,
+        judges_enabled: original.judges_enabled,
+        seed: None,
+    };
+
+    let new_run_id = UuidGenerator.new_uuid();
+    let scoring_policy = ScoringPolicy::default();
+    let occurred_at = SystemClock.now();
+
+    run_processor
+        .handle(
+            new_run_id,
+            EvaluationRunCommand::RequestRun(RequestRun {
+                run_id: new_run_id,
+                dataset_id: run.dataset_id,
+                pipeline_configuration_id: run.pipeline_configuration_id,
+                document_id: run.document_id,
+                document_version: run.document_version,
+                variants: Vec::<crate::shared::ChunkingVariant>::new(),
+                options: Vec::<EvaluationRunOptions>::new(),
+                autotune_request: None,
+                optimization: Some(optimization),
+                scoring_policy,
+                occurred_at,
+            }),
+        )
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(new_run_id)
+}
+
+#[server(
+    name = PromoteVariantToChunkingConfig,
+    prefix = "/api",
+    endpoint = "promote_variant_to_chunking_config"
+)]
+pub async fn promote_variant_to_chunking_config(
+    run_id: Uuid,
+    variant_label: String,
+    name: String,
+) -> Result<Uuid, ServerFnError> {
+    use crate::server::application::configuration::ChunkingConfigurationService;
+    use crate::shared::{ChunkingConfigurationCommandDto, CreateChunkingConfigurationDto};
+
+    let trimmed_label = variant_label.trim();
+    if trimmed_label.is_empty() {
+        return Err(ServerFnError::new(
+            "variant_label is required".to_string(),
+        ));
+    }
+
+    let query = ctx::<Arc<EvaluationQueryService>>()?;
+    let chunking_service = ctx::<Arc<ChunkingConfigurationService>>()?;
+
+    let run = query
+        .get_run(run_id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .ok_or_else(|| ServerFnError::new(format!("run {run_id} not found")))?;
+
+    let chosen = run
+        .variant_results
+        .iter()
+        .find(|v| v.variant_label == trimmed_label)
+        .ok_or_else(|| {
+            ServerFnError::new(format!(
+                "run {run_id} has no variant labelled '{trimmed_label}'"
+            ))
+        })?;
+
+    let trimmed_name = name.trim();
+    let chosen_name = if trimmed_name.is_empty() {
+        format!(
+            "{}-{}",
+            &run_id.to_string()[..8],
+            chosen.variant_label
+        )
+    } else {
+        trimmed_name.to_string()
+    };
+
+    let cmd = ChunkingConfigurationCommandDto::CreateChunkingConfiguration(
+        CreateChunkingConfigurationDto {
+            name: chosen_name,
+            config: chosen.variant_config,
+        },
+    );
+    chunking_service
+        .handle_dto(cmd)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(run_id)
 }
 
 #[server(name = GetRun, prefix = "/api", endpoint = "get_run")]

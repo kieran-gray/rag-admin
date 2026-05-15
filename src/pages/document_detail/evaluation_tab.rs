@@ -16,6 +16,7 @@ use crate::shared::{
 };
 
 use super::eval_launcher::{EvaluationLauncher, LauncherCallbacks};
+use super::optimize_launcher::OptimizeLauncher;
 
 #[component]
 pub fn EvaluationTab(
@@ -186,16 +187,42 @@ fn EvaluationWorkspace(
                 </Transition>
             </Surface>
 
-            <EvaluationLauncher
-                pipelines=pipelines
-                chunking_configurations=chunking_configurations
-                sweep_templates=sweep_templates
-                active_dataset=active_dataset
-                active_pipeline=active_pipeline
-                set_active_pipeline=set_active_pipeline
-                running=job_running
-                callbacks=LauncherCallbacks { on_start: on_start_run }
-            />
+            {move || {
+                match (active_dataset.get(), active_pipeline.get()) {
+                    (Some(ds), Some(pipeline)) => view! {
+                        <OptimizeLauncher
+                            document_id=document_id
+                            dataset_id=ds
+                            pipeline_configuration_id=pipeline
+                        />
+                    }.into_any(),
+                    _ => view! {
+                        <Surface>
+                            <p class="muted text-sm">
+                                "Generate a dataset and pick a pipeline configuration to enable the optimization launcher."
+                            </p>
+                        </Surface>
+                    }.into_any(),
+                }
+            }}
+
+            <details class="surface-raised rounded p-4">
+                <summary class="cursor-pointer text-sm muted hover:text-text">
+                    "Expert: manual variants / autotune"
+                </summary>
+                <div class="pt-4">
+                    <EvaluationLauncher
+                        pipelines=pipelines
+                        chunking_configurations=chunking_configurations
+                        sweep_templates=sweep_templates
+                        active_dataset=active_dataset
+                        active_pipeline=active_pipeline
+                        set_active_pipeline=set_active_pipeline
+                        running=job_running
+                        callbacks=LauncherCallbacks { on_start: on_start_run }
+                    />
+                </div>
+            </details>
 
             {move || launch_error.get().map(|err| view! {
                 <Surface>

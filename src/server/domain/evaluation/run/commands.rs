@@ -3,7 +3,7 @@ use uuid::Uuid;
 use crate::server::domain::shared::Timestamp;
 use crate::shared::{
     ChunkingConfig, ChunkingVariant, EvaluationAutotuneRequest, EvaluationMetrics,
-    EvaluationResultSplit, EvaluationRunOptions,
+    EvaluationResultSplit, EvaluationRunOptions, OptimizationConfig,
 };
 
 use super::{events::RetrievalTraceEntry, scoring_policy::ScoringPolicy};
@@ -17,6 +17,7 @@ pub struct RequestRun {
     pub variants: Vec<ChunkingVariant>,
     pub options: Vec<EvaluationRunOptions>,
     pub autotune_request: Option<EvaluationAutotuneRequest>,
+    pub optimization: Option<OptimizationConfig>,
     pub scoring_policy: ScoringPolicy,
     pub occurred_at: Timestamp,
 }
@@ -54,10 +55,35 @@ pub struct FailRun {
     pub occurred_at: Timestamp,
 }
 
+pub struct ProposeTrial {
+    pub run_id: Uuid,
+    pub trial_id: u32,
+    pub params: serde_json::Value,
+    pub rung: u32,
+    pub occurred_at: Timestamp,
+}
+
+pub struct AdvanceRung {
+    pub run_id: Uuid,
+    pub rung: u32,
+    pub surviving_trials: Vec<u32>,
+    pub occurred_at: Timestamp,
+}
+
+pub struct SelectChampion {
+    pub run_id: Uuid,
+    pub trial_id: u32,
+    pub holdout_metrics: EvaluationMetrics,
+    pub occurred_at: Timestamp,
+}
+
 pub enum EvaluationRunCommand {
     RequestRun(RequestRun),
     MarkVariantPrepared(MarkVariantPrepared),
     ScoreVariant(ScoreVariant),
+    ProposeTrial(ProposeTrial),
+    AdvanceRung(AdvanceRung),
+    SelectChampion(SelectChampion),
     CompleteRun(CompleteRun),
     FailRun(FailRun),
 }
@@ -68,6 +94,9 @@ impl EvaluationRunCommand {
             Self::RequestRun(c) => c.run_id,
             Self::MarkVariantPrepared(c) => c.run_id,
             Self::ScoreVariant(c) => c.run_id,
+            Self::ProposeTrial(c) => c.run_id,
+            Self::AdvanceRung(c) => c.run_id,
+            Self::SelectChampion(c) => c.run_id,
             Self::CompleteRun(c) => c.run_id,
             Self::FailRun(c) => c.run_id,
         }

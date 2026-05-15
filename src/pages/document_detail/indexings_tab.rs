@@ -347,7 +347,7 @@ fn NewIndexingPanel(
                             if ps.is_empty() {
                                 return view! {
                                     <p class="muted text-sm">
-                                        "No pipelines configured — add one in Pipelines."
+                                        "No pipelines configured. Add one in Pipelines."
                                     </p>
                                 }.into_any();
                             }
@@ -382,7 +382,7 @@ fn NewIndexingPanel(
                         if cs.is_empty() {
                             return view! {
                                 <p class="muted text-sm">
-                                    "No chunking configurations — add some in Chunking."
+                                    "No chunking configurations. Add some in Chunking."
                                 </p>
                             }.into_any();
                         }

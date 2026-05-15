@@ -6,6 +6,7 @@ pub fn Surface(
     #[prop(optional)] actions: Option<Children>,
     #[prop(optional)] raised: bool,
     #[prop(optional)] flush: bool,
+    #[prop(optional)] sticky_header: bool,
     #[prop(optional, into)] class: Option<String>,
     children: Children,
 ) -> impl IntoView {
@@ -14,10 +15,15 @@ pub fn Surface(
     let extra = class.unwrap_or_default();
     let class = format!("{base} {padding} {extra}");
 
+    let header_class = if sticky_header {
+        "surface-header surface-header-sticky"
+    } else {
+        "surface-header"
+    };
     let header = match (title.as_ref(), actions.is_some()) {
         (None, false) => None,
         _ => Some(view! {
-            <div class="flex items-center justify-between mb-3 gap-3">
+            <div class=header_class>
                 <div class="section-title">{title.clone().unwrap_or_default()}</div>
                 <div class="flex items-center gap-2">
                     {actions.map(|c| c())}

@@ -2,7 +2,9 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::server::domain::evaluation::run::scoring_policy::ScoringPolicy;
-use crate::shared::{ChunkingVariant, EvaluationAutotuneRequest, EvaluationRunOptions};
+use crate::shared::{
+    ChunkingVariant, EvaluationAutotuneRequest, EvaluationRunOptions, OptimizationConfig,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecuteRunEffect {
@@ -18,7 +20,19 @@ pub struct ExecuteRunEffect {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OptimizeRunEffect {
+    pub run_id: Uuid,
+    pub dataset_id: Uuid,
+    pub pipeline_configuration_id: Uuid,
+    pub document_id: Uuid,
+    pub document_version: u32,
+    pub optimization: OptimizationConfig,
+    pub scoring_policy: ScoringPolicy,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum EvaluationRunEffect {
     ExecuteRun(ExecuteRunEffect),
+    OptimizeRun(OptimizeRunEffect),
 }

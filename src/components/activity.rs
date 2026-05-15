@@ -6,7 +6,7 @@ use leptos_router::NavigateOptions;
 use crate::components::event_bus::use_event_bus;
 use crate::server_functions::jobs::list_active_jobs;
 use crate::shared::{
-    classify_event, ActivityDelta, ActivityJobDto, ActivityKind, ActivityStart, ActivityStatus,
+    classify_event, ActivityDelta, ActivityJobDto, ActivityStart, ActivityStatus,
 };
 
 #[derive(Clone, Copy)]
@@ -57,10 +57,7 @@ pub fn provide_activity_state() {
             if let Some(delta) = classify_event(&event) {
                 let needs_url_refresh = matches!(
                     &delta,
-                    ActivityDelta::Start(ActivityStart {
-                        kind: ActivityKind::Indexing,
-                        ..
-                    }) | ActivityDelta::Refresh { .. }
+                    ActivityDelta::Start(_) | ActivityDelta::Refresh { .. }
                 );
                 set_rows.update(|rows| apply_delta(rows, delta));
                 if needs_url_refresh {

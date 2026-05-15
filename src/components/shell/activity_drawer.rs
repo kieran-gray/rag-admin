@@ -162,7 +162,7 @@ fn ActivityRowView(
                             }.into_any(),
                             None => view! {
                                 <div class="muted text-xs italic">
-                                    "No streamed log for this job — the drawer renders aggregate events on the bus."
+                                    "No streamed log for this job. The drawer renders aggregate events on the bus."
                                 </div>
                             }.into_any(),
                         }}

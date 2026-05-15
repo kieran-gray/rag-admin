@@ -98,6 +98,9 @@ pub struct EvaluationQuestionDto {
     pub references: Vec<EvaluationReferenceDto>,
     #[serde(default)]
     pub embedding: Option<Vec<OrderedF32>>,
+    pub category: String,
+    pub grammar_variant: String,
+    pub paraphrase_of: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -148,11 +151,99 @@ impl Default for EvaluationRunOptions {
     }
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum OptimizationBudget {
+    Quick,
+    #[default]
+    Thorough,
+    Exhaustive,
+}
+
+impl OptimizationBudget {
+    pub fn describe(self) -> &'static str {
+        match self {
+            OptimizationBudget::Quick => "24 + 12 + 6 trials · 3 rungs · holdout top 1",
+            OptimizationBudget::Thorough => "48 + 24 + 12 + 6 trials · 4 rungs · holdout top 3",
+            OptimizationBudget::Exhaustive => "96 + 48 + 24 + 12 trials · 4 rungs · holdout top 5",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum OptimizationScope {
+    Chunking,
+    Retrieval,
+    #[default]
+    Both,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct OptimizationConfig {
+    pub budget: OptimizationBudget,
+    pub scope: OptimizationScope,
+    pub judges_enabled: bool,
+    pub seed: Option<u64>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EvaluationAutotuneRequest {
-    pub current_config: ChunkingConfig,
-    pub top_k_values: Vec<u32>,
-    pub min_score_milli_values: Vec<u32>,
+    #[serde(
+        default = "default_tuning_fraction_milli",
+        deserialize_with = "crate::shared::serde_compat::u32_from_string"
+    )]
+    pub tuning_fraction_milli: u32,
+    #[serde(
+        default = "default_holdout_top_n",
+        deserialize_with = "crate::shared::serde_compat::u32_from_string"
+    )]
+    pub holdout_top_n: u32,
+}
+
+impl Default for EvaluationAutotuneRequest {
+    fn default() -> Self {
+        Self {
+            tuning_fraction_milli: default_tuning_fraction_milli(),
+            holdout_top_n: default_holdout_top_n(),
+        }
+    }
+}
+
+impl EvaluationAutotuneRequest {
+    pub fn tuning_fraction(&self) -> f32 {
+        milli_to_f32(self.tuning_fraction_milli)
+    }
+}
+
+fn default_tuning_fraction_milli() -> u32 {
+    700
+}
+
+fn default_holdout_top_n() -> u32 {
+    3
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReliabilityFlag {
+    ValidationHoldoutGap,
+    FlatLandscape,
+    SmallSample,
+    StatisticalTie,
+}
+
+impl ReliabilityFlag {
+    pub fn headline(self) -> &'static str {
+        match self {
+            Self::ValidationHoldoutGap => "Holdout score diverges from selection score",
+            Self::FlatLandscape => "Dataset isn't discriminating between configs",
+            Self::SmallSample => "Small sample, wide confidence intervals",
+            Self::StatisticalTie => {
+                "Top configs may be tied (overlapping 95% confidence intervals)"
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Default)]
@@ -161,6 +252,7 @@ pub enum EvaluationResultSplit {
     #[default]
     Full,
     Tuning,
+    Validation,
     Holdout,
 }
 
@@ -169,6 +261,7 @@ impl EvaluationResultSplit {
         match self {
             Self::Full => "full",
             Self::Tuning => "tuning",
+            Self::Validation => "validation",
             Self::Holdout => "holdout",
         }
     }
@@ -177,6 +270,7 @@ impl EvaluationResultSplit {
         match s {
             "full" => Ok(Self::Full),
             "tuning" => Ok(Self::Tuning),
+            "validation" => Ok(Self::Validation),
             "holdout" => Ok(Self::Holdout),
             other => Err(format!("unknown evaluation split '{other}'")),
         }
@@ -220,6 +314,23 @@ pub struct EvaluationMetrics {
     pub chunk_count: u32,
     pub average_chunk_tokens: u32,
     pub average_retrieved_tokens: u32,
+    pub recall_ci_low: f32,
+    pub recall_ci_high: f32,
+    pub precision_ci_low: f32,
+    pub precision_ci_high: f32,
+    pub iou_ci_low: f32,
+    pub iou_ci_high: f32,
+    pub precision_omega_ci_low: f32,
+    pub precision_omega_ci_high: f32,
+    pub composite_ci_low: f32,
+    pub composite_ci_high: f32,
+    pub judge_score: Option<f32>,
+}
+
+impl EvaluationMetrics {
+    pub fn composite_ci_half_width(&self) -> f32 {
+        ((self.composite_ci_high - self.composite_ci_low) / 2.0).max(0.0)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -247,6 +358,10 @@ pub struct EvaluationScorePolicy {
 }
 
 impl EvaluationScorePolicy {
+    pub fn weights(&self) -> EvaluationScoreWeights {
+        self.weights
+    }
+
     pub fn new(weights: EvaluationScoreWeights) -> Self {
         Self { weights }
     }
@@ -287,8 +402,8 @@ pub struct EvaluationQuestionResult {
     pub iou: f32,
     pub retrieved_chunk_ids: Vec<u32>,
     pub missed_reference_count: u32,
-    #[serde(default)]
     pub reference_results: Vec<EvaluationReferenceResult>,
+    pub category: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -373,7 +488,7 @@ fn default_generation_model() -> String {
 }
 
 fn default_question_count() -> u32 {
-    8
+    30
 }
 
 fn default_excerpt_similarity_threshold_milli() -> u32 {
@@ -381,7 +496,7 @@ fn default_excerpt_similarity_threshold_milli() -> u32 {
 }
 
 fn default_duplicate_similarity_threshold_milli() -> u32 {
-    700
+    820
 }
 
 fn default_top_k() -> u32 {
@@ -433,6 +548,13 @@ pub struct RunEvaluationRequestDto {
     pub options: Vec<EvaluationRunOptions>,
     #[serde(default)]
     pub autotune: Option<EvaluationAutotuneRequest>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RunOptimizationRequestDto {
+    pub dataset_id: Uuid,
+    pub pipeline_configuration_id: Uuid,
+    pub optimization: OptimizationConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

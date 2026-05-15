@@ -10,6 +10,7 @@ pub struct GenerateDatasetEffect {
     pub embedding_model_id: Uuid,
     pub excerpt_similarity_threshold_milli: u32,
     pub duplicate_similarity_threshold_milli: u32,
+    pub grammar_variants_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

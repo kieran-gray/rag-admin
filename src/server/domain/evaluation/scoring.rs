@@ -37,6 +37,14 @@ pub fn score_question(question: &EvaluationQuestion, retrieved: &[&Chunk]) -> (f
     (recall, precision, iou)
 }
 
+pub fn score_trick_question(retrieved_count: usize) -> (f32, f32, f32, f32) {
+    if retrieved_count == 0 {
+        (1.0, 1.0, 1.0, 1.0)
+    } else {
+        (0.0, 0.0, 0.0, 0.0)
+    }
+}
+
 pub fn precision_omega(question: &EvaluationQuestion, all_chunks: &[Chunk]) -> f32 {
     let reference_ranges = reference_ranges(question);
     let relevant_len = non_overlapping_len(&reference_ranges);
@@ -112,6 +120,53 @@ pub fn std_dev(values: &[f32]) -> f32 {
     variance.sqrt()
 }
 
+pub fn bootstrap_ci(per_question: &[f32], seed: u64, samples: usize, alpha: f32) -> (f32, f32) {
+    let n = per_question.len();
+    if n == 0 {
+        return (0.0, 0.0);
+    }
+    if n == 1 {
+        return (per_question[0], per_question[0]);
+    }
+    let samples = samples.max(1);
+    let alpha = alpha.clamp(0.0, 1.0);
+
+    let mut state = if seed == 0 { 0x9E37_79B9_7F4A_7C15 } else { seed };
+    let mut means: Vec<f32> = Vec::with_capacity(samples);
+    for _ in 0..samples {
+        let mut sum = 0.0f64;
+        for _ in 0..n {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            let idx = (state % n as u64) as usize;
+            sum += per_question[idx] as f64;
+        }
+        means.push((sum / n as f64) as f32);
+    }
+    means.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+    let low = percentile(&means, alpha / 2.0);
+    let high = percentile(&means, 1.0 - alpha / 2.0);
+    (low, high)
+}
+
+fn percentile(sorted: &[f32], q: f32) -> f32 {
+    if sorted.is_empty() {
+        return 0.0;
+    }
+    let n = sorted.len();
+    let pos = q.clamp(0.0, 1.0) * (n - 1) as f32;
+    let low = pos.floor() as usize;
+    let high = pos.ceil() as usize;
+    if low == high {
+        sorted[low]
+    } else {
+        let frac = pos - low as f32;
+        sorted[low] + (sorted[high] - sorted[low]) * frac
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -144,6 +199,9 @@ mod tests {
                 })
                 .collect(),
             embedding: None,
+            category: Default::default(),
+            grammar_variant: Default::default(),
+            paraphrase_of: None,
         }
     }
 
@@ -185,6 +243,13 @@ mod tests {
     }
 
     #[test]
+    fn score_trick_question_passes_only_when_nothing_retrieved() {
+        assert_eq!(score_trick_question(0), (1.0, 1.0, 1.0, 1.0));
+        assert_eq!(score_trick_question(1), (0.0, 0.0, 0.0, 0.0));
+        assert_eq!(score_trick_question(7), (0.0, 0.0, 0.0, 0.0));
+    }
+
+    #[test]
     fn precision_omega_isolates_chunking_quality() {
         let q = question(&[(10, 20)]);
         let chunks = vec![chunk(0, 30), chunk(100, 200)];
@@ -194,5 +259,52 @@ mod tests {
     #[test]
     fn non_overlapping_len_merges_overlaps() {
         assert_eq!(non_overlapping_len(&[(0, 10), (5, 15), (20, 25)]), 20);
+    }
+
+    #[test]
+    fn bootstrap_ci_deterministic_for_same_seed() {
+        let v = vec![0.1, 0.4, 0.5, 0.7, 0.9, 0.95, 0.2, 0.6, 0.55, 0.8];
+        let (l1, h1) = bootstrap_ci(&v, 42, 500, 0.05);
+        let (l2, h2) = bootstrap_ci(&v, 42, 500, 0.05);
+        assert!((l1 - l2).abs() < 1e-6);
+        assert!((h1 - h2).abs() < 1e-6);
+        assert!(l1 <= h1);
+    }
+
+    #[test]
+    fn bootstrap_ci_brackets_mean_for_iid_data() {
+        let v = vec![0.5; 30];
+        let (l, h) = bootstrap_ci(&v, 1, 200, 0.05);
+        close(l, 0.5, "ci low on constant");
+        close(h, 0.5, "ci high on constant");
+    }
+
+    #[test]
+    fn bootstrap_ci_empty_returns_zero() {
+        assert_eq!(bootstrap_ci(&[], 1, 100, 0.05), (0.0, 0.0));
+    }
+
+    #[test]
+    fn bootstrap_ci_single_value_returns_value() {
+        let (l, h) = bootstrap_ci(&[0.42], 1, 100, 0.05);
+        close(l, 0.42, "single low");
+        close(h, 0.42, "single high");
+    }
+
+    #[test]
+    fn bootstrap_ci_widens_with_variance() {
+        let tight = vec![0.4, 0.5, 0.5, 0.5, 0.6];
+        let wide = vec![0.0, 0.0, 0.5, 1.0, 1.0];
+        let (lt, ht) = bootstrap_ci(&tight, 7, 500, 0.05);
+        let (lw, hw) = bootstrap_ci(&wide, 7, 500, 0.05);
+        assert!((hw - lw) > (ht - lt), "wide CI should be wider than tight CI");
+    }
+
+    #[test]
+    fn bootstrap_ci_changes_with_seed() {
+        let v = vec![0.1, 0.4, 0.5, 0.7, 0.9, 0.95, 0.2, 0.6, 0.55, 0.8];
+        let (l1, _) = bootstrap_ci(&v, 1, 200, 0.05);
+        let (l2, _) = bootstrap_ci(&v, 99, 200, 0.05);
+        assert!((l1 - l2).abs() > 1e-6, "different seeds should yield different draws");
     }
 }

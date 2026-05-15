@@ -4,7 +4,7 @@ use uuid::Uuid;
 use crate::server::domain::shared::Timestamp;
 use crate::shared::{
     ChunkingConfig, ChunkingVariant, EvaluationAutotuneRequest, EvaluationMetrics,
-    EvaluationResultSplit, EvaluationRunOptions,
+    EvaluationResultSplit, EvaluationRunOptions, OptimizationConfig,
 };
 
 use super::scoring_policy::ScoringPolicy;
@@ -17,6 +17,7 @@ pub struct RetrievalTraceEntry {
     pub recall: f32,
     pub precision: f32,
     pub iou: f32,
+    pub category: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -29,6 +30,7 @@ pub struct RunRequested {
     pub variants: Vec<ChunkingVariant>,
     pub options: Vec<EvaluationRunOptions>,
     pub autotune_request: Option<EvaluationAutotuneRequest>,
+    pub optimization: Option<OptimizationConfig>,
     pub scoring_policy: ScoringPolicy,
     pub occurred_at: Timestamp,
 }
@@ -58,6 +60,31 @@ pub struct VariantScored {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TrialProposed {
+    pub run_id: Uuid,
+    pub trial_id: u32,
+    pub params: serde_json::Value,
+    pub rung: u32,
+    pub occurred_at: Timestamp,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RungAdvanced {
+    pub run_id: Uuid,
+    pub rung: u32,
+    pub surviving_trials: Vec<u32>,
+    pub occurred_at: Timestamp,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChampionSelected {
+    pub run_id: Uuid,
+    pub trial_id: u32,
+    pub holdout_metrics: EvaluationMetrics,
+    pub occurred_at: Timestamp,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RunCompleted {
     pub run_id: Uuid,
     pub occurred_at: Timestamp,
@@ -76,6 +103,9 @@ pub enum EvaluationRunEvent {
     RunRequested(RunRequested),
     VariantPrepared(VariantPrepared),
     VariantScored(VariantScored),
+    TrialProposed(TrialProposed),
+    RungAdvanced(RungAdvanced),
+    ChampionSelected(ChampionSelected),
     RunCompleted(RunCompleted),
     RunFailed(RunFailed),
 }

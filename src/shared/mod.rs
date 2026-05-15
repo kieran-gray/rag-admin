@@ -6,6 +6,7 @@ mod embedding;
 mod evaluation;
 mod events;
 mod ingest;
+mod pareto;
 mod query;
 pub(crate) mod serde_compat;
 mod settings;
@@ -47,11 +48,13 @@ pub use evaluation::{
     EvaluationQuestionDto, EvaluationQuestionResult, EvaluationReferenceDto,
     EvaluationReferenceResult, EvaluationResultSplit, EvaluationRunDto, EvaluationRunOptions,
     EvaluationRunResult, EvaluationRunSummary, EvaluationRunSummaryDto, EvaluationScorePolicy,
-    EvaluationScoreWeights, EvaluationSettings, EvaluationVariantResult, RecentEvaluationRunDto,
-    RunEvaluationRequestDto,
+    EvaluationScoreWeights, EvaluationSettings, EvaluationVariantResult, OptimizationBudget,
+    OptimizationConfig, OptimizationScope, RecentEvaluationRunDto, ReliabilityFlag,
+    RunEvaluationRequestDto, RunOptimizationRequestDto,
 };
 pub use events::{aggregate as aggregate_type, PublishedEvent};
 pub use ingest::{IngestOptions, LogEvent, LogLevel};
+pub use pareto::{pareto_frontier, ParetoPoint};
 pub use query::{QueryHit, QueryRequest, QueryResult};
 pub use settings::SettingsDto;
 pub use source_document::{

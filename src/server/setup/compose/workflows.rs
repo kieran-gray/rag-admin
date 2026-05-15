@@ -6,8 +6,11 @@ use tokio::sync::Notify;
 
 use crate::server::application::evaluation::effects::{
     EvaluationDatasetEffect, EvaluationDatasetEffectExecutor, EvaluationRunEffect,
-    EvaluationRunEffectExecutor,
+    EvaluationRunEffectDispatcher, EvaluationRunEffectExecutor, OptimizeRunEffectExecutor,
 };
+use crate::server::application::evaluation::ports::LlmJudge;
+use crate::server::application::evaluation::scoring::TrialScorer;
+use crate::server::infrastructure::evaluation::LlmJudgeAdapter;
 use crate::server::application::indexing::{IndexingEffect, IndexingEffectExecutor};
 use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::source_document::ports::SourceAdapterRegistry;
@@ -196,7 +199,7 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
         Arc::clone(&clock),
     );
 
-    let run_effect_executor = EvaluationRunEffectExecutor::new(
+    let trial_scorer = TrialScorer::new(
         Arc::clone(&repos.source_document),
         Arc::clone(&repos.blob_store),
         Arc::clone(&services.chunking_engine),
@@ -205,12 +208,35 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
         Arc::clone(&repos.embedding_set),
         Arc::clone(&repos.evaluation_dataset),
         Arc::clone(&services.evaluation_retriever),
-        Arc::clone(&wirings.run.command_processor),
         Arc::clone(&services.pipeline_resolver),
+        Arc::clone(&clock),
+        Arc::clone(&id_generator),
+    );
+
+    let run_effect_executor = EvaluationRunEffectExecutor::new(
+        Arc::clone(&trial_scorer),
+        Arc::clone(&wirings.run.command_processor),
         Arc::clone(&services.job_registry),
         Arc::clone(&services.activity_registry),
         Arc::clone(&clock),
-        Arc::clone(&id_generator),
+    );
+
+    let judge_adapter: Arc<dyn LlmJudge> =
+        LlmJudgeAdapter::new(Arc::clone(&services.generation_service));
+
+    let optimize_effect_executor = OptimizeRunEffectExecutor::new(
+        Arc::clone(&trial_scorer),
+        Arc::clone(&wirings.run.command_processor),
+        Arc::clone(&wirings.run.event_store),
+        Arc::clone(&services.job_registry),
+        Arc::clone(&services.activity_registry),
+        Arc::clone(&clock),
+        Some(judge_adapter),
+    );
+
+    let run_effect_dispatcher = EvaluationRunEffectDispatcher::new(
+        run_effect_executor,
+        optimize_effect_executor,
     );
 
     let dataset_process_manager = Arc::new(ProcessManager::new(
@@ -222,7 +248,7 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
     let run_process_manager = Arc::new(ProcessManager::new(
         Arc::clone(&wirings.run.aggregate_repository),
         run_effect_ledger,
-        run_effect_executor,
+        run_effect_dispatcher,
         derive_run_effects,
     ));
 

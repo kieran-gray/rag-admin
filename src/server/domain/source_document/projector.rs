@@ -32,13 +32,7 @@ impl Projector<SourceDocumentEvent> for SourceDocumentProjector {
         for envelope in events {
             let document_id = envelope.metadata.stream_id;
             match &envelope.event {
-                SourceDocumentEvent::DocumentCreated(_) => {
-                    // The DocumentCreated event is always followed by an initial
-                    // VersionAdded in the same command. We materialise the row when
-                    // the VersionAdded arrives so the read model has a valid latest
-                    // version. Until then nothing is queryable, which matches what
-                    // the previous sync projector did (Option<ReadModel>).
-                }
+                SourceDocumentEvent::DocumentCreated(_) => {}
                 SourceDocumentEvent::VersionAdded(e) => {
                     let existing = self.repository.load(document_id).await?;
                     let read_model = match existing {

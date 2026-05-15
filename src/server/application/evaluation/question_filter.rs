@@ -1,5 +1,6 @@
 use crate::server::application::embedding::{EmbeddingService, ResolvedEmbeddingModel};
 use crate::server::application::AppError;
+use crate::server::domain::evaluation::question::QuestionCategory;
 use crate::shared::{ordered_f32_vec, EvaluationQuestionDto};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -107,6 +108,7 @@ impl<'a> GeneratedQuestionGate<'a> {
             .embed_with_resolved(self.embedding_model, &texts)
             .await?;
         let question_embedding = embeddings.first().cloned();
+        let requires_references = !is_trick(&question.category);
 
         match classify_candidate(
             question_embedding.as_deref(),
@@ -114,6 +116,7 @@ impl<'a> GeneratedQuestionGate<'a> {
             &self.question_embeddings,
             self.excerpt_similarity_threshold,
             self.duplicate_similarity_threshold,
+            requires_references,
         ) {
             CandidateClassification::Accepted => {
                 let question_embedding =
@@ -199,12 +202,14 @@ fn filter_questions_by_embeddings(
             .cloned()
             .collect::<Vec<_>>();
 
+        let requires_references = !is_trick(&question.category);
         match classify_candidate(
             question_embeddings.get(question_index).map(Vec::as_slice),
             &reference_embeddings_for_question,
             &kept_embeddings,
             excerpt_similarity_threshold,
             duplicate_similarity_threshold,
+            requires_references,
         ) {
             CandidateClassification::Accepted => {
                 kept_embedding_indexes.push(question_index);
@@ -234,24 +239,28 @@ fn classify_candidate(
     kept_embeddings: &[Vec<f32>],
     excerpt_similarity_threshold: f32,
     duplicate_similarity_threshold: f32,
+    requires_references: bool,
 ) -> CandidateClassification {
     let Some(question_embedding) = question_embedding else {
         return CandidateClassification::RejectedLowExcerptSimilarity { similarity: 0.0 };
     };
-    if reference_embeddings.is_empty() {
-        return CandidateClassification::RejectedLowExcerptSimilarity { similarity: 0.0 };
-    }
 
-    let min_reference_similarity = reference_embeddings
-        .iter()
-        .map(|reference_embedding| cosine_similarity(question_embedding, reference_embedding))
-        .fold(f32::INFINITY, f32::min);
-    if !min_reference_similarity.is_finite()
-        || min_reference_similarity < excerpt_similarity_threshold
-    {
-        return CandidateClassification::RejectedLowExcerptSimilarity {
-            similarity: min_reference_similarity.max(0.0),
-        };
+    if requires_references {
+        if reference_embeddings.is_empty() {
+            return CandidateClassification::RejectedLowExcerptSimilarity { similarity: 0.0 };
+        }
+
+        let min_reference_similarity = reference_embeddings
+            .iter()
+            .map(|reference_embedding| cosine_similarity(question_embedding, reference_embedding))
+            .fold(f32::INFINITY, f32::min);
+        if !min_reference_similarity.is_finite()
+            || min_reference_similarity < excerpt_similarity_threshold
+        {
+            return CandidateClassification::RejectedLowExcerptSimilarity {
+                similarity: min_reference_similarity.max(0.0),
+            };
+        }
     }
 
     let max_duplicate_similarity = kept_embeddings
@@ -265,6 +274,12 @@ fn classify_candidate(
     }
 
     CandidateClassification::Accepted
+}
+
+fn is_trick(category: &str) -> bool {
+    QuestionCategory::parse(category)
+        .map(|c| c == QuestionCategory::Trick)
+        .unwrap_or(false)
 }
 
 fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
@@ -293,6 +308,9 @@ mod tests {
                 embedding: None,
             }],
             embedding: None,
+            category: "fact_retrieval".into(),
+            grammar_variant: "clean".into(),
+            paraphrase_of: None,
         }
     }
 
@@ -350,11 +368,35 @@ mod tests {
 
     #[test]
     fn classification_rejects_missing_references() {
-        let decision = classify_candidate(Some(&[1.0, 0.0]), &[], &[], 0.5, 0.95);
+        let decision = classify_candidate(Some(&[1.0, 0.0]), &[], &[], 0.5, 0.95, true);
 
         assert!(matches!(
             decision,
             CandidateClassification::RejectedLowExcerptSimilarity { similarity: 0.0 }
+        ));
+    }
+
+    #[test]
+    fn classification_accepts_trick_questions_with_no_references() {
+        let decision = classify_candidate(Some(&[1.0, 0.0]), &[], &[], 0.5, 0.95, false);
+
+        assert!(matches!(decision, CandidateClassification::Accepted));
+    }
+
+    #[test]
+    fn classification_still_rejects_duplicate_trick_questions() {
+        let decision = classify_candidate(
+            Some(&[1.0, 0.0]),
+            &[],
+            &[vec![0.99, 0.01]],
+            0.5,
+            0.95,
+            false,
+        );
+
+        assert!(matches!(
+            decision,
+            CandidateClassification::RejectedDuplicate { .. }
         ));
     }
 
@@ -366,6 +408,7 @@ mod tests {
             &[vec![0.99, 0.01]],
             0.5,
             0.95,
+            true,
         );
 
         assert!(matches!(

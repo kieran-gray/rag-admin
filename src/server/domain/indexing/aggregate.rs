@@ -107,7 +107,6 @@ impl Aggregate for Indexing {
             Self::Event::IndexingRemoved(_) => {
                 self.removed = true;
             }
-            // Markers — purely for policy dispatch, no state change.
             Self::Event::ChunkingRequeued(_)
             | Self::Event::EmbeddingRequeued(_)
             | Self::Event::IndexingRequeued(_) => {}
@@ -599,7 +598,6 @@ mod tests {
         let mut all = events;
         all.extend(retry_events);
         let retried = Indexing::from_events(&all).unwrap();
-        // Failed at Embedding → reset to Chunking (chunking was done)
         assert_eq!(retried.status, IndexingStatus::Chunking);
     }
 

@@ -144,6 +144,9 @@ impl Aggregate for EvaluationDataset {
                     question: cmd.question,
                     references: cmd.references,
                     embedding: cmd.embedding,
+                    category: cmd.category,
+                    grammar_variant: cmd.grammar_variant,
+                    paraphrase_of: cmd.paraphrase_of,
                     occurred_at: cmd.occurred_at,
                 })])
             }
@@ -303,6 +306,9 @@ mod tests {
                 embedding: None,
             }],
             embedding: None,
+            category: Default::default(),
+            grammar_variant: Default::default(),
+            paraphrase_of: None,
             occurred_at: "2024-01-01T00:01:00Z".into(),
         })
     }

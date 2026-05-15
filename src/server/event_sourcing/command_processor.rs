@@ -103,10 +103,6 @@ where
             );
         }
 
-        // `next_state` is dropped here intentionally; callers that need it can
-        // re-load through the repository (which will read the snapshot).
-        let _ = next_state;
-
         Ok(appended)
     }
 }

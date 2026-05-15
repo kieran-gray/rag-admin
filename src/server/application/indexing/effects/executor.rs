@@ -556,15 +556,7 @@ fn vector_id(doc_id_hex: &str, pipeline_hex_short: &str, sequence: u32) -> Strin
     format!("{doc_id_hex}:{pipeline_hex_short}:{sequence}")
 }
 
-/// A "safe to requeue" indexing is one where the operator explicitly asked
-/// to re-chunk despite chunking already being recorded. The aggregate doesn't
-/// reset state on `ChunkingRequeued`, but we still rerun the work because
-/// the operator asked for it explicitly — the previous chunk set is left
-/// orphaned, the new one is created and recorded via `CompleteChunking`.
 fn is_requeue_safe(_indexing: &IndexingReadModel) -> bool {
-    // Today: never auto-skip. The policy fires the effect only on
-    // operator-initiated `ChunkingRequeued` (or initial `IngestRequested`),
-    // so reaching here means the operator wants the work to run.
     true
 }
 

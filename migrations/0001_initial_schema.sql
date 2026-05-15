@@ -259,8 +259,14 @@ CREATE TABLE evaluation_questions (
     sequence INT NOT NULL,
     question TEXT NOT NULL,
     embedding JSONB,
+    category TEXT NOT NULL,
+    grammar_variant TEXT NOT NULL,
+    paraphrase_of INT,
     PRIMARY KEY (dataset_id, sequence)
 );
+
+CREATE INDEX idx_eval_questions_category
+    ON evaluation_questions (dataset_id, category);
 
 CREATE TABLE evaluation_references (
     dataset_id UUID NOT NULL,
@@ -287,6 +293,7 @@ CREATE TABLE evaluation_runs (
     variants JSONB NOT NULL,
     options JSONB NOT NULL,
     autotune_request JSONB,
+    optimization JSONB,
     status TEXT NOT NULL,
     variants_count INT NOT NULL,
     variants_prepared INT NOT NULL,
@@ -308,6 +315,8 @@ CREATE TABLE evaluation_variant_results (
     run_id UUID NOT NULL REFERENCES evaluation_runs (run_id) ON DELETE CASCADE,
     variant_label TEXT NOT NULL,
     split TEXT NOT NULL,
+    top_k INTEGER NOT NULL,
+    min_score_milli INTEGER NOT NULL,
     variant_config JSONB NOT NULL,
     options JSONB NOT NULL,
     recall_mean REAL NOT NULL,
@@ -318,20 +327,34 @@ CREATE TABLE evaluation_variant_results (
     iou_std REAL NOT NULL,
     precision_omega_mean REAL NOT NULL,
     precision_omega_std REAL NOT NULL,
+    recall_ci_low REAL NOT NULL DEFAULT 0,
+    recall_ci_high REAL NOT NULL DEFAULT 0,
+    precision_ci_low REAL NOT NULL DEFAULT 0,
+    precision_ci_high REAL NOT NULL DEFAULT 0,
+    iou_ci_low REAL NOT NULL DEFAULT 0,
+    iou_ci_high REAL NOT NULL DEFAULT 0,
+    precision_omega_ci_low REAL NOT NULL DEFAULT 0,
+    precision_omega_ci_high REAL NOT NULL DEFAULT 0,
+    composite_ci_low REAL NOT NULL DEFAULT 0,
+    composite_ci_high REAL NOT NULL DEFAULT 0,
+    judge_score REAL,
     chunk_set_id UUID NOT NULL,
     embedding_set_id UUID NOT NULL,
     chunk_count INTEGER NOT NULL DEFAULT 0,
     average_chunk_tokens INTEGER NOT NULL DEFAULT 0,
     average_retrieved_tokens INTEGER NOT NULL DEFAULT 0,
     selected BOOLEAN NOT NULL DEFAULT FALSE,
-    PRIMARY KEY (run_id, variant_label, split)
+    PRIMARY KEY (run_id, variant_label, split, top_k, min_score_milli)
 );
 
 CREATE TABLE retrieval_traces (
     run_id UUID NOT NULL,
     variant_label TEXT NOT NULL,
     split TEXT NOT NULL,
+    top_k INTEGER NOT NULL,
+    min_score_milli INTEGER NOT NULL,
     question_sequence INT NOT NULL,
+    category TEXT NOT NULL,
     retrieved_chunk_ids JSONB NOT NULL,
     scores JSONB NOT NULL,
     recall REAL NOT NULL,
@@ -341,9 +364,14 @@ CREATE TABLE retrieval_traces (
         run_id,
         variant_label,
         split,
+        top_k,
+        min_score_milli,
         question_sequence
     ),
-    FOREIGN KEY (run_id, variant_label, split) REFERENCES evaluation_variant_results (run_id, variant_label, split) ON DELETE CASCADE
+    CONSTRAINT retrieval_traces_variant_fkey
+        FOREIGN KEY (run_id, variant_label, split, top_k, min_score_milli)
+        REFERENCES evaluation_variant_results (run_id, variant_label, split, top_k, min_score_milli)
+        ON DELETE CASCADE
 );
 
 CREATE TABLE kv_store (

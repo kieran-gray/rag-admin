@@ -1,3 +1,9 @@
+pub mod category;
+pub mod variant;
+
+pub use category::QuestionCategory;
+pub use variant::GrammarVariant;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -14,6 +20,9 @@ pub struct EvaluationQuestion {
     pub question: String,
     pub references: Vec<EvaluationReference>,
     pub embedding: Option<Vec<f32>>,
+    pub category: QuestionCategory,
+    pub grammar_variant: GrammarVariant,
+    pub paraphrase_of: Option<u32>,
 }
 
 impl From<EvaluationReference> for crate::shared::EvaluationReferenceDto {
@@ -33,6 +42,9 @@ impl From<EvaluationQuestion> for crate::shared::EvaluationQuestionDto {
             question: q.question,
             references: q.references.into_iter().map(Into::into).collect(),
             embedding: q.embedding.map(crate::shared::ordered_f32_vec),
+            category: q.category.as_str().into(),
+            grammar_variant: q.grammar_variant.as_str().into(),
+            paraphrase_of: q.paraphrase_of,
         }
     }
 }

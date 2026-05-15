@@ -28,6 +28,9 @@ pub struct QuestionAccepted {
     pub question: String,
     pub references: Vec<EvaluationReference>,
     pub embedding: Option<Vec<f32>>,
+    pub category: crate::server::domain::evaluation::question::QuestionCategory,
+    pub grammar_variant: crate::server::domain::evaluation::question::GrammarVariant,
+    pub paraphrase_of: Option<u32>,
     pub occurred_at: Timestamp,
 }
 

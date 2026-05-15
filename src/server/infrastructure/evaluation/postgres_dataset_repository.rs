@@ -85,7 +85,8 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         dataset_id: Uuid,
     ) -> Result<Vec<EvaluationQuestion>, EvaluationDatasetRepositoryError> {
         let question_rows: Vec<QuestionRow> = sqlx::query_as(
-            "SELECT sequence, question, embedding FROM evaluation_questions WHERE dataset_id = $1 ORDER BY sequence ASC"
+            "SELECT sequence, question, embedding, category, grammar_variant, paraphrase_of \
+             FROM evaluation_questions WHERE dataset_id = $1 ORDER BY sequence ASC"
         )
         .bind(dataset_id)
         .fetch_all(&self.pool)
@@ -103,11 +104,17 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
             .await
             .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("load_references: {e}")))?;
 
+            use crate::server::domain::evaluation::question::{GrammarVariant, QuestionCategory};
+            let category = QuestionCategory::parse(&q_row.category).unwrap_or_default();
+            let grammar_variant = GrammarVariant::parse(&q_row.grammar_variant).unwrap_or_default();
             questions.push(EvaluationQuestion {
                 sequence: q_row.sequence as u32,
                 question: q_row.question,
                 references: ref_rows.into_iter().map(|r| r.into()).collect(),
                 embedding: q_row.embedding.and_then(|v| serde_json::from_value(v).ok()),
+                category,
+                grammar_variant,
+                paraphrase_of: q_row.paraphrase_of.map(|n| n as u32),
             });
         }
 
@@ -168,11 +175,17 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
 
         let inserted: (bool,) = sqlx::query_as(
             r#"
-            INSERT INTO evaluation_questions (dataset_id, sequence, question, embedding)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO evaluation_questions (
+                dataset_id, sequence, question, embedding,
+                category, grammar_variant, paraphrase_of
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT (dataset_id, sequence) DO UPDATE SET
                 question = EXCLUDED.question,
-                embedding = EXCLUDED.embedding
+                embedding = EXCLUDED.embedding,
+                category = EXCLUDED.category,
+                grammar_variant = EXCLUDED.grammar_variant,
+                paraphrase_of = EXCLUDED.paraphrase_of
             RETURNING (xmax = 0) AS is_new
             "#,
         )
@@ -180,6 +193,9 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         .bind(question.sequence as i32)
         .bind(&question.question)
         .bind(&embedding)
+        .bind(question.category.as_str())
+        .bind(question.grammar_variant.as_str())
+        .bind(question.paraphrase_of.map(|n| n as i32))
         .fetch_one(&mut *tx)
         .await
         .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("save_question: {e}")))?;
@@ -358,6 +374,9 @@ struct QuestionRow {
     sequence: i32,
     question: String,
     embedding: Option<serde_json::Value>,
+    category: String,
+    grammar_variant: String,
+    paraphrase_of: Option<i32>,
 }
 
 #[derive(sqlx::FromRow)]

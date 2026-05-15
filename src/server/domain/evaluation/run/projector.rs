@@ -43,6 +43,7 @@ impl Projector<EvaluationRunEvent> for EvaluationRunProjector {
                             variants: e.variants.clone(),
                             options: e.options.clone(),
                             autotune_request: e.autotune_request.clone(),
+                            optimization: e.optimization.clone(),
                             variants_count: e.variants.len() as u32,
                             scoring_policy: e.scoring_policy,
                             created_at: e.occurred_at.clone(),
@@ -75,9 +76,23 @@ impl Projector<EvaluationRunEvent> for EvaluationRunProjector {
                             average_retrieved_tokens: e.metrics.average_retrieved_tokens,
                             selected: e.selected,
                             retrieval_traces: e.retrieval_traces.clone(),
+                            recall_ci_low: e.metrics.recall_ci_low,
+                            recall_ci_high: e.metrics.recall_ci_high,
+                            precision_ci_low: e.metrics.precision_ci_low,
+                            precision_ci_high: e.metrics.precision_ci_high,
+                            iou_ci_low: e.metrics.iou_ci_low,
+                            iou_ci_high: e.metrics.iou_ci_high,
+                            precision_omega_ci_low: e.metrics.precision_omega_ci_low,
+                            precision_omega_ci_high: e.metrics.precision_omega_ci_high,
+                            composite_ci_low: e.metrics.composite_ci_low,
+                            composite_ci_high: e.metrics.composite_ci_high,
+                            judge_score: e.metrics.judge_score,
                         })
                         .await?;
                 }
+                EvaluationRunEvent::TrialProposed(_)
+                | EvaluationRunEvent::RungAdvanced(_)
+                | EvaluationRunEvent::ChampionSelected(_) => {}
                 EvaluationRunEvent::RunCompleted(e) => {
                     self.repository.mark_completed(e.run_id).await?;
                 }

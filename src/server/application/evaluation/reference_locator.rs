@@ -39,6 +39,9 @@ impl ReferenceLocator {
             question: generated.question.clone(),
             references,
             embedding: None,
+            category: generated.category.as_str().into(),
+            grammar_variant: "clean".into(),
+            paraphrase_of: None,
         })
     }
 
@@ -422,6 +425,7 @@ mod tests {
         let generated = GeneratedEvaluationQuestion {
             question: "What word follows alpha?".into(),
             references: vec!["alpha beta".into()],
+            category: crate::server::domain::evaluation::question::QuestionCategory::FactRetrieval,
         };
 
         let question = ReferenceLocator::generated_to_question(&generated, doc).unwrap();

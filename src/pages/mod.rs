@@ -7,3 +7,4 @@ pub mod pipelines;
 pub mod playground;
 pub mod posts_list;
 pub mod settings;
+pub(crate) mod shared;

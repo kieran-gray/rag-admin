@@ -4,7 +4,7 @@ use uuid::Uuid;
 use crate::server::domain::shared::Timestamp;
 use crate::shared::{
     ChunkingConfig, ChunkingVariant, EvaluationAutotuneRequest, EvaluationMetrics,
-    EvaluationResultSplit, EvaluationRunOptions,
+    EvaluationResultSplit, EvaluationRunOptions, OptimizationConfig,
 };
 
 use super::{
@@ -33,6 +33,17 @@ pub struct EvaluationVariantResultDto {
     pub average_retrieved_tokens: u32,
     pub selected: bool,
     pub retrieval_traces: Vec<RetrievalTraceEntry>,
+    pub recall_ci_low: f32,
+    pub recall_ci_high: f32,
+    pub precision_ci_low: f32,
+    pub precision_ci_high: f32,
+    pub iou_ci_low: f32,
+    pub iou_ci_high: f32,
+    pub precision_omega_ci_low: f32,
+    pub precision_omega_ci_high: f32,
+    pub composite_ci_low: f32,
+    pub composite_ci_high: f32,
+    pub judge_score: Option<f32>,
 }
 
 impl EvaluationVariantResultDto {
@@ -49,6 +60,17 @@ impl EvaluationVariantResultDto {
             chunk_count: self.chunk_count,
             average_chunk_tokens: self.average_chunk_tokens,
             average_retrieved_tokens: self.average_retrieved_tokens,
+            recall_ci_low: self.recall_ci_low,
+            recall_ci_high: self.recall_ci_high,
+            precision_ci_low: self.precision_ci_low,
+            precision_ci_high: self.precision_ci_high,
+            iou_ci_low: self.iou_ci_low,
+            iou_ci_high: self.iou_ci_high,
+            precision_omega_ci_low: self.precision_omega_ci_low,
+            precision_omega_ci_high: self.precision_omega_ci_high,
+            composite_ci_low: self.composite_ci_low,
+            composite_ci_high: self.composite_ci_high,
+            judge_score: self.judge_score,
         }
     }
 }
@@ -63,6 +85,7 @@ pub struct EvaluationRunReadModel {
     pub variants: Vec<ChunkingVariant>,
     pub options: Vec<EvaluationRunOptions>,
     pub autotune_request: Option<EvaluationAutotuneRequest>,
+    pub optimization: Option<OptimizationConfig>,
     pub status: EvaluationRunStatus,
     pub variants_count: u32,
     pub variants_prepared: u32,
@@ -83,6 +106,7 @@ pub struct NewRunSummary {
     pub variants: Vec<ChunkingVariant>,
     pub options: Vec<EvaluationRunOptions>,
     pub autotune_request: Option<EvaluationAutotuneRequest>,
+    pub optimization: Option<OptimizationConfig>,
     pub variants_count: u32,
     pub scoring_policy: ScoringPolicy,
     pub created_at: Timestamp,
@@ -90,6 +114,20 @@ pub struct NewRunSummary {
 
 impl From<EvaluationVariantResultDto> for crate::shared::EvaluationVariantResult {
     fn from(v: EvaluationVariantResultDto) -> Self {
+        let question_results: Vec<crate::shared::EvaluationQuestionResult> = v
+            .retrieval_traces
+            .iter()
+            .map(|t| crate::shared::EvaluationQuestionResult {
+                question: format!("Q{}", t.question_sequence + 1),
+                recall: t.recall,
+                precision: t.precision,
+                iou: t.iou,
+                retrieved_chunk_ids: Vec::new(),
+                missed_reference_count: 0,
+                reference_results: Vec::new(),
+                category: t.category.clone(),
+            })
+            .collect();
         Self {
             variant: ChunkingVariant {
                 label: v.variant_label,
@@ -107,11 +145,22 @@ impl From<EvaluationVariantResultDto> for crate::shared::EvaluationVariantResult
                 iou_std: v.iou_std,
                 precision_omega_mean: v.precision_omega_mean,
                 precision_omega_std: v.precision_omega_std,
+                recall_ci_low: v.recall_ci_low,
+                recall_ci_high: v.recall_ci_high,
+                precision_ci_low: v.precision_ci_low,
+                precision_ci_high: v.precision_ci_high,
+                iou_ci_low: v.iou_ci_low,
+                iou_ci_high: v.iou_ci_high,
+                precision_omega_ci_low: v.precision_omega_ci_low,
+                precision_omega_ci_high: v.precision_omega_ci_high,
+                composite_ci_low: v.composite_ci_low,
+                composite_ci_high: v.composite_ci_high,
                 chunk_count: v.chunk_count,
                 average_chunk_tokens: v.average_chunk_tokens,
                 average_retrieved_tokens: v.average_retrieved_tokens,
+                judge_score: v.judge_score,
             },
-            question_results: Vec::new(),
+            question_results,
         }
     }
 }

@@ -108,9 +108,7 @@ impl Projector<IndexingEvent> for IndexingProjector {
                 }
                 IndexingEvent::ChunkingRequeued(_)
                 | IndexingEvent::EmbeddingRequeued(_)
-                | IndexingEvent::IndexingRequeued(_) => {
-                    // Marker events — no read-model state change.
-                }
+                | IndexingEvent::IndexingRequeued(_) => {}
             }
         }
         Ok(())

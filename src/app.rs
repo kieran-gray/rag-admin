@@ -9,7 +9,10 @@ use crate::components::event_bus::provide_event_bus;
 use crate::components::shell::AppShell;
 use crate::pages::{
     chunking::ChunkingPage,
-    document_detail::{DatasetDetailPage, DocumentByIdRedirect, DocumentDetailPage, RunDetailPage},
+    document_detail::{
+        DatasetDetailPage, DocumentByIdRedirect, DocumentDetailPage, OptimizeProgressPage,
+        ReplicateComparePage, RunDetailPage,
+    },
     embed_test::EmbedTestPage,
     evaluations::EvaluationsPage,
     pipelines::PipelinesPage,
@@ -69,6 +72,22 @@ pub fn App() -> impl IntoView {
                     <Route
                         path=(StaticSegment("runs"), ParamSegment("run_id"))
                         view=RunDetailPage
+                    />
+                    <Route
+                        path=(
+                            StaticSegment("runs"),
+                            ParamSegment("run_id"),
+                            StaticSegment("optimize"),
+                        )
+                        view=OptimizeProgressPage
+                    />
+                    <Route
+                        path=(
+                            StaticSegment("runs"),
+                            ParamSegment("run_id"),
+                            StaticSegment("replicate"),
+                        )
+                        view=ReplicateComparePage
                     />
                     <Route
                         path=(StaticSegment("datasets"), ParamSegment("dataset_id"))

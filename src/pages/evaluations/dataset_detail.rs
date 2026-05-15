@@ -296,12 +296,28 @@ fn QuestionCard(index: u32, question: EvaluationQuestionDto) -> impl IntoView {
     let references = question.references;
     let ref_count = references.len();
     let question_text = question.question;
+    let category = question.category.clone();
+    let grammar_variant = question.grammar_variant.clone();
+    let paraphrase_of = question.paraphrase_of;
 
     view! {
         <div class="surface-raised rounded p-4 space-y-3">
-            <div class="flex items-start gap-3">
+            <div class="flex items-start gap-3 flex-wrap">
                 <span class="font-mono text-xs muted shrink-0 pt-0.5">{format!("Q{index:02}")}</span>
-                <p class="text-text leading-relaxed">{question_text}</p>
+                <p class="text-text leading-relaxed flex-1">{question_text}</p>
+                <div class="flex items-center gap-1 shrink-0">
+                    <span class="pill text-xs" title="Question category">{category}</span>
+                    {(grammar_variant != "clean").then(|| view! {
+                        <span class="pill pill-warn text-xs" title="Grammar-degraded paraphrase">
+                            {grammar_variant.clone()}
+                        </span>
+                    })}
+                    {paraphrase_of.map(|p| view! {
+                        <span class="text-xs muted font-mono" title="Derived from this question's sequence">
+                            {format!("↳ Q{:02}", p + 1)}
+                        </span>
+                    })}
+                </div>
             </div>
             <div class="pl-8 space-y-2">
                 <div class="eyebrow">{format!("References ({ref_count})")}</div>

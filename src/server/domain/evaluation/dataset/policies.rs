@@ -30,6 +30,7 @@ fn for_dataset_generation_requested(
             embedding_model_id: event.embedding_model_id,
             excerpt_similarity_threshold_milli: event.excerpt_similarity_threshold_milli,
             duplicate_similarity_threshold_milli: event.duplicate_similarity_threshold_milli,
+            grammar_variants_enabled: true,
         }),
     }]
 }

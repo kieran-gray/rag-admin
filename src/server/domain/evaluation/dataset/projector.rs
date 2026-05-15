@@ -63,6 +63,9 @@ impl Projector<EvaluationDatasetEvent> for EvaluationDatasetProjector {
                                 question: e.question.clone(),
                                 references: e.references.clone(),
                                 embedding: e.embedding.clone(),
+                                category: e.category,
+                                grammar_variant: e.grammar_variant,
+                                paraphrase_of: e.paraphrase_of,
                             },
                         )
                         .await?;

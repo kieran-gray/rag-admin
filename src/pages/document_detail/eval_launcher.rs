@@ -86,6 +86,19 @@ pub fn EvaluationLauncher(
 
     let (custom_variants, set_custom_variants) = signal::<Vec<ChunkingVariant>>(Vec::new());
 
+    let active_gen_model: Signal<Uuid> = Signal::derive(move || {
+        active_pipeline
+            .get()
+            .and_then(|pid| {
+                pipelines.with_value(|ps| {
+                    ps.iter()
+                        .find(|p| p.pipeline_configuration_id == pid)
+                        .map(|p| p.generation_model_id)
+                })
+            })
+            .unwrap_or_else(Uuid::nil)
+    });
+
     let initial_sweep_template_id = sweep_templates.with_value(|tpls| {
         let stored = load_sweep_template_pref()
             .and_then(|id| tpls.iter().find(|t| t.sweep_template_id == id))
@@ -109,8 +122,8 @@ pub fn EvaluationLauncher(
     let (options_expanded, set_options_expanded) = signal(false);
     let (single_top_k, set_single_top_k) = signal(5u32);
     let (single_min_score_milli, set_single_min_score_milli) = signal(0u32);
-    let (sweep_top_k_input, set_sweep_top_k_input) = signal("2,3,5,8".to_string());
-    let (sweep_min_score_input, set_sweep_min_score_input) = signal("0,200,500,800".to_string());
+    let (sweep_top_k_input, set_sweep_top_k_input) = signal("5,6,7,8".to_string());
+    let (sweep_min_score_input, set_sweep_min_score_input) = signal("500,600,700,800".to_string());
 
     let (run_mode, set_run_mode) = signal(RunMode::ScoreAll);
 
@@ -144,6 +157,7 @@ pub fn EvaluationLauncher(
             bert_target.get(),
             bert_overlap.get(),
             llm_micro.get(),
+            active_gen_model.get(),
         )
         .map(|v| vec![v])
         .map_err(|e| format!("variant error: {e}")),
@@ -193,7 +207,7 @@ pub fn EvaluationLauncher(
                 }
             }
             ChunkStrategy::Llm => parse_u32_values(&sweep_llm_micro_input.get(), 32, 1024, 32)
-                .map(build_llm_sweep)
+                .map(|values| build_llm_sweep(values, active_gen_model.get()))
                 .map_err(|e| format!("llm sweep: {e}")),
         },
         VariantsMode::Custom => {
@@ -264,14 +278,7 @@ pub fn EvaluationLauncher(
 
         let autotune = match run_mode.get() {
             RunMode::ScoreAll => None,
-            RunMode::Autotune => Some(EvaluationAutotuneRequest {
-                current_config: variants.first().map(|v| v.config).unwrap_or_default(),
-                top_k_values: options.iter().map(|o| o.top_k).collect::<Vec<_>>(),
-                min_score_milli_values: options
-                    .iter()
-                    .map(|o| o.min_score_milli)
-                    .collect::<Vec<_>>(),
-            }),
+            RunMode::Autotune => Some(EvaluationAutotuneRequest::default()),
         };
 
         callbacks.on_start.run(RunEvaluationRequestDto {
@@ -348,6 +355,7 @@ pub fn EvaluationLauncher(
                         selected_sweep_template=selected_sweep_template
                         set_selected_sweep_template=set_selected_sweep_template
                         variants_computed=variants_computed
+                        active_gen_model=active_gen_model
                     />
                 </Section>
 
@@ -499,6 +507,7 @@ fn VariantsPicker(
     selected_sweep_template: ReadSignal<Option<Uuid>>,
     set_selected_sweep_template: WriteSignal<Option<Uuid>>,
     variants_computed: Memo<Result<Vec<ChunkingVariant>, String>>,
+    active_gen_model: Signal<Uuid>,
 ) -> impl IntoView {
     view! {
         <div class="space-y-3 pt-3">
@@ -553,6 +562,7 @@ fn VariantsPicker(
                     <CustomVariantsList
                         custom_variants=custom_variants
                         set_custom_variants=set_custom_variants
+                        active_gen_model=active_gen_model
                     />
                 }.into_any(),
             }}
@@ -673,6 +683,7 @@ fn StrategySweepFields(
 fn CustomVariantsList(
     custom_variants: ReadSignal<Vec<ChunkingVariant>>,
     set_custom_variants: WriteSignal<Vec<ChunkingVariant>>,
+    active_gen_model: Signal<Uuid>,
 ) -> impl IntoView {
     let (draft_strategy, set_draft_strategy) = signal(ChunkStrategy::Section);
     let (draft_tokens, set_draft_tokens) = signal(512u32);
@@ -700,7 +711,7 @@ fn CustomVariantsList(
                 config: ChunkingConfig::Llm(LlmChunkingConfig {
                     target_tokens: 384,
                     micro_chunk_tokens: draft_micro.get(),
-                    generation_model_id: Uuid::nil(),
+                    generation_model_id: active_gen_model.get(),
                 }),
             },
         };
@@ -1045,6 +1056,7 @@ fn build_single_variant(
     bert_target: u32,
     bert_overlap: u32,
     llm_micro: u32,
+    generation_model_id: Uuid,
 ) -> Result<ChunkingVariant, String> {
     Ok(match strategy {
         ChunkStrategy::Section => ChunkingVariant {
@@ -1066,7 +1078,7 @@ fn build_single_variant(
             config: ChunkingConfig::Llm(LlmChunkingConfig {
                 target_tokens: 384,
                 micro_chunk_tokens: llm_micro,
-                generation_model_id: Uuid::nil(),
+                generation_model_id,
             }),
         },
     })
@@ -1215,7 +1227,7 @@ fn build_bert_sweep(targets: &[u32], overlaps: &[u32]) -> Vec<ChunkingVariant> {
     out
 }
 
-fn build_llm_sweep(values: Vec<u32>) -> Vec<ChunkingVariant> {
+fn build_llm_sweep(values: Vec<u32>, generation_model_id: Uuid) -> Vec<ChunkingVariant> {
     values
         .into_iter()
         .map(|micro| ChunkingVariant {
@@ -1223,7 +1235,7 @@ fn build_llm_sweep(values: Vec<u32>) -> Vec<ChunkingVariant> {
             config: ChunkingConfig::Llm(LlmChunkingConfig {
                 target_tokens: 384,
                 micro_chunk_tokens: micro,
-                generation_model_id: Uuid::nil(),
+                generation_model_id,
             }),
         })
         .collect()

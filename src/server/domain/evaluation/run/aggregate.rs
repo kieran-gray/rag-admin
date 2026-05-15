@@ -7,16 +7,21 @@ use crate::server::domain::shared::Timestamp;
 use crate::server::event_sourcing::Aggregate;
 use crate::shared::{
     ChunkingVariant, EvaluationAutotuneRequest, EvaluationResultSplit, EvaluationRunOptions,
+    OptimizationConfig,
 };
 
 use super::{
     commands::EvaluationRunCommand,
     events::{
-        EvaluationRunEvent, RunCompleted, RunFailed, RunRequested, VariantPrepared, VariantScored,
+        ChampionSelected, EvaluationRunEvent, RunCompleted, RunFailed, RunRequested, RungAdvanced,
+        TrialProposed, VariantPrepared, VariantScored,
     },
     exceptions::EvaluationRunError,
     scoring_policy::ScoringPolicy,
 };
+
+use crate::server::domain::evaluation::optimizer::SearchBudget;
+use crate::shared::OptimizationBudget;
 
 const EVAL_RUN_NAMESPACE: Uuid = uuid::uuid!("b2e4f6a8-c0d2-4e6f-8012-3456789abcde");
 
@@ -76,9 +81,12 @@ pub struct EvaluationRun {
     pub variants: Vec<ChunkingVariant>,
     pub options: Vec<EvaluationRunOptions>,
     pub autotune_request: Option<EvaluationAutotuneRequest>,
+    pub optimization: Option<crate::shared::OptimizationConfig>,
     pub scoring_policy: ScoringPolicy,
     pub prepared_labels: BTreeSet<String>,
     pub scored_keys: BTreeSet<ScoredVariantKey>,
+    pub proposed_trials: BTreeSet<u32>,
+    pub champion_trial_id: Option<u32>,
     pub status: EvaluationRunStatus,
     pub created_at: Timestamp,
 }
@@ -90,6 +98,7 @@ impl EvaluationRun {
         variants: &[ChunkingVariant],
         options: &[EvaluationRunOptions],
         autotune_request: Option<&EvaluationAutotuneRequest>,
+        optimization: Option<&OptimizationConfig>,
     ) -> Uuid {
         let key = serde_json::to_string(&(
             dataset_id,
@@ -97,6 +106,7 @@ impl EvaluationRun {
             variants,
             options,
             autotune_request,
+            optimization,
         ))
         .unwrap_or_default();
         Uuid::new_v5(&EVAL_RUN_NAMESPACE, key.as_bytes())
@@ -112,21 +122,47 @@ impl EvaluationRun {
             variants: e.variants.clone(),
             options: e.options.clone(),
             autotune_request: e.autotune_request.clone(),
+            optimization: e.optimization.clone(),
             scoring_policy: e.scoring_policy,
             prepared_labels: BTreeSet::new(),
             scored_keys: BTreeSet::new(),
+            proposed_trials: BTreeSet::new(),
+            champion_trial_id: None,
             status: EvaluationRunStatus::Pending,
             created_at: e.occurred_at.clone(),
         }
     }
 
     pub fn expected_score_count(&self) -> u32 {
-        let splits = if self.autotune_request.is_some() {
-            2
-        } else {
-            1
+        if let Some(opt) = &self.optimization {
+            let budget: SearchBudget = match opt.budget {
+                OptimizationBudget::Quick => SearchBudget::Quick,
+                OptimizationBudget::Thorough => SearchBudget::Thorough,
+                OptimizationBudget::Exhaustive => SearchBudget::Exhaustive,
+            };
+            let total_rung_scores: usize = budget.schedule().iter().map(|r| r.trials).sum();
+            return (total_rung_scores + budget.holdout_top_n() + 1) as u32;
+        }
+        let combos = self.variants.len() * self.options.len();
+        match &self.autotune_request {
+            Some(req) => {
+                let holdout = (req.holdout_top_n as usize).min(combos);
+                (combos + holdout) as u32
+            }
+            None => combos as u32,
+        }
+    }
+
+    pub fn expected_optimization_counts(&self) -> Option<(u32, u32, u32)> {
+        let opt = self.optimization.as_ref()?;
+        let budget: SearchBudget = match opt.budget {
+            OptimizationBudget::Quick => SearchBudget::Quick,
+            OptimizationBudget::Thorough => SearchBudget::Thorough,
+            OptimizationBudget::Exhaustive => SearchBudget::Exhaustive,
         };
-        (self.variants.len() * self.options.len() * splits) as u32
+        let tuning: u32 = budget.schedule().iter().map(|r| r.trials as u32).sum();
+        let validation = budget.holdout_top_n() as u32;
+        Some((tuning, validation, 1))
     }
 }
 
@@ -158,6 +194,13 @@ impl Aggregate for EvaluationRun {
                     variants_completed: self.scored_keys.len() as u32,
                 };
             }
+            Self::Event::TrialProposed(e) => {
+                self.proposed_trials.insert(e.trial_id);
+            }
+            Self::Event::RungAdvanced(_) => {}
+            Self::Event::ChampionSelected(e) => {
+                self.champion_trial_id = Some(e.trial_id);
+            }
             Self::Event::RunCompleted(_) => {
                 self.status = EvaluationRunStatus::Completed;
             }
@@ -184,6 +227,7 @@ impl Aggregate for EvaluationRun {
                     variants: cmd.variants,
                     options: cmd.options,
                     autotune_request: cmd.autotune_request,
+                    optimization: cmd.optimization,
                     scoring_policy: cmd.scoring_policy,
                     occurred_at: cmd.occurred_at,
                 })]),
@@ -200,6 +244,7 @@ impl Aggregate for EvaluationRun {
                             variants: cmd.variants,
                             options: cmd.options,
                             autotune_request: cmd.autotune_request,
+                            optimization: cmd.optimization,
                             scoring_policy: cmd.scoring_policy,
                             occurred_at: cmd.occurred_at,
                         })])
@@ -247,6 +292,44 @@ impl Aggregate for EvaluationRun {
                 })])
             }
 
+            Self::Command::ProposeTrial(cmd) => {
+                let run = state.ok_or(EvaluationRunError::NotFound)?;
+                if run.proposed_trials.contains(&cmd.trial_id) {
+                    return Ok(vec![]);
+                }
+                Ok(vec![Self::Event::TrialProposed(TrialProposed {
+                    run_id: run.run_id,
+                    trial_id: cmd.trial_id,
+                    params: cmd.params,
+                    rung: cmd.rung,
+                    occurred_at: cmd.occurred_at,
+                })])
+            }
+
+            Self::Command::AdvanceRung(cmd) => {
+                let run = state.ok_or(EvaluationRunError::NotFound)?;
+                Ok(vec![Self::Event::RungAdvanced(RungAdvanced {
+                    run_id: run.run_id,
+                    rung: cmd.rung,
+                    surviving_trials: cmd.surviving_trials,
+                    occurred_at: cmd.occurred_at,
+                })])
+            }
+
+            Self::Command::SelectChampion(cmd) => {
+                let run = state.ok_or(EvaluationRunError::NotFound)?;
+
+                if run.champion_trial_id.is_some() {
+                    return Ok(vec![]);
+                }
+                Ok(vec![Self::Event::ChampionSelected(ChampionSelected {
+                    run_id: run.run_id,
+                    trial_id: cmd.trial_id,
+                    holdout_metrics: cmd.holdout_metrics,
+                    occurred_at: cmd.occurred_at,
+                })])
+            }
+
             Self::Command::CompleteRun(cmd) => {
                 let run = state.ok_or(EvaluationRunError::NotFound)?;
                 match &run.status {
@@ -256,7 +339,28 @@ impl Aggregate for EvaluationRun {
                     }
                     _ => {}
                 }
-                if (run.scored_keys.len() as u32) < run.expected_score_count() {
+                if let Some((expected_tuning, expected_validation, expected_holdout)) =
+                    run.expected_optimization_counts()
+                {
+                    let mut tuning = 0u32;
+                    let mut validation = 0u32;
+                    let mut holdout = 0u32;
+                    for k in &run.scored_keys {
+                        match k.split {
+                            EvaluationResultSplit::Tuning => tuning += 1,
+                            EvaluationResultSplit::Validation => validation += 1,
+                            EvaluationResultSplit::Holdout => holdout += 1,
+                            EvaluationResultSplit::Full => {}
+                        }
+                    }
+                    if tuning < expected_tuning
+                        || validation < expected_validation
+                        || holdout < expected_holdout
+                        || run.champion_trial_id.is_none()
+                    {
+                        return Err(EvaluationRunError::NotAllVariantsScored);
+                    }
+                } else if (run.scored_keys.len() as u32) < run.expected_score_count() {
                     return Err(EvaluationRunError::NotAllVariantsScored);
                 }
                 Ok(vec![Self::Event::RunCompleted(RunCompleted {
@@ -330,6 +434,7 @@ mod tests {
             }],
             options: vec![EvaluationRunOptions::default()],
             autotune_request: None,
+            optimization: None,
             scoring_policy: ScoringPolicy::default(),
             occurred_at: "2024-01-01T00:00:00Z".into(),
         })
@@ -348,6 +453,7 @@ mod tests {
             }],
             options: vec![EvaluationRunOptions::default()],
             autotune_request: None,
+            optimization: None,
             scoring_policy: ScoringPolicy::default(),
             occurred_at: "2024-01-01T00:00:00Z".into(),
         })
@@ -400,7 +506,6 @@ mod tests {
         let run = EvaluationRun::from_events(&events).unwrap();
         assert!(run.prepared_labels.contains("section-512"));
 
-        // Second prepare with same label → no-op
         let cmd2 = EvaluationRunCommand::MarkVariantPrepared(MarkVariantPrepared {
             run_id,
             variant_label: "section-512".to_string(),
@@ -448,6 +553,17 @@ mod tests {
             chunk_count: 0,
             average_chunk_tokens: 0,
             average_retrieved_tokens: 0,
+            recall_ci_low: 0.0,
+            recall_ci_high: 0.0,
+            precision_ci_low: 0.0,
+            precision_ci_high: 0.0,
+            iou_ci_low: 0.0,
+            iou_ci_high: 0.0,
+            precision_omega_ci_low: 0.0,
+            precision_omega_ci_high: 0.0,
+            composite_ci_low: 0.0,
+            composite_ci_high: 0.0,
+            judge_score: None,
         };
         let score_cmd = ScoreVariant {
             run_id,
@@ -473,7 +589,6 @@ mod tests {
         let run = EvaluationRun::from_events(&events).unwrap();
         assert_eq!(run.scored_keys.len(), 1);
 
-        // Second score same variant+split → no-op
         let dup = EvaluationRun::handle_command(
             Some(&run),
             EvaluationRunCommand::ScoreVariant(ScoreVariant {
@@ -550,6 +665,17 @@ mod tests {
             chunk_count: 0,
             average_chunk_tokens: 0,
             average_retrieved_tokens: 0,
+            recall_ci_low: 0.0,
+            recall_ci_high: 0.0,
+            precision_ci_low: 0.0,
+            precision_ci_high: 0.0,
+            iou_ci_low: 0.0,
+            iou_ci_high: 0.0,
+            precision_omega_ci_low: 0.0,
+            precision_omega_ci_high: 0.0,
+            composite_ci_low: 0.0,
+            composite_ci_high: 0.0,
+            judge_score: None,
         };
         events.extend(
             EvaluationRun::handle_command(
@@ -585,7 +711,6 @@ mod tests {
         let run = EvaluationRun::from_events(&events).unwrap();
         assert!(matches!(run.status, EvaluationRunStatus::Completed));
 
-        // Idempotent second complete
         let no_op = EvaluationRun::handle_command(
             Some(&run),
             EvaluationRunCommand::CompleteRun(CompleteRun {
@@ -641,13 +766,14 @@ mod tests {
         }];
         let options = vec![EvaluationRunOptions::default()];
 
-        let expected_json = r#"["00000000-0000-0000-0000-000000000001","00000000-0000-0000-0000-000000000002",[{"label":"section-512","config":{"section":{"max_section_tokens":512}}}],[{"top_k":5,"min_score_milli":0}],null]"#;
+        let expected_json = r#"["00000000-0000-0000-0000-000000000001","00000000-0000-0000-0000-000000000002",[{"label":"section-512","config":{"section":{"max_section_tokens":512}}}],[{"top_k":5,"min_score_milli":0}],null,null]"#;
         let actual_json = serde_json::to_string(&(
             dataset_id,
             pipeline_id,
             &variants,
             &options,
             Option::<&crate::shared::EvaluationAutotuneRequest>::None,
+            Option::<&OptimizationConfig>::None,
         ))
         .unwrap();
         assert_eq!(
@@ -655,9 +781,8 @@ mod tests {
             "compute_id JSON payload changed — run IDs will fork"
         );
 
-        // UUID derived from the JSON payload above; regenerate if the schema
-        // intentionally changes.
-        let id = EvaluationRun::compute_id(dataset_id, pipeline_id, &variants, &options, None);
+        let id =
+            EvaluationRun::compute_id(dataset_id, pipeline_id, &variants, &options, None, None);
         let expected_id = uuid::Uuid::new_v5(&EVAL_RUN_NAMESPACE, expected_json.as_bytes());
         assert_eq!(id, expected_id);
     }
@@ -672,8 +797,10 @@ mod tests {
         }];
         let options = vec![EvaluationRunOptions::default()];
 
-        let id1 = EvaluationRun::compute_id(dataset_id, pipeline_id, &variants, &options, None);
-        let id2 = EvaluationRun::compute_id(dataset_id, pipeline_id, &variants, &options, None);
+        let id1 =
+            EvaluationRun::compute_id(dataset_id, pipeline_id, &variants, &options, None, None);
+        let id2 =
+            EvaluationRun::compute_id(dataset_id, pipeline_id, &variants, &options, None, None);
         assert_eq!(id1, id2);
     }
 
@@ -693,8 +820,66 @@ mod tests {
         }];
         let options = vec![EvaluationRunOptions::default()];
 
-        let id_a = EvaluationRun::compute_id(dataset_id, pipeline_id, &variants_a, &options, None);
-        let id_b = EvaluationRun::compute_id(dataset_id, pipeline_id, &variants_b, &options, None);
+        let id_a =
+            EvaluationRun::compute_id(dataset_id, pipeline_id, &variants_a, &options, None, None);
+        let id_b =
+            EvaluationRun::compute_id(dataset_id, pipeline_id, &variants_b, &options, None, None);
         assert_ne!(id_a, id_b);
+    }
+
+    #[test]
+    fn compute_id_differs_for_different_optimization_configs() {
+        use crate::shared::{OptimizationBudget, OptimizationConfig, OptimizationScope};
+
+        let dataset_id = Uuid::new_v4();
+        let pipeline_id = Uuid::new_v4();
+        let variants: Vec<ChunkingVariant> = Vec::new();
+        let options: Vec<EvaluationRunOptions> = Vec::new();
+
+        let cfg_a = OptimizationConfig {
+            budget: OptimizationBudget::Quick,
+            scope: OptimizationScope::Both,
+            judges_enabled: false,
+            seed: Some(1),
+        };
+        let cfg_b = OptimizationConfig {
+            budget: OptimizationBudget::Thorough,
+            scope: OptimizationScope::Both,
+            judges_enabled: false,
+            seed: Some(1),
+        };
+        let cfg_c = OptimizationConfig {
+            budget: OptimizationBudget::Quick,
+            scope: OptimizationScope::Both,
+            judges_enabled: false,
+            seed: Some(2),
+        };
+
+        let id_a = EvaluationRun::compute_id(
+            dataset_id,
+            pipeline_id,
+            &variants,
+            &options,
+            None,
+            Some(&cfg_a),
+        );
+        let id_b = EvaluationRun::compute_id(
+            dataset_id,
+            pipeline_id,
+            &variants,
+            &options,
+            None,
+            Some(&cfg_b),
+        );
+        let id_c = EvaluationRun::compute_id(
+            dataset_id,
+            pipeline_id,
+            &variants,
+            &options,
+            None,
+            Some(&cfg_c),
+        );
+        assert_ne!(id_a, id_b, "different budgets must produce different ids");
+        assert_ne!(id_a, id_c, "different seeds must produce different ids");
     }
 }

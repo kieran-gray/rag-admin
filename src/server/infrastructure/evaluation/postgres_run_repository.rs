@@ -15,6 +15,7 @@ use crate::server::domain::shared::Timestamp;
 use crate::server::infrastructure::postgres::timestamps::to_offset_datetime;
 use crate::shared::{
     ChunkingVariant, EvaluationAutotuneRequest, EvaluationResultSplit, EvaluationRunOptions,
+    OptimizationConfig,
 };
 
 pub struct PostgresEvaluationRunRepository {
@@ -37,7 +38,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             r#"
             SELECT
                 run_id, dataset_id, pipeline_configuration_id, document_id, document_version,
-                variants, options, autotune_request,
+                variants, options, autotune_request, optimization,
                 status, variants_count, variants_prepared, variants_scored, failure_reason,
                 scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
                 scoring_precision_omega_weight, created_at
@@ -68,7 +69,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             r#"
             SELECT
                 run_id, dataset_id, pipeline_configuration_id, document_id, document_version,
-                variants, options, autotune_request,
+                variants, options, autotune_request, optimization,
                 status, variants_count, variants_prepared, variants_scored, failure_reason,
                 scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
                 scoring_precision_omega_weight, created_at
@@ -95,7 +96,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             r#"
             SELECT
                 run_id, dataset_id, pipeline_configuration_id, document_id, document_version,
-                variants, options, autotune_request,
+                variants, options, autotune_request, optimization,
                 status, variants_count, variants_prepared, variants_scored, failure_reason,
                 scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
                 scoring_precision_omega_weight, created_at
@@ -122,7 +123,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             r#"
             SELECT
                 run_id, dataset_id, pipeline_configuration_id, document_id, document_version,
-                variants, options, autotune_request,
+                variants, options, autotune_request, optimization,
                 status, variants_count, variants_prepared, variants_scored, failure_reason,
                 scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
                 scoring_precision_omega_weight, created_at
@@ -149,14 +150,22 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             r#"
             SELECT
                 run_id, variant_label, split, variant_config, options,
+                top_k, min_score_milli,
                 recall_mean, recall_std,
                 precision_mean, precision_std, iou_mean, iou_std,
                 precision_omega_mean, precision_omega_std,
                 chunk_set_id, embedding_set_id,
                 chunk_count, average_chunk_tokens, average_retrieved_tokens,
-                selected
+                selected,
+                recall_ci_low, recall_ci_high,
+                precision_ci_low, precision_ci_high,
+                iou_ci_low, iou_ci_high,
+                precision_omega_ci_low, precision_omega_ci_high,
+                composite_ci_low, composite_ci_high,
+                judge_score
             FROM evaluation_variant_results
             WHERE run_id = $1
+            ORDER BY variant_label, top_k, min_score_milli
             "#,
         )
         .bind(run_id)
@@ -171,15 +180,18 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             let trace_rows: Vec<RetrievalTraceRow> = sqlx::query_as(
                 r#"
                 SELECT
-                    question_sequence, retrieved_chunk_ids, scores, recall, precision, iou
+                    question_sequence, retrieved_chunk_ids, scores, recall, precision, iou, category
                 FROM retrieval_traces
                 WHERE run_id = $1 AND variant_label = $2 AND split = $3
+                  AND top_k = $4 AND min_score_milli = $5
                 ORDER BY question_sequence ASC
                 "#,
             )
             .bind(run_id)
             .bind(&row.variant_label)
             .bind(&row.split)
+            .bind(row.top_k)
+            .bind(row.min_score_milli)
             .fetch_all(&self.pool)
             .await
             .map_err(|e| {
@@ -221,6 +233,17 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
                         RetrievalTraceEntry::try_from(r)
                     })
                     .collect::<Result<Vec<_>, _>>()?,
+                recall_ci_low: row.recall_ci_low,
+                recall_ci_high: row.recall_ci_high,
+                precision_ci_low: row.precision_ci_low,
+                precision_ci_high: row.precision_ci_high,
+                iou_ci_low: row.iou_ci_low,
+                iou_ci_high: row.iou_ci_high,
+                precision_omega_ci_low: row.precision_omega_ci_low,
+                precision_omega_ci_high: row.precision_omega_ci_high,
+                composite_ci_low: row.composite_ci_low,
+                composite_ci_high: row.composite_ci_high,
+                judge_score: row.judge_score,
             });
         }
 
@@ -243,17 +266,20 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         let autotune_request = serde_json::to_value(&summary.autotune_request).map_err(|e| {
             EvaluationRunRepositoryError::Internal(format!("serialize autotune_request: {e}"))
         })?;
+        let optimization = serde_json::to_value(&summary.optimization).map_err(|e| {
+            EvaluationRunRepositoryError::Internal(format!("serialize optimization: {e}"))
+        })?;
 
         sqlx::query(
             r#"
             INSERT INTO evaluation_runs (
                 run_id, dataset_id, pipeline_configuration_id, document_id, document_version,
-                variants, options, autotune_request,
+                variants, options, autotune_request, optimization,
                 status, variants_count, variants_prepared, variants_scored, failure_reason,
                 scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
                 scoring_precision_omega_weight, created_at, updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, 0, 0, NULL, $10, $11, $12, $13, $14, NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, 0, 0, NULL, $11, $12, $13, $14, $15, NOW())
             ON CONFLICT (run_id) DO NOTHING
             "#,
         )
@@ -265,6 +291,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         .bind(&variants)
         .bind(&options)
         .bind(&autotune_request)
+        .bind(&optimization)
         .bind(summary.variants_count as i32)
         .bind(summary.scoring_policy.weights.recall)
         .bind(summary.scoring_policy.weights.iou)
@@ -311,15 +338,23 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             r#"
             INSERT INTO evaluation_variant_results (
                 run_id, variant_label, split, variant_config, options,
+                top_k, min_score_milli,
                 recall_mean, recall_std,
                 precision_mean, precision_std, iou_mean, iou_std,
                 precision_omega_mean, precision_omega_std,
                 chunk_set_id, embedding_set_id,
                 chunk_count, average_chunk_tokens, average_retrieved_tokens,
-                selected
+                selected,
+                recall_ci_low, recall_ci_high,
+                precision_ci_low, precision_ci_high,
+                iou_ci_low, iou_ci_high,
+                precision_omega_ci_low, precision_omega_ci_high,
+                composite_ci_low, composite_ci_high,
+                judge_score
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-            ON CONFLICT (run_id, variant_label, split) DO UPDATE SET
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
+                    $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32)
+            ON CONFLICT (run_id, variant_label, split, top_k, min_score_milli) DO UPDATE SET
                 variant_config = EXCLUDED.variant_config,
                 options = EXCLUDED.options,
                 recall_mean = EXCLUDED.recall_mean,
@@ -333,7 +368,18 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
                 chunk_count = EXCLUDED.chunk_count,
                 average_chunk_tokens = EXCLUDED.average_chunk_tokens,
                 average_retrieved_tokens = EXCLUDED.average_retrieved_tokens,
-                selected = EXCLUDED.selected
+                selected = EXCLUDED.selected,
+                recall_ci_low = EXCLUDED.recall_ci_low,
+                recall_ci_high = EXCLUDED.recall_ci_high,
+                precision_ci_low = EXCLUDED.precision_ci_low,
+                precision_ci_high = EXCLUDED.precision_ci_high,
+                iou_ci_low = EXCLUDED.iou_ci_low,
+                iou_ci_high = EXCLUDED.iou_ci_high,
+                precision_omega_ci_low = EXCLUDED.precision_omega_ci_low,
+                precision_omega_ci_high = EXCLUDED.precision_omega_ci_high,
+                composite_ci_low = EXCLUDED.composite_ci_low,
+                composite_ci_high = EXCLUDED.composite_ci_high,
+                judge_score = EXCLUDED.judge_score
             RETURNING (xmax = 0) AS is_new
             "#,
         )
@@ -342,6 +388,8 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         .bind(result.split.as_str())
         .bind(&variant_config)
         .bind(&options)
+        .bind(result.options.top_k as i32)
+        .bind(result.options.min_score_milli as i32)
         .bind(result.recall_mean)
         .bind(result.recall_std)
         .bind(result.precision_mean)
@@ -356,6 +404,17 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         .bind(result.average_chunk_tokens as i32)
         .bind(result.average_retrieved_tokens as i32)
         .bind(result.selected)
+        .bind(result.recall_ci_low)
+        .bind(result.recall_ci_high)
+        .bind(result.precision_ci_low)
+        .bind(result.precision_ci_high)
+        .bind(result.iou_ci_low)
+        .bind(result.iou_ci_high)
+        .bind(result.precision_omega_ci_low)
+        .bind(result.precision_omega_ci_high)
+        .bind(result.composite_ci_low)
+        .bind(result.composite_ci_high)
+        .bind(result.judge_score)
         .fetch_one(&mut *tx)
         .await
         .map_err(|e| EvaluationRunRepositoryError::Internal(format!("save_variant_result: {e}")))?;
@@ -374,27 +433,31 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             sqlx::query(
                 r#"
                 INSERT INTO retrieval_traces (
-                    run_id, variant_label, split, question_sequence,
-                    retrieved_chunk_ids, scores, recall, precision, iou
+                    run_id, variant_label, split, top_k, min_score_milli, question_sequence,
+                    retrieved_chunk_ids, scores, recall, precision, iou, category
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                ON CONFLICT (run_id, variant_label, split, question_sequence) DO UPDATE SET
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                ON CONFLICT (run_id, variant_label, split, top_k, min_score_milli, question_sequence) DO UPDATE SET
                     retrieved_chunk_ids = EXCLUDED.retrieved_chunk_ids,
                     scores = EXCLUDED.scores,
                     recall = EXCLUDED.recall,
                     precision = EXCLUDED.precision,
-                    iou = EXCLUDED.iou
+                    iou = EXCLUDED.iou,
+                    category = EXCLUDED.category
                 "#,
             )
             .bind(result.run_id)
             .bind(&result.variant_label)
             .bind(result.split.as_str())
+            .bind(result.options.top_k as i32)
+            .bind(result.options.min_score_milli as i32)
             .bind(trace.question_sequence as i32)
             .bind(&retrieved_chunk_ids)
             .bind(&scores)
             .bind(trace.recall)
             .bind(trace.precision)
             .bind(trace.iou)
+            .bind(&trace.category)
             .execute(&mut *tx)
             .await
             .map_err(|e| {
@@ -457,6 +520,7 @@ struct RunRow {
     variants: serde_json::Value,
     options: serde_json::Value,
     autotune_request: Option<serde_json::Value>,
+    optimization: Option<serde_json::Value>,
     status: String,
     variants_count: i32,
     variants_prepared: i32,
@@ -483,6 +547,9 @@ impl TryFrom<RunRow> for EvaluationRunReadModel {
         let autotune_request: Option<EvaluationAutotuneRequest> = row
             .autotune_request
             .and_then(|v| serde_json::from_value(v).ok());
+        let optimization: Option<OptimizationConfig> = row
+            .optimization
+            .and_then(|v| serde_json::from_value(v).ok());
 
         Ok(Self {
             run_id: row.run_id,
@@ -493,6 +560,7 @@ impl TryFrom<RunRow> for EvaluationRunReadModel {
             variants,
             options,
             autotune_request,
+            optimization,
             status: EvaluationRunStatus::from_parts(
                 &row.status,
                 row.variants_scored as u32,
@@ -524,6 +592,8 @@ struct VariantResultRow {
     split: String,
     variant_config: serde_json::Value,
     options: serde_json::Value,
+    top_k: i32,
+    min_score_milli: i32,
     recall_mean: f32,
     recall_std: f32,
     precision_mean: f32,
@@ -538,6 +608,17 @@ struct VariantResultRow {
     average_chunk_tokens: i32,
     average_retrieved_tokens: i32,
     selected: bool,
+    recall_ci_low: f32,
+    recall_ci_high: f32,
+    precision_ci_low: f32,
+    precision_ci_high: f32,
+    iou_ci_low: f32,
+    iou_ci_high: f32,
+    precision_omega_ci_low: f32,
+    precision_omega_ci_high: f32,
+    composite_ci_low: f32,
+    composite_ci_high: f32,
+    judge_score: Option<f32>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -548,6 +629,7 @@ struct RetrievalTraceRow {
     recall: f32,
     precision: f32,
     iou: f32,
+    category: String,
 }
 
 impl TryFrom<RetrievalTraceRow>
@@ -569,6 +651,7 @@ impl TryFrom<RetrievalTraceRow>
             recall: row.recall,
             precision: row.precision,
             iou: row.iou,
+            category: row.category,
         })
     }
 }

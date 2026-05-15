@@ -89,6 +89,26 @@ a:hover {
     border-radius: var(--radius-1);
 }
 
+.surface-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.surface-header-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background-color: var(--color-surface-1);
+    margin: -1rem -1rem 0.75rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+    border-top-left-radius: var(--radius-1);
+    border-top-right-radius: var(--radius-1);
+}
+
 /* Legacy classes — preserved during migration. New code uses .surface. */
 .card-outer {
     background-color: var(--color-surface-1);
@@ -200,6 +220,30 @@ a:hover {
     background-color: color-mix(in srgb, var(--color-danger) 12%, transparent);
     border-color: var(--color-danger);
     color: var(--color-danger);
+}
+
+.btn-compact {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+.promote-status {
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-1);
+    font-size: 0.8125rem;
+    border-left: 3px solid;
+}
+
+.promote-status-ok {
+    border-color: var(--color-accent);
+    background-color: color-mix(in srgb, var(--color-accent) 10%, transparent);
+    color: var(--color-text);
+}
+
+.promote-status-err {
+    border-color: var(--color-danger, #c45);
+    background-color: color-mix(in srgb, var(--color-danger, #c45) 10%, transparent);
+    color: var(--color-text);
 }
 
 /* ── Inputs ────────────────────────────────────────────────────────────── */
@@ -677,7 +721,26 @@ header::before {
     white-space: nowrap;
     position: sticky;
     top: 0;
+    z-index: 1;
     background-color: var(--color-surface-1);
+}
+
+.variants-table thead th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.variants-table thead th.sortable:hover {
+    color: var(--color-text);
+}
+
+.variants-table thead th.is-sorted {
+    color: var(--color-text);
+}
+
+.variants-table thead th .sort-indicator {
+    font-size: 0.625rem;
+    opacity: 0.8;
 }
 
 .variants-table thead th.num,
@@ -709,6 +772,11 @@ header::before {
     color: var(--color-accent);
 }
 
+.variants-table tbody tr.row-trick td {
+    background-color: color-mix(in srgb, var(--color-surface-2) 60%, transparent);
+    color: var(--color-text-muted);
+}
+
 .variants-table .cell-stddev {
     color: var(--color-text-faint);
     font-size: 0.6875rem;
@@ -716,9 +784,29 @@ header::before {
 }
 
 .variants-table-scroll {
-    overflow-x: auto;
+    overflow: auto;
+    max-height: 70vh;
     margin: 0 -0.25rem;
     padding: 0 0.25rem;
+}
+
+/* ── Reliability advisor banners ─────────────────────────────────────── */
+
+.advisor-banner {
+    border-left: 3px solid var(--status-warn, var(--color-accent));
+    padding: 0.5rem 0.75rem;
+    background-color: var(--color-surface-2, var(--color-surface-1));
+    border-radius: var(--radius-1);
+}
+
+.advisor-banner-headline {
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+
+.advisor-banner-detail {
+    font-size: 0.75rem;
+    line-height: 1.4;
 }
 
 /* ── LogStream (SSE-backed per-row log) ───────────────────────────────── */
