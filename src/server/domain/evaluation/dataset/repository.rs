@@ -56,6 +56,11 @@ pub trait EvaluationDatasetRepository: Send + Sync {
         reason: String,
     ) -> Result<(), EvaluationDatasetRepositoryError>;
 
+    async fn mark_cancelled(
+        &self,
+        dataset_id: Uuid,
+    ) -> Result<(), EvaluationDatasetRepositoryError>;
+
     async fn rename(
         &self,
         dataset_id: Uuid,

@@ -63,8 +63,8 @@ fn PlaygroundBody(pipelines: Vec<PipelineConfigurationDto>) -> impl IntoView {
 
     let (query, set_query) = signal(String::new());
     let (pipeline_id, set_pipeline_id) = signal(initial_pipeline);
-    let (top_k, set_top_k) = signal::<u32>(5);
-    let (min_score, set_min_score) = signal::<f32>(0.0);
+    let (top_k, set_top_k) = signal::<u32>(8);
+    let (min_score, set_min_score) = signal::<f32>(0.4);
     let (busy, set_busy) = signal(false);
     let (error, set_error) = signal::<Option<String>>(None);
     let (result, set_result) = signal::<Option<QueryResult>>(None);

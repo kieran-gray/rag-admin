@@ -23,17 +23,17 @@ pub fn DocumentStep(
 
     view! {
         <div class="space-y-6">
-            <Surface>
+            <Surface title="Not sure how to chunk it?">
                 <div class="flex items-start justify-between gap-4 flex-wrap">
                     <div class="space-y-1 max-w-2xl">
-                        <h3 class="text-sm font-semibold">"Not sure how to chunk it?"</h3>
+                        <h3 class="text-sm font-semibold"></h3>
                         <p class="text-sm muted">
                             "Generate a synthetic Q&A set and let the optimizer score chunking strategies for this document. Recommended if you haven't indexed a document like this before."
                         </p>
                     </div>
                     <button
                         type="button"
-                        class=move || if show_evaluate.get() { "btn".to_string() } else { "btn btn-ghost".to_string() }
+                        class=move || if show_evaluate.get() { "btn".to_string() } else { "btn btn-primary".to_string() }
                         on:click=move |_| set_show_evaluate.update(|v| *v = !*v)
                     >
                         {move || if show_evaluate.get() { "Hide tuning" } else { "Find best chunking" }}

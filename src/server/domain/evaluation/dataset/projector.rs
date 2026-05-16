@@ -83,6 +83,9 @@ impl Projector<EvaluationDatasetEvent> for EvaluationDatasetProjector {
                         .mark_failed(e.dataset_id, e.reason.clone())
                         .await?;
                 }
+                EvaluationDatasetEvent::DatasetGenerationCancelled(e) => {
+                    self.repository.mark_cancelled(e.dataset_id).await?;
+                }
                 EvaluationDatasetEvent::DatasetRenamed(e) => {
                     self.repository
                         .rename(e.dataset_id, e.label.clone())

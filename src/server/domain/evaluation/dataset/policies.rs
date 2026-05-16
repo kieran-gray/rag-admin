@@ -46,7 +46,8 @@ pub fn derive_dataset_effects(
         EvaluationDatasetEvent::DatasetGenerationCompleted(_)
         | EvaluationDatasetEvent::DatasetGenerationFailed(_)
         | EvaluationDatasetEvent::DatasetRenamed(_)
-        | EvaluationDatasetEvent::DatasetDeleted(_) => Vec::new(),
+        | EvaluationDatasetEvent::DatasetDeleted(_)
+        | EvaluationDatasetEvent::DatasetGenerationCancelled(_) => Vec::new(),
     }
 }
 

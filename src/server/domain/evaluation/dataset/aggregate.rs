@@ -4,7 +4,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::server::{
-    domain::{evaluation::question::QuestionCategory, shared::Timestamp},
+    domain::{
+        evaluation::{dataset::events::DatasetGenerationCancelled, question::QuestionCategory},
+        shared::Timestamp,
+    },
     event_sourcing::Aggregate,
 };
 
@@ -22,6 +25,7 @@ use super::{
 pub enum DatasetGenerationStatus {
     Generating,
     Completed,
+    Cancelled,
     Failed { reason: String },
 }
 
@@ -30,6 +34,7 @@ impl DatasetGenerationStatus {
         match self {
             Self::Generating => "generating",
             Self::Completed => "completed",
+            Self::Cancelled => "cancelled",
             Self::Failed { .. } => "failed",
         }
     }
@@ -38,6 +43,7 @@ impl DatasetGenerationStatus {
         match status {
             "generating" => Ok(Self::Generating),
             "completed" => Ok(Self::Completed),
+            "cancelled" => Ok(Self::Cancelled),
             "failed" => Ok(Self::Failed {
                 reason: failure_reason.unwrap_or_default(),
             }),
@@ -55,24 +61,14 @@ pub struct EvaluationDataset {
     pub status: DatasetGenerationStatus,
     pub accepted_sequences: BTreeSet<u32>,
     pub created_at: Timestamp,
-    #[serde(default)]
     pub deleted: bool,
-
-    #[serde(default)]
     pub generation_model_id: Uuid,
-    #[serde(default)]
     pub embedding_model_id: Uuid,
-    #[serde(default)]
     pub excerpt_similarity_threshold_milli: u32,
-    #[serde(default)]
     pub duplicate_similarity_threshold_milli: u32,
-    #[serde(default)]
     pub max_attempts: u32,
-    #[serde(default)]
     pub grammar_variants_enabled: bool,
-    #[serde(default)]
     pub attempt_count: u32,
-    #[serde(default)]
     pub accepted_by_category: HashMap<QuestionCategory, u32>,
 }
 
@@ -141,6 +137,9 @@ impl Aggregate for EvaluationDataset {
                 self.status = DatasetGenerationStatus::Failed {
                     reason: e.reason.clone(),
                 };
+            }
+            Self::Event::DatasetGenerationCancelled(_) => {
+                self.status = DatasetGenerationStatus::Cancelled;
             }
             Self::Event::DatasetRenamed(_) => {}
             Self::Event::DatasetDeleted(_) => {
@@ -220,6 +219,9 @@ impl Aggregate for EvaluationDataset {
                     DatasetGenerationStatus::Failed { .. } => {
                         return Err(EvaluationDatasetError::AlreadyFailed)
                     }
+                    DatasetGenerationStatus::Cancelled => {
+                        return Err(EvaluationDatasetError::AlreadyCancelled)
+                    }
                     DatasetGenerationStatus::Generating => {}
                 }
                 if dataset.accepted_sequences.is_empty() {
@@ -239,6 +241,9 @@ impl Aggregate for EvaluationDataset {
                     DatasetGenerationStatus::Completed => {
                         return Err(EvaluationDatasetError::AlreadyCompleted)
                     }
+                    DatasetGenerationStatus::Cancelled => {
+                        return Err(EvaluationDatasetError::AlreadyCancelled)
+                    }
                     DatasetGenerationStatus::Failed { .. } => return Ok(vec![]),
                     DatasetGenerationStatus::Generating => {}
                 }
@@ -246,6 +251,26 @@ impl Aggregate for EvaluationDataset {
                     DatasetGenerationFailed {
                         dataset_id: dataset.dataset_id,
                         reason: cmd.reason,
+                        occurred_at: cmd.occurred_at,
+                    },
+                )])
+            }
+
+            Self::Command::CancelDatasetGeneration(cmd) => {
+                let dataset = state.ok_or(EvaluationDatasetError::NotFound)?;
+                match &dataset.status {
+                    DatasetGenerationStatus::Completed => {
+                        return Err(EvaluationDatasetError::AlreadyCompleted)
+                    }
+                    DatasetGenerationStatus::Cancelled => return Ok(vec![]),
+                    DatasetGenerationStatus::Failed { .. } => {
+                        return Err(EvaluationDatasetError::AlreadyFailed)
+                    }
+                    DatasetGenerationStatus::Generating => {}
+                }
+                Ok(vec![Self::Event::DatasetGenerationCancelled(
+                    DatasetGenerationCancelled {
+                        dataset_id: dataset.dataset_id,
                         occurred_at: cmd.occurred_at,
                     },
                 )])
@@ -345,6 +370,7 @@ mod tests {
         })
     }
 
+    use crate::server::domain::evaluation::dataset::commands::CancelDatasetGeneration;
     use crate::server::domain::evaluation::question::EvaluationReference;
 
     fn make_accept_cmd(dataset_id: Uuid, sequence: u32) -> EvaluationDatasetCommand {
@@ -521,6 +547,27 @@ mod tests {
             dataset.status,
             DatasetGenerationStatus::Failed { .. }
         ));
+    }
+
+    #[test]
+    fn cancel_transitions_to_failed() {
+        let dataset_id = Uuid::new_v4();
+        let document_id = Uuid::new_v4();
+        let events = vec![make_requested_event(dataset_id, document_id)];
+        let dataset = EvaluationDataset::from_events(&events).unwrap();
+
+        let cancel_events = EvaluationDataset::handle_command(
+            Some(&dataset),
+            EvaluationDatasetCommand::CancelDatasetGeneration(CancelDatasetGeneration {
+                dataset_id,
+                occurred_at: "2024-01-01T00:02:00Z".into(),
+            }),
+        )
+        .unwrap();
+
+        let all_events: Vec<_> = events.into_iter().chain(cancel_events).collect();
+        let dataset = EvaluationDataset::from_events(&all_events).unwrap();
+        assert!(matches!(dataset.status, DatasetGenerationStatus::Cancelled));
     }
 
     #[test]

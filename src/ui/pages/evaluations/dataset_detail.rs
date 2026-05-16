@@ -8,9 +8,13 @@ use uuid::Uuid;
 use crate::contracts::{
     aggregate_type, EvaluationDatasetDto, EvaluationQuestionDto, EvaluationReferenceDto,
 };
-use crate::server_functions::evaluation::{delete_dataset, get_dataset, rename_dataset};
+use crate::server_functions::evaluation::{
+    cancel_dataset_generation, delete_dataset, get_dataset, rename_dataset,
+};
 use crate::ui::components::event_bus::use_invalidator;
-use crate::ui::components::primitives::{EmptyState, Kv, PageHeader, Status, StatusPill, Surface};
+use crate::ui::components::primitives::{
+    ConfirmDialog, EmptyState, Kv, PageHeader, Status, StatusPill, Surface,
+};
 
 use crate::ui::pages::shared::short_hash;
 
@@ -60,9 +64,11 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
     let (status_kind, status_label) = match dataset.status.as_str() {
         "completed" => (Status::Ok, "Completed"),
         "failed" => (Status::Fail, "Failed"),
+        "cancelled" => (Status::Cancel, "Cancelled"),
         "generating" => (Status::Pending, "Generating"),
         _ => (Status::Neutral, "Unknown"),
     };
+    let is_generating = dataset.status == "generating";
 
     let dataset_id = dataset.dataset_id;
     let dataset_short = dataset_id.to_string()[..8].to_string();
@@ -84,7 +90,8 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
     let (label_input, set_label_input) = signal(label.clone());
     let (busy, set_busy) = signal(false);
     let (error, set_error) = signal::<Option<String>>(None);
-    let (confirm_delete, set_confirm_delete) = signal(false);
+    let (confirm_delete_open, set_confirm_delete_open) = signal(false);
+    let (confirm_cancel_open, set_confirm_cancel_open) = signal(false);
     let original_label = StoredValue::new(label);
 
     let on_save_rename = StoredValue::new(move |_: leptos::ev::MouseEvent| {
@@ -118,13 +125,38 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
         set_error.set(None);
     });
 
-    let on_request_delete = StoredValue::new(move |_: leptos::ev::MouseEvent| {
-        set_confirm_delete.set(true);
+    let open_confirm_cancel = Callback::new(move |_| {
+        set_confirm_cancel_open.set(true);
         set_error.set(None);
     });
-    let on_cancel_delete =
-        StoredValue::new(move |_: leptos::ev::MouseEvent| set_confirm_delete.set(false));
-    let on_confirm_delete = StoredValue::new(move |_: leptos::ev::MouseEvent| {
+    let close_confirm_cancel = Callback::new(move |_| set_confirm_cancel_open.set(false));
+    let confirm_cancel_generation = Callback::new(move |_| {
+        if busy.get_untracked() {
+            return;
+        }
+        set_busy.set(true);
+        set_error.set(None);
+        spawn_local(async move {
+            match cancel_dataset_generation(dataset_id).await {
+                Ok(_) => {
+                    set_busy.set(false);
+                    set_confirm_cancel_open.set(false);
+                }
+                Err(e) => {
+                    set_busy.set(false);
+                    set_confirm_cancel_open.set(false);
+                    set_error.set(Some(format!("{e}")));
+                }
+            }
+        });
+    });
+
+    let open_confirm_delete = Callback::new(move |_| {
+        set_confirm_delete_open.set(true);
+        set_error.set(None);
+    });
+    let close_confirm_delete = Callback::new(move |_| set_confirm_delete_open.set(false));
+    let confirm_delete_action = Callback::new(move |_| {
         if busy.get_untracked() {
             return;
         }
@@ -143,7 +175,7 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
                 }
                 Err(e) => {
                     set_busy.set(false);
-                    set_confirm_delete.set(false);
+                    set_confirm_delete_open.set(false);
                     set_error.set(Some(format!("{e}")));
                 }
             }
@@ -212,40 +244,23 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
                             }.into_any()
                         }}
                     </div>
-                    <div class="shrink-0">
-                        {move || if confirm_delete.get() {
-                            view! {
-                                <div class="flex items-center gap-2">
-                                    <span class="text-xs muted">"Delete this dataset?"</span>
-                                    <button
-                                        type="button"
-                                        class="btn btn-danger"
-                                        disabled=move || busy.get()
-                                        on:click=move |ev| on_confirm_delete.with_value(|f| f(ev))
-                                    >
-                                        {move || if busy.get() { "Deleting…" } else { "Confirm delete" }}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        class="btn"
-                                        disabled=move || busy.get()
-                                        on:click=move |ev| on_cancel_delete.with_value(|f| f(ev))
-                                    >
-                                        "Cancel"
-                                    </button>
-                                </div>
-                            }.into_any()
-                        } else {
-                            view! {
-                                <button
-                                    type="button"
-                                    class="btn btn-danger"
-                                    on:click=move |ev| on_request_delete.with_value(|f| f(ev))
-                                >
-                                    "Delete"
-                                </button>
-                            }.into_any()
-                        }}
+                    <div class="shrink-0 flex items-center gap-2">
+                        {is_generating.then(|| view! {
+                            <button
+                                type="button"
+                                class="btn"
+                                on:click=move |_| open_confirm_cancel.run(())
+                            >
+                                "Cancel generation"
+                            </button>
+                        })}
+                        <button
+                            type="button"
+                            class="btn btn-danger"
+                            on:click=move |_| open_confirm_delete.run(())
+                        >
+                            "Delete"
+                        </button>
                     </div>
                 </div>
                 {move || error.get().map(|e| view! {
@@ -287,6 +302,29 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
                     }.into_any()
                 }}
             </Surface>
+
+            <ConfirmDialog
+                open=confirm_delete_open
+                title="Delete dataset".to_string()
+                message="This dataset and all of its questions will be permanently removed.".to_string()
+                confirm_label="Delete dataset".to_string()
+                confirm_busy_label="Deleting…".to_string()
+                busy=busy
+                danger=true
+                on_confirm=confirm_delete_action
+                on_close=close_confirm_delete
+            />
+
+            <ConfirmDialog
+                open=confirm_cancel_open
+                title="Cancel generation".to_string()
+                message="Stop generating questions for this dataset? Already-accepted questions will be kept.".to_string()
+                confirm_label="Cancel generation".to_string()
+                confirm_busy_label="Cancelling…".to_string()
+                busy=busy
+                on_confirm=confirm_cancel_generation
+                on_close=close_confirm_cancel
+            />
         </div>
     }
 }

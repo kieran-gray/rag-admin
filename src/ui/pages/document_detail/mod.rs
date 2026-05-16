@@ -22,7 +22,7 @@ use crate::server_functions::configuration::{
     get_chunking_configurations, get_pipeline_configurations, get_sweep_templates,
 };
 use crate::server_functions::source_document::{
-    get_document_detail_by_source_ref, import_source_document, start_indexing_with_defaults,
+    get_document_detail_by_source_ref, import_source_document,
 };
 use crate::ui::components::event_bus::use_invalidator;
 use crate::ui::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
@@ -168,7 +168,6 @@ fn DocumentWorkspace(
     let on_back_to_chunk = Callback::new(move |_| set_active_step.set(WorkflowStep::Chunk));
 
     let header_subtitle = header_subtitle.unwrap_or_default();
-    let source_ref_for_quick = source_ref_for_step;
 
     view! {
         <div>
@@ -179,7 +178,6 @@ fn DocumentWorkspace(
                 actions=Box::new(move || view! {
                     <div class="flex items-center gap-2">
                         <StatusPill label=status_label.clone() kind=status_kind />
-                        <QuickIndexButton source_ref=source_ref_for_quick />
                     </div>
                 }.into_any())
             />
@@ -300,49 +298,6 @@ fn Stepper(
                     </button>
                 }
             }).collect_view()}
-        </div>
-    }
-}
-
-#[component]
-fn QuickIndexButton(source_ref: StoredValue<String>) -> impl IntoView {
-    let (busy, set_busy) = signal(false);
-    let (error, set_error) = signal::<Option<String>>(None);
-
-    let run = move |_| {
-        if busy.get_untracked() {
-            return;
-        }
-        let slug = source_ref.get_value();
-        set_busy.set(true);
-        set_error.set(None);
-        spawn_local(async move {
-            match start_indexing_with_defaults(slug).await {
-                Ok(_) => {
-                    set_busy.set(false);
-                }
-                Err(e) => {
-                    set_busy.set(false);
-                    set_error.set(Some(format!("{e}")));
-                }
-            }
-        });
-    };
-
-    view! {
-        <div class="flex flex-col items-end gap-1">
-            <button
-                type="button"
-                class="btn btn-ghost"
-                disabled=move || busy.get()
-                title="Skip the wizard — chunk, embed, and index using the default pipeline & chunking config"
-                on:click=run
-            >
-                {move || if busy.get() { "Running…" } else { "Quick: index with defaults" }}
-            </button>
-            {move || error.get().map(|e| view! {
-                <div class="log-line-error text-xs">{e}</div>
-            })}
         </div>
     }
 }

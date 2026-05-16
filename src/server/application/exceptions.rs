@@ -196,6 +196,7 @@ impl From<EvaluationDatasetError> for AppError {
             EvaluationDatasetError::GenerationNotInProgress
             | EvaluationDatasetError::AlreadyCompleted
             | EvaluationDatasetError::AlreadyFailed
+            | EvaluationDatasetError::AlreadyCancelled
             | EvaluationDatasetError::NoQuestionsAccepted
             | EvaluationDatasetError::Deleted
             | EvaluationDatasetError::EmptyLabel

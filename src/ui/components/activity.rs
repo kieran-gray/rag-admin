@@ -67,11 +67,9 @@ impl ActivityState {
 
 pub fn provide_activity_state() {
     let rows = RwSignal::new(Vec::<ActivityJobDto>::new());
-    let initial_open = read_stored_open();
-    let initial_height = read_stored_height();
-    let open = RwSignal::new(initial_open);
+    let open = RwSignal::new(false);
     let selected = RwSignal::new(None::<Uuid>);
-    let height = RwSignal::new(initial_height);
+    let height = RwSignal::new(DEFAULT_TRAY_HEIGHT_PX);
 
     let state = ActivityState {
         rows,
@@ -82,6 +80,7 @@ pub fn provide_activity_state() {
     provide_context(state);
     let set_rows = rows.write_only();
 
+    restore_persisted_state(open, height);
     persist_open_on_change(open);
     persist_height_on_change(height);
 
@@ -245,11 +244,6 @@ fn read_stored_open() -> bool {
         .unwrap_or(false)
 }
 
-#[cfg(not(feature = "hydrate"))]
-fn read_stored_open() -> bool {
-    false
-}
-
 #[cfg(feature = "hydrate")]
 fn read_stored_height() -> f64 {
     web_sys::window()
@@ -260,15 +254,26 @@ fn read_stored_height() -> f64 {
         .unwrap_or(DEFAULT_TRAY_HEIGHT_PX)
 }
 
-#[cfg(not(feature = "hydrate"))]
-fn read_stored_height() -> f64 {
-    DEFAULT_TRAY_HEIGHT_PX
+#[cfg(feature = "hydrate")]
+fn restore_persisted_state(open: RwSignal<bool>, height: RwSignal<f64>) {
+    Effect::new(move |prev: Option<()>| {
+        if prev.is_none() {
+            open.set(read_stored_open());
+            height.set(read_stored_height());
+        }
+    });
 }
+
+#[cfg(not(feature = "hydrate"))]
+fn restore_persisted_state(_open: RwSignal<bool>, _height: RwSignal<f64>) {}
 
 #[cfg(feature = "hydrate")]
 fn persist_open_on_change(open: RwSignal<bool>) {
-    Effect::new(move |_| {
+    Effect::new(move |prev: Option<()>| {
         let value = open.get();
+        if prev.is_none() {
+            return;
+        }
         if let Some(store) = web_sys::window().and_then(|w| w.local_storage().ok().flatten()) {
             let _ = store.set_item(LS_OPEN_KEY, if value { "1" } else { "0" });
         }
@@ -280,8 +285,11 @@ fn persist_open_on_change(_open: RwSignal<bool>) {}
 
 #[cfg(feature = "hydrate")]
 fn persist_height_on_change(height: RwSignal<f64>) {
-    Effect::new(move |_| {
+    Effect::new(move |prev: Option<()>| {
         let value = height.get();
+        if prev.is_none() {
+            return;
+        }
         if let Some(store) = web_sys::window().and_then(|w| w.local_storage().ok().flatten()) {
             let _ = store.set_item(LS_HEIGHT_KEY, &format!("{value:.0}"));
         }

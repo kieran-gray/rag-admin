@@ -20,6 +20,7 @@ use crate::server::application::source_document::SourceDocumentQueryService;
 use crate::server::domain::evaluation::dataset::{
     aggregate::EvaluationDataset,
     commands::{
+        CancelDatasetGeneration as CancelDatasetGenerationCommand,
         DeleteDataset as DeleteDatasetCommand, EvaluationDatasetCommand,
         RenameDataset as RenameDatasetCommand, RequestDatasetGeneration,
     },
@@ -195,6 +196,21 @@ pub async fn delete_dataset(dataset_id: Uuid) -> Result<(), ServerFnError> {
         .handle(
             dataset_id,
             EvaluationDatasetCommand::DeleteDataset(DeleteDatasetCommand {
+                dataset_id,
+                occurred_at: SystemClock.now(),
+            }),
+        )
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    Ok(())
+}
+
+#[server(name = CancelDatasetGeneration, prefix = "/api", endpoint = "cancel_dataset_generation")]
+pub async fn cancel_dataset_generation(dataset_id: Uuid) -> Result<(), ServerFnError> {
+    ctx::<Arc<CommandProcessor<EvaluationDataset>>>()?
+        .handle(
+            dataset_id,
+            EvaluationDatasetCommand::CancelDatasetGeneration(CancelDatasetGenerationCommand {
                 dataset_id,
                 occurred_at: SystemClock.now(),
             }),

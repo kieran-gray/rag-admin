@@ -297,6 +297,20 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         Ok(())
     }
 
+    async fn mark_cancelled(
+        &self,
+        dataset_id: Uuid,
+    ) -> Result<(), EvaluationDatasetRepositoryError> {
+        sqlx::query(
+            "UPDATE evaluation_datasets SET status = 'cancelled', updated_at = NOW() WHERE dataset_id = $1",
+        )
+        .bind(dataset_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("mark_cancelled: {e}")))?;
+        Ok(())
+    }
+
     async fn rename(
         &self,
         dataset_id: Uuid,

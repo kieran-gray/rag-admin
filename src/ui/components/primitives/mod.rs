@@ -1,3 +1,4 @@
+pub mod confirm_dialog;
 pub mod dialog;
 pub mod empty_state;
 pub mod kv;
@@ -7,6 +8,7 @@ pub mod status_pill;
 pub mod surface;
 pub mod toolbar;
 
+pub use confirm_dialog::ConfirmDialog;
 pub use dialog::Dialog;
 pub use empty_state::EmptyState;
 pub use kv::Kv;

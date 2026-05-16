@@ -4,6 +4,7 @@ pub enum EvaluationDatasetError {
     NotFound,
     GenerationNotInProgress,
     AlreadyCompleted,
+    AlreadyCancelled,
     AlreadyFailed,
     NoQuestionsAccepted,
     Deleted,
@@ -23,6 +24,9 @@ impl std::fmt::Display for EvaluationDatasetError {
             }
             EvaluationDatasetError::AlreadyCompleted => {
                 write!(f, "dataset generation has already completed")
+            }
+            EvaluationDatasetError::AlreadyCancelled => {
+                write!(f, "dataset generation has already been cancelled")
             }
             EvaluationDatasetError::AlreadyFailed => {
                 write!(f, "dataset generation has already failed")

@@ -51,6 +51,11 @@ pub struct FailDatasetGeneration {
     pub occurred_at: Timestamp,
 }
 
+pub struct CancelDatasetGeneration {
+    pub dataset_id: Uuid,
+    pub occurred_at: Timestamp,
+}
+
 pub struct RenameDataset {
     pub dataset_id: Uuid,
     pub label: String,
@@ -68,6 +73,7 @@ pub enum EvaluationDatasetCommand {
     RejectQuestion(RejectQuestion),
     CompleteDatasetGeneration(CompleteDatasetGeneration),
     FailDatasetGeneration(FailDatasetGeneration),
+    CancelDatasetGeneration(CancelDatasetGeneration),
     RenameDataset(RenameDataset),
     DeleteDataset(DeleteDataset),
 }
@@ -80,6 +86,7 @@ impl EvaluationDatasetCommand {
             Self::RejectQuestion(c) => c.dataset_id,
             Self::CompleteDatasetGeneration(c) => c.dataset_id,
             Self::FailDatasetGeneration(c) => c.dataset_id,
+            Self::CancelDatasetGeneration(c) => c.dataset_id,
             Self::RenameDataset(c) => c.dataset_id,
             Self::DeleteDataset(c) => c.dataset_id,
         }
@@ -92,6 +99,7 @@ impl EvaluationDatasetCommand {
             Self::RejectQuestion(_) => "reject_question",
             Self::CompleteDatasetGeneration(_) => "complete_dataset_generation",
             Self::FailDatasetGeneration(_) => "fail_dataset_generation",
+            Self::CancelDatasetGeneration(_) => "cancel_dataset_generation",
             Self::RenameDataset(_) => "rename_dataset",
             Self::DeleteDataset(_) => "delete_dataset",
         }

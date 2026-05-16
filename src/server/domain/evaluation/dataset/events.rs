@@ -60,6 +60,12 @@ pub struct DatasetGenerationFailed {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DatasetGenerationCancelled {
+    pub dataset_id: Uuid,
+    pub occurred_at: Timestamp,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DatasetRenamed {
     pub dataset_id: Uuid,
     pub label: String,
@@ -80,6 +86,7 @@ pub enum EvaluationDatasetEvent {
     QuestionRejected(QuestionRejected),
     DatasetGenerationCompleted(DatasetGenerationCompleted),
     DatasetGenerationFailed(DatasetGenerationFailed),
+    DatasetGenerationCancelled(DatasetGenerationCancelled),
     DatasetRenamed(DatasetRenamed),
     DatasetDeleted(DatasetDeleted),
 }
