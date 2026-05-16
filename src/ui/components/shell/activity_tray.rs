@@ -318,9 +318,7 @@ mod hydrate {
     use wasm_bindgen::prelude::*;
     use wasm_bindgen::JsCast;
 
-    use crate::ui::components::activity::{
-        clamp_tray_height, set_tray_open, use_activity_state,
-    };
+    use crate::ui::components::activity::{clamp_tray_height, set_tray_open, use_activity_state};
 
     static KEYBOARD_INSTALLED: AtomicBool = AtomicBool::new(false);
 
@@ -330,10 +328,12 @@ mod hydrate {
         }
         let state = use_activity_state();
         let open = state.open;
-        let Some(window) = web_sys::window() else { return };
+        let Some(window) = web_sys::window() else {
+            return;
+        };
 
-        let closure = Closure::<dyn FnMut(web_sys::KeyboardEvent)>::new(
-            move |ev: web_sys::KeyboardEvent| {
+        let closure =
+            Closure::<dyn FnMut(web_sys::KeyboardEvent)>::new(move |ev: web_sys::KeyboardEvent| {
                 if !(ev.ctrl_key() || ev.meta_key()) {
                     return;
                 }
@@ -343,27 +343,24 @@ mod hydrate {
                 ev.prevent_default();
                 let next = !open.get_untracked();
                 set_tray_open(next);
-            },
-        );
-        let _ = window
-            .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
+            });
+        let _ =
+            window.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
         closure.forget();
     }
 
     type MouseClosureCell = Rc<Cell<Option<Closure<dyn FnMut(web_sys::MouseEvent)>>>>;
 
     pub fn begin_resize(start_y: i32, height: RwSignal<f64>) {
-        let Some(window) = web_sys::window() else { return };
+        let Some(window) = web_sys::window() else {
+            return;
+        };
         let start_height = height.get_untracked();
         let body = window.document().and_then(|d| d.body());
 
         if let Some(body) = body.as_ref() {
-            let _ = body
-                .style()
-                .set_property("cursor", "row-resize");
-            let _ = body
-                .style()
-                .set_property("user-select", "none");
+            let _ = body.style().set_property("cursor", "row-resize");
+            let _ = body.style().set_property("user-select", "none");
         }
 
         let move_closure: MouseClosureCell = Rc::new(Cell::new(None));
@@ -375,20 +372,17 @@ mod hydrate {
         let up_clone = up_closure.clone();
         let body_for_up = body.clone();
 
-        let on_move = Closure::<dyn FnMut(web_sys::MouseEvent)>::new(
-            move |ev: web_sys::MouseEvent| {
+        let on_move =
+            Closure::<dyn FnMut(web_sys::MouseEvent)>::new(move |ev: web_sys::MouseEvent| {
                 let delta = (start_y - ev.client_y()) as f64;
                 let next = clamp_tray_height(start_height + delta);
                 height.set(next);
-            },
-        );
-        let _ = move_window.add_event_listener_with_callback(
-            "mousemove",
-            on_move.as_ref().unchecked_ref(),
-        );
+            });
+        let _ = move_window
+            .add_event_listener_with_callback("mousemove", on_move.as_ref().unchecked_ref());
 
-        let on_up = Closure::<dyn FnMut(web_sys::MouseEvent)>::new(
-            move |_ev: web_sys::MouseEvent| {
+        let on_up =
+            Closure::<dyn FnMut(web_sys::MouseEvent)>::new(move |_ev: web_sys::MouseEvent| {
                 if let Some(c) = move_clone.take() {
                     let _ = up_window.remove_event_listener_with_callback(
                         "mousemove",
@@ -397,20 +391,16 @@ mod hydrate {
                     drop(c);
                 }
                 if let Some(c) = up_clone.take() {
-                    let _ = up_window.remove_event_listener_with_callback(
-                        "mouseup",
-                        c.as_ref().unchecked_ref(),
-                    );
+                    let _ = up_window
+                        .remove_event_listener_with_callback("mouseup", c.as_ref().unchecked_ref());
                     drop(c);
                 }
                 if let Some(body) = body_for_up.as_ref() {
                     let _ = body.style().remove_property("cursor");
                     let _ = body.style().remove_property("user-select");
                 }
-            },
-        );
-        let _ = window
-            .add_event_listener_with_callback("mouseup", on_up.as_ref().unchecked_ref());
+            });
+        let _ = window.add_event_listener_with_callback("mouseup", on_up.as_ref().unchecked_ref());
 
         move_closure.set(Some(on_move));
         up_closure.set(Some(on_up));

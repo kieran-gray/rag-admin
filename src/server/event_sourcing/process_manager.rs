@@ -1,9 +1,11 @@
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
+use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -11,11 +13,12 @@ use crate::server::application::AppError;
 
 use super::aggregate::Aggregate;
 use super::aggregate_repository::AggregateRepository;
-use super::effect::{EffectLedger, EffectStatus, IdempotencyKey, PendingEffect};
 use super::envelope::EventEnvelope;
+use super::job_queue::{JobQueue, NewJob};
 use super::policy::PolicyContext;
 
-const MAX_EFFECT_ATTEMPTS: i32 = 6;
+pub(crate) const LEASE: Duration = Duration::from_secs(30);
+pub(crate) const HEARTBEAT: Duration = Duration::from_secs(10);
 
 #[async_trait]
 pub trait EffectExecutor<R>: Send + Sync
@@ -31,32 +34,34 @@ where
     R: Serialize + DeserializeOwned + Send + Sync,
 {
     repository: Arc<AggregateRepository<A>>,
-    ledger: Arc<dyn EffectLedger<R>>,
+    queue: Arc<dyn JobQueue<R>>,
     executor: Arc<dyn EffectExecutor<R>>,
     derive_effects: DeriveEffectsFn<A, R>,
+    worker_id: String,
     _phantom: PhantomData<R>,
 }
 
 pub type DeriveEffectsFn<A, R> =
-    fn(envelope: &EventEnvelope<<A as Aggregate>::Event>, state: &A) -> Vec<PendingEffect<R>>;
+    fn(envelope: &EventEnvelope<<A as Aggregate>::Event>, state: &A) -> Vec<NewJob<R>>;
 
 impl<A, R> ProcessManager<A, R>
 where
     A: Aggregate,
-    R: Serialize + DeserializeOwned + Clone + Send + Sync,
+    R: Serialize + DeserializeOwned + Clone + Send + Sync + 'static,
     AppError: From<A::Error>,
 {
     pub fn new(
         repository: Arc<AggregateRepository<A>>,
-        ledger: Arc<dyn EffectLedger<R>>,
+        queue: Arc<dyn JobQueue<R>>,
         executor: Arc<dyn EffectExecutor<R>>,
         derive_effects: DeriveEffectsFn<A, R>,
     ) -> Self {
         Self {
             repository,
-            ledger,
+            queue,
             executor,
             derive_effects,
+            worker_id: format!("{}-{}", A::aggregate_type(), Uuid::new_v4()),
             _phantom: PhantomData,
         }
     }
@@ -83,92 +88,154 @@ where
                 continue;
             };
             let state = &loaded.aggregate;
-            let mut pending: Vec<PendingEffect<R>> = Vec::new();
+            let mut pending: Vec<NewJob<R>> = Vec::new();
             for env in events {
                 let _ctx = PolicyContext::new(env, state);
                 pending.extend((self.derive_effects)(env, state));
             }
             if !pending.is_empty() {
-                let effect_types: Vec<&'static str> =
-                    pending.iter().map(|p| p.effect_type).collect();
+                let job_types: Vec<&'static str> = pending.iter().map(|p| p.job_type).collect();
                 info!(
                     aggregate = A::aggregate_type(),
                     %stream_id,
                     count = pending.len(),
-                    effects = ?effect_types,
-                    "enqueued effects"
+                    jobs = ?job_types,
+                    "enqueued jobs"
                 );
-                self.ledger.insert(A::aggregate_type(), &pending).await?;
+                self.queue.enqueue(A::aggregate_type(), &pending).await?;
             }
         }
 
         Ok(())
     }
 
-    pub async fn dispatch_pending(&self) -> Result<bool, AppError> {
-        let pending = self
-            .ledger
-            .pending(A::aggregate_type(), MAX_EFFECT_ATTEMPTS)
-            .await?;
+    pub async fn claim_and_dispatch_one(&self) -> Result<bool, AppError> {
+        let Some(job) = self
+            .queue
+            .claim(A::aggregate_type(), &self.worker_id, LEASE)
+            .await?
+        else {
+            return Ok(false);
+        };
 
-        let did_work = !pending.is_empty();
+        info!(
+            aggregate = A::aggregate_type(),
+            job_id = %job.id,
+            partition = ?job.partition_key,
+            idempotency_key = %job.idempotency_key.as_str(),
+            attempt = job.attempts,
+            "claimed job"
+        );
 
-        for record in pending {
-            self.ledger.mark_dispatched(record.effect_id).await?;
-            info!(
-                aggregate = A::aggregate_type(),
-                stream_id = %record.stream_id,
-                effect_id = %record.effect_id,
-                idempotency_key = %record.idempotency_key.as_str(),
-                attempt = record.attempts + 1,
-                "dispatching effect"
-            );
-            match self.executor.execute(&record.payload).await {
-                Ok(()) => {
-                    self.ledger.mark_completed(record.effect_id).await?;
-                    info!(
+        let _heartbeat = HeartbeatGuard::spawn(
+            Arc::clone(&self.queue),
+            job.id,
+            self.worker_id.clone(),
+            HEARTBEAT,
+            LEASE,
+        );
+
+        let result = self.executor.execute(&job.payload).await;
+        drop(_heartbeat);
+
+        match result {
+            Ok(()) => {
+                self.queue.ack(job.id, &self.worker_id).await?;
+                info!(
+                    aggregate = A::aggregate_type(),
+                    job_id = %job.id,
+                    "job completed"
+                );
+            }
+            Err(e) => {
+                let attempts = job.attempts;
+                if attempts >= job.max_attempts {
+                    error!(
                         aggregate = A::aggregate_type(),
-                        stream_id = %record.stream_id,
-                        effect_id = %record.effect_id,
-                        "effect completed"
+                        job_id = %job.id,
+                        idempotency_key = %job.idempotency_key.as_str(),
+                        attempt = attempts,
+                        error = %e,
+                        "job exhausted retries, moving to dead_jobs"
                     );
-                }
-                Err(e) => {
-                    let next_attempts = record.attempts + 1;
+                    self.queue.dead_letter(job.id, &e.to_string()).await?;
+                } else {
+                    let delay = backoff(attempts);
                     warn!(
                         aggregate = A::aggregate_type(),
-                        effect_id = %record.effect_id,
-                        idempotency_key = %record.idempotency_key.as_str(),
-                        attempt = next_attempts,
+                        job_id = %job.id,
+                        idempotency_key = %job.idempotency_key.as_str(),
+                        attempt = attempts,
+                        backoff_secs = delay.as_secs(),
                         error = %e,
-                        "effect dispatch failed"
+                        "job failed, retrying"
                     );
-                    if let Err(le) = self
-                        .ledger
-                        .mark_failed(record.effect_id, &e.to_string(), next_attempts)
-                        .await
-                    {
-                        error!(
-                            effect_id = %record.effect_id,
-                            error = %le,
-                            "failed to mark effect failed"
-                        );
-                    }
+                    self.queue
+                        .nack(job.id, &self.worker_id, &e.to_string(), delay)
+                        .await?;
                 }
             }
         }
-        Ok(did_work)
+        Ok(true)
+    }
+}
+
+fn backoff(attempts: i32) -> Duration {
+    const BASE_SECS: u64 = 2;
+    const MAX_SECS: u64 = 300;
+    let exp = (attempts.clamp(1, 8) as u32) - 1;
+    Duration::from_secs((BASE_SECS << exp).min(MAX_SECS))
+}
+
+struct HeartbeatGuard {
+    handle: JoinHandle<()>,
+}
+
+impl HeartbeatGuard {
+    fn spawn<R>(
+        queue: Arc<dyn JobQueue<R>>,
+        job_id: Uuid,
+        worker_id: String,
+        interval: Duration,
+        lease: Duration,
+    ) -> Self
+    where
+        R: Serialize + DeserializeOwned + Send + Sync + 'static,
+    {
+        let handle = tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(interval);
+            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            ticker.tick().await;
+            loop {
+                ticker.tick().await;
+                match queue.heartbeat(job_id, &worker_id, lease).await {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        warn!(%job_id, "heartbeat lost lease");
+                        return;
+                    }
+                    Err(e) => {
+                        error!(%job_id, error = %e, "heartbeat error");
+                    }
+                }
+            }
+        });
+        Self { handle }
+    }
+}
+
+impl Drop for HeartbeatGuard {
+    fn drop(&mut self) {
+        self.handle.abort();
     }
 }
 
 #[allow(dead_code)]
 fn _trait_object_safety_assertions() {
     fn _is_object_safe<R: Send + Sync>(_: &dyn EffectExecutor<R>) {}
-    fn _ledger_object_safe<R>(_: &dyn EffectLedger<R>)
+    fn _queue_object_safe<R>(_: &dyn JobQueue<R>)
     where
         R: Serialize + DeserializeOwned + Send + Sync,
     {
     }
-    let _ = IdempotencyKey::new(Uuid::nil(), 0, "x");
-    let _ = EffectStatus::Pending;
 }

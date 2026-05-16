@@ -1,9 +1,8 @@
 use crate::server::application::indexing::effects::{
     ExecuteChunkingEffect, ExecuteEmbeddingEffect, ExecuteIndexingEffect, IndexingEffect,
 };
-use crate::server::event_sourcing::effect::{IdempotencyKey, PendingEffect};
 use crate::server::event_sourcing::envelope::EventEnvelope;
-use crate::server::event_sourcing::policy::PolicyContext;
+use crate::server::event_sourcing::job_queue::{IdempotencyKey, NewJob};
 
 use super::aggregate::Indexing;
 use super::events::IndexingEvent;
@@ -15,10 +14,9 @@ const INDEXING: &str = "execute_indexing";
 pub fn derive_indexing_effects(
     envelope: &EventEnvelope<IndexingEvent>,
     state: &Indexing,
-) -> Vec<PendingEffect<IndexingEffect>> {
-    let ctx = PolicyContext::new(envelope, state);
+) -> Vec<NewJob<IndexingEffect>> {
     let indexing_id = state.indexing_id;
-    let log_position = ctx.envelope.metadata.log_position;
+    let log_position = envelope.metadata.log_position;
     match &envelope.event {
         IndexingEvent::IngestRequested(_) | IndexingEvent::ChunkingRequeued(_) => {
             vec![chunking_effect(indexing_id, log_position)]
@@ -44,31 +42,28 @@ pub fn derive_indexing_effects(
     }
 }
 
-fn chunking_effect(indexing_id: uuid::Uuid, log_position: i64) -> PendingEffect<IndexingEffect> {
-    PendingEffect {
-        stream_id: indexing_id,
-        event_log_position: log_position,
-        effect_type: CHUNKING,
+fn chunking_effect(indexing_id: uuid::Uuid, log_position: i64) -> NewJob<IndexingEffect> {
+    NewJob {
+        partition_key: indexing_id,
+        job_type: CHUNKING,
         idempotency_key: IdempotencyKey::new(indexing_id, log_position, CHUNKING),
         payload: IndexingEffect::ExecuteChunking(ExecuteChunkingEffect { indexing_id }),
     }
 }
 
-fn embedding_effect(indexing_id: uuid::Uuid, log_position: i64) -> PendingEffect<IndexingEffect> {
-    PendingEffect {
-        stream_id: indexing_id,
-        event_log_position: log_position,
-        effect_type: EMBEDDING,
+fn embedding_effect(indexing_id: uuid::Uuid, log_position: i64) -> NewJob<IndexingEffect> {
+    NewJob {
+        partition_key: indexing_id,
+        job_type: EMBEDDING,
         idempotency_key: IdempotencyKey::new(indexing_id, log_position, EMBEDDING),
         payload: IndexingEffect::ExecuteEmbedding(ExecuteEmbeddingEffect { indexing_id }),
     }
 }
 
-fn indexing_effect(indexing_id: uuid::Uuid, log_position: i64) -> PendingEffect<IndexingEffect> {
-    PendingEffect {
-        stream_id: indexing_id,
-        event_log_position: log_position,
-        effect_type: INDEXING,
+fn indexing_effect(indexing_id: uuid::Uuid, log_position: i64) -> NewJob<IndexingEffect> {
+    NewJob {
+        partition_key: indexing_id,
+        job_type: INDEXING,
         idempotency_key: IdempotencyKey::new(indexing_id, log_position, INDEXING),
         payload: IndexingEffect::ExecuteIndexing(ExecuteIndexingEffect { indexing_id }),
     }

@@ -249,10 +249,8 @@ impl EvaluationDatasetEffectExecutor {
         {
             Some(q) => q,
             None => {
-                job.warn(&format!(
-                    "Paraphrase skipped: Q{clean_display} not found"
-                ))
-                .await;
+                job.warn(&format!("Paraphrase skipped: Q{clean_display} not found"))
+                    .await;
                 return Ok(());
             }
         };
@@ -426,8 +424,7 @@ impl EvaluationDatasetEffectExecutor {
                 .await;
                 job.finish().await;
             } else {
-                let reason =
-                    format!("no usable questions after {attempts} attempts");
+                let reason = format!("no usable questions after {attempts} attempts");
                 self.command_processor
                     .handle(
                         dataset_id,

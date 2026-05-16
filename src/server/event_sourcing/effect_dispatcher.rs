@@ -36,13 +36,10 @@ where
     }
 
     pub async fn run(self: Arc<Self>) {
-        info!(
-            aggregate = A::aggregate_type(),
-            "effect dispatcher started"
-        );
+        info!(aggregate = A::aggregate_type(), "effect dispatcher started");
         loop {
             loop {
-                match self.process_manager.dispatch_pending().await {
+                match self.process_manager.claim_and_dispatch_one().await {
                     Ok(true) => continue,
                     Ok(false) => break,
                     Err(e) => {

@@ -156,7 +156,9 @@ pub fn open_tray_with(stream_id: Uuid) {
 
 pub fn dismiss_job(stream_id: Uuid) {
     let state = use_activity_state();
-    state.rows.update(|rows| rows.retain(|r| r.stream_id != stream_id));
+    state
+        .rows
+        .update(|rows| rows.retain(|r| r.stream_id != stream_id));
     if state.selected.get_untracked() == Some(stream_id) {
         state.selected.set(None);
     }

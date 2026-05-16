@@ -39,12 +39,12 @@ use crate::server::domain::indexing::policies::derive_indexing_effects;
 use crate::server::domain::indexing::projector::IndexingProjector;
 use crate::server::domain::source_document::aggregate::SourceDocument;
 use crate::server::domain::source_document::projector::SourceDocumentProjector;
-use crate::server::event_sourcing::effect::EffectLedger;
 use crate::server::event_sourcing::event_bus::EventBus;
+use crate::server::event_sourcing::job_queue::JobQueue;
 use crate::server::event_sourcing::process_manager::ProcessManager;
 use crate::server::infrastructure::evaluation::LlmJudgeAdapter;
 use crate::server::infrastructure::event_sourcing::{
-    spawn_postgres_event_listener, PostgresEffectLedger,
+    spawn_postgres_event_listener, PostgresJobQueue,
 };
 use crate::server::infrastructure::html::HtmdConverter;
 use crate::server::infrastructure::http_client::ReqwestHttpClient;
@@ -144,8 +144,8 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
         &mut wakeups,
     );
 
-    let indexing_effect_ledger: Arc<dyn EffectLedger<IndexingEffect>> =
-        Arc::new(PostgresEffectLedger::<IndexingEffect>::new(pool.clone()));
+    let indexing_job_queue: Arc<dyn JobQueue<IndexingEffect>> =
+        Arc::new(PostgresJobQueue::<IndexingEffect>::new(pool.clone()));
 
     let indexing_effect_executor = IndexingEffectExecutor::new(
         Arc::clone(&repos.source_document),
@@ -167,7 +167,7 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
 
     let indexing_process_manager = Arc::new(ProcessManager::<Indexing, IndexingEffect>::new(
         Arc::clone(&wirings.indexing.aggregate_repository),
-        indexing_effect_ledger,
+        indexing_job_queue,
         indexing_effect_executor,
         derive_indexing_effects,
     ));
@@ -183,12 +183,11 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
         &mut wakeups,
     );
 
-    let dataset_effect_ledger: Arc<dyn EffectLedger<EvaluationDatasetEffect>> = Arc::new(
-        PostgresEffectLedger::<EvaluationDatasetEffect>::new(pool.clone()),
+    let dataset_job_queue: Arc<dyn JobQueue<EvaluationDatasetEffect>> = Arc::new(
+        PostgresJobQueue::<EvaluationDatasetEffect>::new(pool.clone()),
     );
-    let run_effect_ledger: Arc<dyn EffectLedger<EvaluationRunEffect>> = Arc::new(
-        PostgresEffectLedger::<EvaluationRunEffect>::new(pool.clone()),
-    );
+    let run_job_queue: Arc<dyn JobQueue<EvaluationRunEffect>> =
+        Arc::new(PostgresJobQueue::<EvaluationRunEffect>::new(pool.clone()));
 
     let dataset_effect_executor = EvaluationDatasetEffectExecutor::new(
         Arc::clone(&repos.source_document),
@@ -243,13 +242,13 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
 
     let dataset_process_manager = Arc::new(ProcessManager::new(
         Arc::clone(&wirings.dataset.aggregate_repository),
-        dataset_effect_ledger,
+        dataset_job_queue,
         dataset_effect_executor,
         derive_dataset_effects,
     ));
     let run_process_manager = Arc::new(ProcessManager::new(
         Arc::clone(&wirings.run.aggregate_repository),
-        run_effect_ledger,
+        run_job_queue,
         run_effect_dispatcher,
         derive_run_effects,
     ));

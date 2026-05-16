@@ -115,8 +115,7 @@ fn RunningCount(#[prop(into)] running: Signal<Vec<ActivityJobDto>>) -> impl Into
         #[cfg(feature = "hydrate")]
         {
             if next {
-                outside_listener
-                    .set_value(Some(self::hydrate::watch_outside_clicks(set_open)));
+                outside_listener.set_value(Some(self::hydrate::watch_outside_clicks(set_open)));
             } else {
                 outside_listener.set_value(None);
             }
@@ -230,10 +229,8 @@ mod hydrate {
     impl Drop for OutsideClick {
         fn drop(&mut self) {
             if let (Some(window), Some(c)) = (web_sys::window(), self.closure.take()) {
-                let _ = window.remove_event_listener_with_callback(
-                    "mousedown",
-                    c.as_ref().unchecked_ref(),
-                );
+                let _ = window
+                    .remove_event_listener_with_callback("mousedown", c.as_ref().unchecked_ref());
             }
         }
     }
@@ -242,8 +239,8 @@ mod hydrate {
         let Some(window) = web_sys::window() else {
             return OutsideClick { closure: None };
         };
-        let closure = Closure::<dyn FnMut(web_sys::MouseEvent)>::new(
-            move |ev: web_sys::MouseEvent| {
+        let closure =
+            Closure::<dyn FnMut(web_sys::MouseEvent)>::new(move |ev: web_sys::MouseEvent| {
                 let target = ev
                     .target()
                     .and_then(|t| t.dyn_into::<web_sys::Element>().ok());
@@ -253,10 +250,9 @@ mod hydrate {
                     }
                 }
                 set_open.set(false);
-            },
-        );
-        let _ = window
-            .add_event_listener_with_callback("mousedown", closure.as_ref().unchecked_ref());
+            });
+        let _ =
+            window.add_event_listener_with_callback("mousedown", closure.as_ref().unchecked_ref());
         OutsideClick {
             closure: Some(closure),
         }

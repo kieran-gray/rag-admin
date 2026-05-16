@@ -1,5 +1,5 @@
-use crate::server::event_sourcing::effect::{IdempotencyKey, PendingEffect};
 use crate::server::event_sourcing::envelope::EventEnvelope;
+use crate::server::event_sourcing::job_queue::{IdempotencyKey, NewJob};
 use crate::server::event_sourcing::policy::PolicyContext;
 
 use super::aggregate::{DatasetGenerationStatus, EvaluationDataset};
@@ -15,7 +15,7 @@ const PARAPHRASE_EFFECT: &str = "generate_paraphrase";
 pub fn derive_dataset_effects(
     envelope: &EventEnvelope<EvaluationDatasetEvent>,
     state: &EvaluationDataset,
-) -> Vec<PendingEffect<EvaluationDatasetEffect>> {
+) -> Vec<NewJob<EvaluationDatasetEffect>> {
     let ctx = PolicyContext::new(envelope, state);
 
     if !matches!(state.status, DatasetGenerationStatus::Generating) {
@@ -59,13 +59,12 @@ fn should_attempt_more(state: &EvaluationDataset) -> bool {
 
 fn attempt_effect(
     ctx: &PolicyContext<'_, EvaluationDataset, EvaluationDatasetEvent>,
-) -> PendingEffect<EvaluationDatasetEffect> {
+) -> NewJob<EvaluationDatasetEffect> {
     let stream_id = ctx.envelope.metadata.stream_id;
     let log_position = ctx.envelope.metadata.log_position;
-    PendingEffect {
-        stream_id,
-        event_log_position: log_position,
-        effect_type: ATTEMPT_EFFECT,
+    NewJob {
+        partition_key: stream_id,
+        job_type: ATTEMPT_EFFECT,
         idempotency_key: IdempotencyKey::new(stream_id, log_position, ATTEMPT_EFFECT),
         payload: EvaluationDatasetEffect::AttemptQuestionGeneration(GenerateQuestionEffect {
             dataset_id: stream_id,
@@ -77,14 +76,13 @@ fn paraphrase_effect(
     ctx: &PolicyContext<'_, EvaluationDataset, EvaluationDatasetEvent>,
     clean_sequence: u32,
     category: crate::server::domain::evaluation::question::QuestionCategory,
-) -> PendingEffect<EvaluationDatasetEffect> {
+) -> NewJob<EvaluationDatasetEffect> {
     let stream_id = ctx.envelope.metadata.stream_id;
     let log_position = ctx.envelope.metadata.log_position;
     let discriminator = format!("paraphrase:{clean_sequence}");
-    PendingEffect {
-        stream_id,
-        event_log_position: log_position,
-        effect_type: PARAPHRASE_EFFECT,
+    NewJob {
+        partition_key: stream_id,
+        job_type: PARAPHRASE_EFFECT,
         idempotency_key: IdempotencyKey::new(stream_id, log_position, &discriminator),
         payload: EvaluationDatasetEffect::GenerateParaphrase(GenerateParaphraseEffect {
             dataset_id: stream_id,

@@ -1,5 +1,5 @@
-use crate::server::event_sourcing::effect::{IdempotencyKey, PendingEffect};
 use crate::server::event_sourcing::envelope::EventEnvelope;
+use crate::server::event_sourcing::job_queue::{IdempotencyKey, NewJob};
 
 use super::aggregate::EvaluationRun;
 use super::events::EvaluationRunEvent;
@@ -11,14 +11,13 @@ use crate::server::application::evaluation::effects::run::{
 pub fn derive_run_effects(
     envelope: &EventEnvelope<EvaluationRunEvent>,
     _state: &EvaluationRun,
-) -> Vec<PendingEffect<EvaluationRunEffect>> {
+) -> Vec<NewJob<EvaluationRunEffect>> {
     let log_position = envelope.metadata.log_position;
     match &envelope.event {
         EvaluationRunEvent::RunRequested(event) => match &event.optimization {
-            Some(optimization) => vec![PendingEffect {
-                stream_id: event.run_id,
-                event_log_position: log_position,
-                effect_type: "optimize_run",
+            Some(optimization) => vec![NewJob {
+                partition_key: event.run_id,
+                job_type: "optimize_run",
                 idempotency_key: IdempotencyKey::new(event.run_id, log_position, "optimize_run"),
                 payload: EvaluationRunEffect::OptimizeRun(OptimizeRunEffect {
                     run_id: event.run_id,
@@ -30,10 +29,9 @@ pub fn derive_run_effects(
                     scoring_policy: event.scoring_policy,
                 }),
             }],
-            None => vec![PendingEffect {
-                stream_id: event.run_id,
-                event_log_position: log_position,
-                effect_type: "execute_run",
+            None => vec![NewJob {
+                partition_key: event.run_id,
+                job_type: "execute_run",
                 idempotency_key: IdempotencyKey::new(event.run_id, log_position, "execute_run"),
                 payload: EvaluationRunEffect::ExecuteRun(ExecuteRunEffect {
                     run_id: event.run_id,
