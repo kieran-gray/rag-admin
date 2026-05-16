@@ -215,9 +215,9 @@ async fn connect_database(url: &str) -> Result<PgPool, SetupError> {
         .connect(url)
         .await
         .map_err(|e| SetupError::Internal(format!("postgres pool: {e}")))?;
-    sqlx::migrate!("./migrations")
-        .run(&pool)
-        .await
-        .map_err(|e| SetupError::Internal(format!("migrations: {e}")))?;
+    // sqlx::migrate!("./migrations")
+    //     .run(&pool)
+    //     .await
+    //     .map_err(|e| SetupError::Internal(format!("migrations: {e}")))?;
     Ok(pool)
 }

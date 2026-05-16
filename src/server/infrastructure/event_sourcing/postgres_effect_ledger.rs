@@ -83,7 +83,12 @@ where
              FROM pending_effects \
              WHERE aggregate_type = $1 \
                AND attempts < $2 \
-               AND status IN ('pending', 'failed') \
+               AND ( \
+                   status IN ('pending', 'failed') \
+                   OR (status = 'dispatched' \
+                       AND last_attempt_at IS NOT NULL \
+                       AND last_attempt_at < NOW() - INTERVAL '5 minutes') \
+               ) \
              ORDER BY event_log_position ASC, effect_id ASC \
              LIMIT 100",
         )

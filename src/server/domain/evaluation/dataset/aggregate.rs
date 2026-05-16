@@ -1,9 +1,12 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::server::{domain::shared::Timestamp, event_sourcing::Aggregate};
+use crate::server::{
+    domain::{evaluation::question::QuestionCategory, shared::Timestamp},
+    event_sourcing::Aggregate,
+};
 
 use super::{
     commands::EvaluationDatasetCommand,
@@ -54,6 +57,23 @@ pub struct EvaluationDataset {
     pub created_at: Timestamp,
     #[serde(default)]
     pub deleted: bool,
+
+    #[serde(default)]
+    pub generation_model_id: Uuid,
+    #[serde(default)]
+    pub embedding_model_id: Uuid,
+    #[serde(default)]
+    pub excerpt_similarity_threshold_milli: u32,
+    #[serde(default)]
+    pub duplicate_similarity_threshold_milli: u32,
+    #[serde(default)]
+    pub max_attempts: u32,
+    #[serde(default)]
+    pub grammar_variants_enabled: bool,
+    #[serde(default)]
+    pub attempt_count: u32,
+    #[serde(default)]
+    pub accepted_by_category: HashMap<QuestionCategory, u32>,
 }
 
 impl EvaluationDataset {
@@ -67,7 +87,28 @@ impl EvaluationDataset {
             accepted_sequences: BTreeSet::new(),
             created_at: e.occurred_at.clone(),
             deleted: false,
+            generation_model_id: e.generation_model_id,
+            embedding_model_id: e.embedding_model_id,
+            excerpt_similarity_threshold_milli: e.excerpt_similarity_threshold_milli,
+            duplicate_similarity_threshold_milli: e.duplicate_similarity_threshold_milli,
+            max_attempts: e.max_attempts,
+            grammar_variants_enabled: e.grammar_variants_enabled,
+            attempt_count: 0,
+            accepted_by_category: HashMap::new(),
         }
+    }
+
+    pub fn clean_accepted_count(&self) -> u32 {
+        self.accepted_by_category.values().copied().sum()
+    }
+
+    pub fn next_sequence(&self) -> u32 {
+        self.accepted_sequences
+            .iter()
+            .copied()
+            .max()
+            .map(|n| n + 1)
+            .unwrap_or(0)
     }
 }
 
@@ -85,8 +126,14 @@ impl Aggregate for EvaluationDataset {
             Self::Event::DatasetGenerationRequested(_) => {}
             Self::Event::QuestionAccepted(e) => {
                 self.accepted_sequences.insert(e.sequence);
+                if e.paraphrase_of.is_none() {
+                    *self.accepted_by_category.entry(e.category).or_insert(0) += 1;
+                    self.attempt_count = self.attempt_count.saturating_add(1);
+                }
             }
-            Self::Event::QuestionRejected(_) => {}
+            Self::Event::QuestionRejected(_) => {
+                self.attempt_count = self.attempt_count.saturating_add(1);
+            }
             Self::Event::DatasetGenerationCompleted(_) => {
                 self.status = DatasetGenerationStatus::Completed;
             }
@@ -125,6 +172,8 @@ impl Aggregate for EvaluationDataset {
                         duplicate_similarity_threshold_milli: cmd
                             .duplicate_similarity_threshold_milli,
                         embedding_model_id: cmd.embedding_model_id,
+                        max_attempts: cmd.max_attempts,
+                        grammar_variants_enabled: cmd.grammar_variants_enabled,
                         occurred_at: cmd.occurred_at,
                     },
                 )])
@@ -271,6 +320,8 @@ mod tests {
             excerpt_similarity_threshold_milli: 800,
             duplicate_similarity_threshold_milli: 950,
             embedding_model_id: Uuid::new_v4(),
+            max_attempts: 96,
+            grammar_variants_enabled: true,
             occurred_at: "2024-01-01T00:00:00Z".into(),
         })
     }
@@ -288,6 +339,8 @@ mod tests {
             excerpt_similarity_threshold_milli: 800,
             duplicate_similarity_threshold_milli: 950,
             embedding_model_id: Uuid::new_v4(),
+            max_attempts: 96,
+            grammar_variants_enabled: true,
             occurred_at: "2024-01-01T00:00:00Z".into(),
         })
     }

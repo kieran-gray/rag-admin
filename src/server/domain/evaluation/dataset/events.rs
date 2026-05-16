@@ -18,6 +18,10 @@ pub struct DatasetGenerationRequested {
     pub excerpt_similarity_threshold_milli: u32,
     pub duplicate_similarity_threshold_milli: u32,
     pub embedding_model_id: Uuid,
+    #[serde(default)]
+    pub max_attempts: u32,
+    #[serde(default)]
+    pub grammar_variants_enabled: bool,
     pub occurred_at: Timestamp,
 }
 

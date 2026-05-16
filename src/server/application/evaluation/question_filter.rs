@@ -89,6 +89,33 @@ impl<'a> GeneratedQuestionGate<'a> {
         }
     }
 
+    pub fn with_existing(
+        embedding_service: &'a EmbeddingService,
+        embedding_model: &'a ResolvedEmbeddingModel,
+        excerpt_similarity_threshold: f32,
+        duplicate_similarity_threshold: f32,
+        existing: Vec<EvaluationQuestionDto>,
+    ) -> Self {
+        let mut question_embeddings = Vec::with_capacity(existing.len());
+        let mut questions = Vec::with_capacity(existing.len());
+        for question in existing {
+            if let Some(embedding) = question.embedding.as_ref() {
+                question_embeddings.push(crate::core::plain_f32_vec(embedding));
+            }
+            questions.push(question);
+        }
+        Self {
+            embedding_service,
+            embedding_model,
+            excerpt_similarity_threshold,
+            duplicate_similarity_threshold,
+            questions,
+            question_embeddings,
+            stats: QuestionFilterStats::default(),
+            generated_count: 0,
+        }
+    }
+
     pub async fn try_accept(
         &mut self,
         question: EvaluationQuestionDto,

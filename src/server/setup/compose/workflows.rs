@@ -193,9 +193,11 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
     let dataset_effect_executor = EvaluationDatasetEffectExecutor::new(
         Arc::clone(&repos.source_document),
         Arc::clone(&repos.blob_store),
+        Arc::clone(&repos.evaluation_dataset),
         Arc::clone(&services.evaluation_generator),
         Arc::clone(&services.embedding_service),
         Arc::clone(&wirings.dataset.command_processor),
+        Arc::clone(&wirings.dataset.aggregate_repository),
         Arc::clone(&services.job_registry),
         Arc::clone(&services.activity_registry),
         Arc::clone(&clock),

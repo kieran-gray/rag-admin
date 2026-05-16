@@ -1,20 +1,23 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::server::domain::evaluation::question::QuestionCategory;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GenerateDatasetEffect {
+pub struct GenerateQuestionEffect {
     pub dataset_id: Uuid,
-    pub document_id: Uuid,
-    pub target_question_count: u32,
-    pub generation_model_id: Uuid,
-    pub embedding_model_id: Uuid,
-    pub excerpt_similarity_threshold_milli: u32,
-    pub duplicate_similarity_threshold_milli: u32,
-    pub grammar_variants_enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GenerateParaphraseEffect {
+    pub dataset_id: Uuid,
+    pub clean_sequence: u32,
+    pub category: QuestionCategory,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum EvaluationDatasetEffect {
-    GenerateDataset(GenerateDatasetEffect),
+    AttemptQuestionGeneration(GenerateQuestionEffect),
+    GenerateParaphrase(GenerateParaphraseEffect),
 }

@@ -6,7 +6,9 @@ pub mod run;
 pub mod run_executor;
 pub mod run_session;
 
-pub use dataset::{EvaluationDatasetEffect, GenerateDatasetEffect};
+pub use dataset::{
+    GenerateQuestionEffect, EvaluationDatasetEffect, GenerateParaphraseEffect,
+};
 pub use dataset_executor::EvaluationDatasetEffectExecutor;
 pub use dispatcher::EvaluationRunEffectDispatcher;
 pub use optimize_executor::OptimizeRunEffectExecutor;

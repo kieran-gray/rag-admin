@@ -168,6 +168,7 @@ where
                     }
                 }
             }
+            self.dispatch_idle_effects().await;
             match timeout(POLL_HEARTBEAT, self.wakeup.notified()).await {
                 Ok(()) => debug!(
                     aggregate = A::aggregate_type(),
@@ -178,6 +179,19 @@ where
                     "projection driver heartbeat tick"
                 ),
             }
+        }
+    }
+
+    async fn dispatch_idle_effects(&self) {
+        let Some(pm) = &self.process_manager else {
+            return;
+        };
+        if let Err(e) = pm.dispatch_pending().await {
+            error!(
+                aggregate = A::aggregate_type(),
+                error = %e,
+                "process manager: idle dispatch failed"
+            );
         }
     }
 }

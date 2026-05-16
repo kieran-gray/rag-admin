@@ -100,6 +100,16 @@ impl JobRegistry {
         (id, job)
     }
 
+    pub async fn get_or_create(&self, id: String) -> (Arc<Job>, bool) {
+        let mut jobs = self.jobs.lock().await;
+        if let Some(existing) = jobs.get(&id) {
+            return (existing.clone(), false);
+        }
+        let job = Job::new();
+        jobs.insert(id, job.clone());
+        (job, true)
+    }
+
     pub async fn get(&self, id: &str) -> Option<Arc<Job>> {
         self.jobs.lock().await.get(id).cloned()
     }

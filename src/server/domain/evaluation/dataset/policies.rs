@@ -1,65 +1,95 @@
 use crate::server::event_sourcing::effect::{IdempotencyKey, PendingEffect};
 use crate::server::event_sourcing::envelope::EventEnvelope;
-use crate::server::event_sourcing::policy::{HasPolicies, PolicyContext, PolicyFn};
+use crate::server::event_sourcing::policy::PolicyContext;
 
-use super::aggregate::EvaluationDataset;
-use super::events::{DatasetGenerationRequested, EvaluationDatasetEvent};
+use super::aggregate::{DatasetGenerationStatus, EvaluationDataset};
+use super::events::EvaluationDatasetEvent;
 
 use crate::server::application::evaluation::effects::dataset::{
-    EvaluationDatasetEffect, GenerateDatasetEffect,
+    EvaluationDatasetEffect, GenerateParaphraseEffect, GenerateQuestionEffect,
 };
 
-fn for_dataset_generation_requested(
-    event: &DatasetGenerationRequested,
-    ctx: &PolicyContext<'_, EvaluationDataset, EvaluationDatasetEvent>,
-) -> Vec<PendingEffect<EvaluationDatasetEffect>> {
-    vec![PendingEffect {
-        stream_id: event.dataset_id,
-        event_log_position: ctx.envelope.metadata.log_position,
-        effect_type: "generate_dataset",
-        idempotency_key: IdempotencyKey::new(
-            event.dataset_id,
-            ctx.envelope.metadata.log_position,
-            "generate_dataset",
-        ),
-        payload: EvaluationDatasetEffect::GenerateDataset(GenerateDatasetEffect {
-            dataset_id: event.dataset_id,
-            document_id: event.document_id,
-            target_question_count: event.target_question_count,
-            generation_model_id: event.generation_model_id,
-            embedding_model_id: event.embedding_model_id,
-            excerpt_similarity_threshold_milli: event.excerpt_similarity_threshold_milli,
-            duplicate_similarity_threshold_milli: event.duplicate_similarity_threshold_milli,
-            grammar_variants_enabled: true,
-        }),
-    }]
-}
-
-impl HasPolicies<EvaluationDataset, EvaluationDatasetEvent, EvaluationDatasetEffect>
-    for DatasetGenerationRequested
-{
-    fn policies() -> &'static [PolicyFn<
-        Self,
-        EvaluationDataset,
-        EvaluationDatasetEvent,
-        EvaluationDatasetEffect,
-    >] {
-        &[for_dataset_generation_requested]
-    }
-}
+const ATTEMPT_EFFECT: &str = "attempt_question_generation";
+const PARAPHRASE_EFFECT: &str = "generate_paraphrase";
 
 pub fn derive_dataset_effects(
     envelope: &EventEnvelope<EvaluationDatasetEvent>,
     state: &EvaluationDataset,
 ) -> Vec<PendingEffect<EvaluationDatasetEffect>> {
     let ctx = PolicyContext::new(envelope, state);
+
+    if !matches!(state.status, DatasetGenerationStatus::Generating) {
+        return Vec::new();
+    }
+
     match &envelope.event {
-        EvaluationDatasetEvent::DatasetGenerationRequested(e) => e.apply_policies(&ctx),
-        EvaluationDatasetEvent::QuestionAccepted(_)
-        | EvaluationDatasetEvent::QuestionRejected(_)
-        | EvaluationDatasetEvent::DatasetGenerationCompleted(_)
+        EvaluationDatasetEvent::DatasetGenerationRequested(_) => {
+            vec![attempt_effect(&ctx)]
+        }
+        EvaluationDatasetEvent::QuestionAccepted(e) => {
+            let mut out = Vec::new();
+            if e.paraphrase_of.is_none() && state.grammar_variants_enabled {
+                out.push(paraphrase_effect(&ctx, e.sequence, e.category));
+            }
+            if should_attempt_more(state) {
+                out.push(attempt_effect(&ctx));
+            }
+            out
+        }
+        EvaluationDatasetEvent::QuestionRejected(_) => {
+            if should_attempt_more(state) {
+                vec![attempt_effect(&ctx)]
+            } else {
+                Vec::new()
+            }
+        }
+        EvaluationDatasetEvent::DatasetGenerationCompleted(_)
         | EvaluationDatasetEvent::DatasetGenerationFailed(_)
         | EvaluationDatasetEvent::DatasetRenamed(_)
         | EvaluationDatasetEvent::DatasetDeleted(_) => Vec::new(),
+    }
+}
+
+fn should_attempt_more(state: &EvaluationDataset) -> bool {
+    let clean = state.clean_accepted_count();
+    let target = state.target_question_count;
+    let attempt_cap = state.max_attempts;
+    clean < target && state.attempt_count < attempt_cap
+}
+
+fn attempt_effect(
+    ctx: &PolicyContext<'_, EvaluationDataset, EvaluationDatasetEvent>,
+) -> PendingEffect<EvaluationDatasetEffect> {
+    let stream_id = ctx.envelope.metadata.stream_id;
+    let log_position = ctx.envelope.metadata.log_position;
+    PendingEffect {
+        stream_id,
+        event_log_position: log_position,
+        effect_type: ATTEMPT_EFFECT,
+        idempotency_key: IdempotencyKey::new(stream_id, log_position, ATTEMPT_EFFECT),
+        payload: EvaluationDatasetEffect::AttemptQuestionGeneration(GenerateQuestionEffect {
+            dataset_id: stream_id,
+        }),
+    }
+}
+
+fn paraphrase_effect(
+    ctx: &PolicyContext<'_, EvaluationDataset, EvaluationDatasetEvent>,
+    clean_sequence: u32,
+    category: crate::server::domain::evaluation::question::QuestionCategory,
+) -> PendingEffect<EvaluationDatasetEffect> {
+    let stream_id = ctx.envelope.metadata.stream_id;
+    let log_position = ctx.envelope.metadata.log_position;
+    let discriminator = format!("paraphrase:{clean_sequence}");
+    PendingEffect {
+        stream_id,
+        event_log_position: log_position,
+        effect_type: PARAPHRASE_EFFECT,
+        idempotency_key: IdempotencyKey::new(stream_id, log_position, &discriminator),
+        payload: EvaluationDatasetEffect::GenerateParaphrase(GenerateParaphraseEffect {
+            dataset_id: stream_id,
+            clean_sequence,
+            category,
+        }),
     }
 }

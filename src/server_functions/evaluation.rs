@@ -139,6 +139,9 @@ pub async fn start_generate_synthetic_dataset(
     let dataset_id = UuidGenerator.new_uuid();
     let occurred_at = SystemClock.now();
 
+    let target = eval_settings.question_count.max(1);
+    let max_attempts = target.saturating_mul(12).max(target.saturating_add(12));
+
     dataset_processor
         .handle(
             dataset_id,
@@ -148,7 +151,7 @@ pub async fn start_generate_synthetic_dataset(
                 document_version: document.latest_version,
                 content_hash: document.latest_content_hash.clone(),
                 label,
-                target_question_count: eval_settings.question_count,
+                target_question_count: target,
                 generation_model_id: pipeline.generation_model.generation_model_id,
                 generation_model: pipeline.generation_model.model.clone(),
                 excerpt_similarity_threshold_milli: eval_settings
@@ -156,6 +159,8 @@ pub async fn start_generate_synthetic_dataset(
                 duplicate_similarity_threshold_milli: eval_settings
                     .duplicate_similarity_threshold_milli,
                 embedding_model_id: pipeline.embedding_model.embedding_model_id,
+                max_attempts,
+                grammar_variants_enabled: true,
                 occurred_at,
             }),
         )

@@ -10,6 +10,7 @@ use crate::contracts::{
 };
 use crate::server_functions::evaluation::{delete_dataset, get_dataset, rename_dataset};
 use crate::ui::components::event_bus::use_invalidator;
+use crate::ui::components::log_stream::LogStream;
 use crate::ui::components::primitives::{EmptyState, Kv, PageHeader, Status, StatusPill, Surface};
 
 use crate::ui::pages::shared::short_hash;
@@ -268,6 +269,15 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
                     <Kv label="Rejections".to_string() value=format!("{rejected}") />
                 </div>
             </Surface>
+
+            {(dataset.status.as_str() == "generating").then(|| {
+                let url = format!("/api/job/logs/{dataset_id}");
+                view! {
+                    <Surface title="Generation log".to_string() class="mb-4".to_string()>
+                        <LogStream url=Signal::derive(move || Some(url.clone())) />
+                    </Surface>
+                }
+            })}
 
             <Surface title=format!("Questions ({})", questions.len())>
                 {if questions.is_empty() {

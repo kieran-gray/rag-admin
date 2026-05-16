@@ -24,17 +24,7 @@ fn stream_for_job(
     job_id: String,
 ) -> impl Stream<Item = Result<Event, Infallible>> {
     stream! {
-        let job = jobs.get(&job_id).await;
-        let Some(job) = job else {
-            let payload = serde_json::to_string(&LogEvent {
-                level: crate::contracts::LogLevel::Error,
-                message: format!("unknown job id: {job_id}"),
-            })
-            .unwrap_or_default();
-            yield Ok(Event::default().data(payload));
-            yield Ok(Event::default().data("__done__"));
-            return;
-        };
+        let (job, _created) = jobs.get_or_create(job_id).await;
 
         let mut rx = job.sender.subscribe();
         let (buffered_events, finished) = {
