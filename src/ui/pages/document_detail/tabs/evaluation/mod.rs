@@ -11,7 +11,6 @@ use crate::server_functions::evaluation::{
     get_datasets_for_document, get_runs_for_document, start_generate_synthetic_dataset,
     start_run_evaluation,
 };
-use crate::ui::components::activity::toggle_drawer;
 use crate::ui::components::event_bus::use_invalidator;
 use crate::ui::components::primitives::{EmptyState, Status, StatusPill, Surface};
 
@@ -120,7 +119,6 @@ fn EvaluationWorkspace(
                 .await
             {
                 Ok(_job) => {
-                    toggle_drawer(true);
                     set_job_running.set(false);
                 }
                 Err(e) => {
@@ -137,7 +135,6 @@ fn EvaluationWorkspace(
         spawn_local(async move {
             match start_run_evaluation(request).await {
                 Ok(_job) => {
-                    toggle_drawer(true);
                     set_job_running.set(false);
                 }
                 Err(e) => {

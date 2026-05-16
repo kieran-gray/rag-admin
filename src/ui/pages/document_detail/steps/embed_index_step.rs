@@ -3,7 +3,6 @@ use leptos::task::spawn_local;
 
 use crate::contracts::{IndexingDto, PipelineConfigurationDto};
 use crate::server_functions::source_document::{requeue_embedding, requeue_indexing};
-use crate::ui::components::activity::toggle_drawer;
 use crate::ui::components::primitives::{EmptyState, Status, StatusPill, Surface};
 use crate::ui::pages::document_detail::steps::ConfigSelection;
 
@@ -93,7 +92,6 @@ pub fn EmbedIndexStep(
         spawn_local(async move {
             match requeue_embedding(id).await {
                 Ok(_) => {
-                    toggle_drawer(true);
                     set_busy_stage.set(None);
                 }
                 Err(e) => {
@@ -118,7 +116,6 @@ pub fn EmbedIndexStep(
         spawn_local(async move {
             match requeue_indexing(id).await {
                 Ok(_) => {
-                    toggle_drawer(true);
                     set_busy_stage.set(None);
                 }
                 Err(e) => {

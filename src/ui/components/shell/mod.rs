@@ -1,4 +1,4 @@
-pub mod activity_drawer;
+pub mod activity_tray;
 pub mod app_shell;
 pub mod nav;
 

@@ -30,7 +30,7 @@ pub fn classify(
         }),
         (aggregate_type::INDEXING, "IndexingRemoved") => Some(ActivityDelta::Remove { stream_id }),
         (aggregate_type::INDEXING, "ChunkingCompleted" | "EmbeddingCompleted") => {
-            let auto_advance = event_data
+            let auto_advance = event_payload(event_data)
                 .get("auto_advance")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(true);
@@ -173,4 +173,60 @@ pub fn classify_event(event: &PublishedEvent) -> Option<ActivityDelta> {
 
 fn short_id(id: Uuid) -> String {
     id.to_string()[..8].to_string()
+}
+
+fn event_payload(event_data: &serde_json::Value) -> &serde_json::Value {
+    event_data.get("data").unwrap_or(event_data)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use uuid::Uuid;
+
+    fn stream_id() -> Uuid {
+        Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap()
+    }
+
+    #[test]
+    fn chunking_completed_with_auto_advance_false_marks_complete() {
+        let payload = json!({
+            "type": "ChunkingCompleted",
+            "data": {
+                "chunk_set_id": Uuid::nil(),
+                "chunk_count": 3,
+                "auto_advance": false,
+                "occurred_at": "2024-01-01T00:00:00Z",
+            }
+        });
+        let delta = classify(
+            stream_id(),
+            aggregate_type::INDEXING,
+            "ChunkingCompleted",
+            "2024-01-01T00:00:01Z",
+            &payload,
+        );
+        assert!(matches!(delta, Some(ActivityDelta::Complete { .. })));
+    }
+
+    #[test]
+    fn embedding_completed_with_auto_advance_true_refreshes() {
+        let payload = json!({
+            "type": "EmbeddingCompleted",
+            "data": {
+                "embedding_set_id": Uuid::nil(),
+                "auto_advance": true,
+                "occurred_at": "2024-01-01T00:00:00Z",
+            }
+        });
+        let delta = classify(
+            stream_id(),
+            aggregate_type::INDEXING,
+            "EmbeddingCompleted",
+            "2024-01-01T00:00:01Z",
+            &payload,
+        );
+        assert!(matches!(delta, Some(ActivityDelta::Refresh { .. })));
+    }
 }

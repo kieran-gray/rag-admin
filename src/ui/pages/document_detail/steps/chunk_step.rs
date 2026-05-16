@@ -4,7 +4,6 @@ use uuid::Uuid;
 
 use crate::contracts::{ChunkDto, ChunkingConfigurationDto, IndexingDto, PipelineConfigurationDto};
 use crate::server_functions::source_document::{get_chunks, request_indexing};
-use crate::ui::components::activity::toggle_drawer;
 use crate::ui::components::primitives::{EmptyState, Status, StatusPill, Surface};
 use crate::ui::pages::document_detail::steps::ConfigSelection;
 use crate::ui::pages::document_detail::tabs::chunks::chunk_card::ChunkCard;
@@ -62,7 +61,6 @@ pub fn ChunkStep(
         spawn_local(async move {
             match request_indexing(slug, pipeline_id, config, false).await {
                 Ok(_) => {
-                    toggle_drawer(true);
                     set_busy.set(false);
                 }
                 Err(e) => {

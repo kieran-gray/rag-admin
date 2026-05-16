@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -68,8 +69,7 @@ where
             return Ok(());
         }
 
-        let mut by_stream: std::collections::BTreeMap<Uuid, Vec<&EventEnvelope<A::Event>>> =
-            std::collections::BTreeMap::new();
+        let mut by_stream: BTreeMap<Uuid, Vec<&EventEnvelope<A::Event>>> = BTreeMap::new();
         for env in envelopes {
             by_stream
                 .entry(env.metadata.stream_id)
@@ -105,11 +105,13 @@ where
         Ok(())
     }
 
-    pub async fn dispatch_pending(&self) -> Result<(), AppError> {
+    pub async fn dispatch_pending(&self) -> Result<bool, AppError> {
         let pending = self
             .ledger
             .pending(A::aggregate_type(), MAX_EFFECT_ATTEMPTS)
             .await?;
+
+        let did_work = !pending.is_empty();
 
         for record in pending {
             self.ledger.mark_dispatched(record.effect_id).await?;
@@ -155,7 +157,7 @@ where
                 }
             }
         }
-        Ok(())
+        Ok(did_work)
     }
 }
 

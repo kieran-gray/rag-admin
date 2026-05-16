@@ -24,7 +24,6 @@ use crate::server_functions::configuration::{
 use crate::server_functions::source_document::{
     get_document_detail_by_source_ref, import_source_document, start_indexing_with_defaults,
 };
-use crate::ui::components::activity::toggle_drawer;
 use crate::ui::components::event_bus::use_invalidator;
 use crate::ui::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
 
@@ -320,7 +319,6 @@ fn QuickIndexButton(source_ref: StoredValue<String>) -> impl IntoView {
         spawn_local(async move {
             match start_indexing_with_defaults(slug).await {
                 Ok(_) => {
-                    toggle_drawer(true);
                     set_busy.set(false);
                 }
                 Err(e) => {

@@ -31,7 +31,8 @@ where
     checkpoint_repository: Arc<dyn CheckpointRepository>,
     event_bus: Arc<EventBus>,
     process_manager: Option<Arc<ProcessManager<A, R>>>,
-    wakeup: Arc<Notify>,
+    projection_wakeup: Arc<Notify>,
+    effect_wakeup: Arc<Notify>,
 }
 
 impl<A, R> ProjectionDriver<A, R>
@@ -46,7 +47,8 @@ where
         checkpoint_repository: Arc<dyn CheckpointRepository>,
         event_bus: Arc<EventBus>,
         process_manager: Option<Arc<ProcessManager<A, R>>>,
-        wakeup: Arc<Notify>,
+        projection_wakeup: Arc<Notify>,
+        effect_wakeup: Arc<Notify>,
     ) -> Self {
         Self {
             event_store,
@@ -54,7 +56,8 @@ where
             checkpoint_repository,
             event_bus,
             process_manager,
-            wakeup,
+            projection_wakeup,
+            effect_wakeup,
         }
     }
 
@@ -103,7 +106,7 @@ where
                         "projector advanced"
                     );
                     self.broadcast(&envelopes);
-                    self.run_process_manager(&envelopes).await;
+                    self.enqueue_effects(&envelopes).await;
                 }
                 Err(e) => {
                     let next_count = checkpoint.error_count + 1;
@@ -138,16 +141,17 @@ where
         }
     }
 
-    async fn run_process_manager(&self, envelopes: &[EventEnvelope<A::Event>]) {
+    async fn enqueue_effects(&self, envelopes: &[EventEnvelope<A::Event>]) {
         let Some(pm) = &self.process_manager else {
             return;
         };
-        if let Err(e) = pm.enqueue_effects_for(envelopes).await {
-            error!(aggregate = A::aggregate_type(), error = %e, "process manager: enqueue failed");
-            return;
-        }
-        if let Err(e) = pm.dispatch_pending().await {
-            error!(aggregate = A::aggregate_type(), error = %e, "process manager: dispatch failed");
+        match pm.enqueue_effects_for(envelopes).await {
+            Ok(()) => {
+                self.effect_wakeup.notify_one();
+            }
+            Err(e) => {
+                error!(aggregate = A::aggregate_type(), error = %e, "process manager: enqueue failed");
+            }
         }
     }
 
@@ -168,8 +172,7 @@ where
                     }
                 }
             }
-            self.dispatch_idle_effects().await;
-            match timeout(POLL_HEARTBEAT, self.wakeup.notified()).await {
+            match timeout(POLL_HEARTBEAT, self.projection_wakeup.notified()).await {
                 Ok(()) => debug!(
                     aggregate = A::aggregate_type(),
                     "projection driver woken by notify"
@@ -179,19 +182,6 @@ where
                     "projection driver heartbeat tick"
                 ),
             }
-        }
-    }
-
-    async fn dispatch_idle_effects(&self) {
-        let Some(pm) = &self.process_manager else {
-            return;
-        };
-        if let Err(e) = pm.dispatch_pending().await {
-            error!(
-                aggregate = A::aggregate_type(),
-                error = %e,
-                "process manager: idle dispatch failed"
-            );
         }
     }
 }

@@ -20,6 +20,7 @@ use crate::server::event_sourcing::checkpoint::CheckpointRepository;
 use crate::server::event_sourcing::command_processor::CommandProcessor;
 use crate::server::event_sourcing::event_bus::EventBus;
 use crate::server::event_sourcing::event_store::EventStore;
+use crate::server::event_sourcing::effect_dispatcher::EffectDispatcher;
 use crate::server::event_sourcing::process_manager::ProcessManager;
 use crate::server::event_sourcing::projection_driver::ProjectionDriver;
 use crate::server::event_sourcing::projector::Projector;
@@ -92,15 +93,23 @@ pub fn spawn_driver<A, R>(
     R: Serialize + DeserializeOwned + Clone + Send + Sync + 'static,
     AppError: From<A::Error>,
 {
-    let wakeup = Arc::new(Notify::new());
-    let driver = Arc::new(ProjectionDriver::<A, R>::new(
+    let projection_wakeup = Arc::new(Notify::new());
+    let effect_wakeup = Arc::new(Notify::new());
+
+    let projection_driver = Arc::new(ProjectionDriver::<A, R>::new(
         event_store,
         projectors,
         checkpoint_repository,
         event_bus,
-        process_manager,
-        Arc::clone(&wakeup),
+        process_manager.clone(),
+        Arc::clone(&projection_wakeup),
+        Arc::clone(&effect_wakeup),
     ));
-    wakeups.insert(A::aggregate_type().to_owned(), wakeup);
-    tokio::spawn(driver.run());
+    wakeups.insert(A::aggregate_type().to_owned(), projection_wakeup);
+    tokio::spawn(projection_driver.run());
+
+    if let Some(pm) = process_manager {
+        let dispatcher = Arc::new(EffectDispatcher::<A, R>::new(pm, effect_wakeup));
+        tokio::spawn(dispatcher.run());
+    }
 }
