@@ -5,5 +5,4 @@ pub mod evaluation;
 pub mod jobs;
 pub mod query;
 pub mod schema;
-pub mod settings;
 pub mod source_document;

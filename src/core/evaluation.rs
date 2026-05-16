@@ -2,84 +2,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::chunking::ChunkingConfig;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum EvaluationGenerationBackend {
-    #[default]
-    Ollama,
-    WorkersAi,
-}
-
-impl EvaluationGenerationBackend {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Ollama => "ollama",
-            Self::WorkersAi => "workers_ai",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct EvaluationSettings {
-    #[serde(default)]
-    pub generation_backend: EvaluationGenerationBackend,
-    #[serde(default = "default_generation_model")]
-    pub generation_model: String,
-    #[serde(
-        default = "default_question_count",
-        deserialize_with = "crate::core::serde_compat::u32_from_string"
-    )]
-    pub question_count: u32,
-    #[serde(
-        default = "default_excerpt_similarity_threshold_milli",
-        deserialize_with = "crate::core::serde_compat::u32_from_string"
-    )]
-    pub excerpt_similarity_threshold_milli: u32,
-    #[serde(
-        default = "default_duplicate_similarity_threshold_milli",
-        deserialize_with = "crate::core::serde_compat::u32_from_string"
-    )]
-    pub duplicate_similarity_threshold_milli: u32,
-    #[serde(
-        default = "default_top_k",
-        deserialize_with = "crate::core::serde_compat::u32_from_string"
-    )]
-    pub top_k: u32,
-    #[serde(
-        default,
-        deserialize_with = "crate::core::serde_compat::u32_from_string"
-    )]
-    pub min_score_milli: u32,
-}
-
-impl Default for EvaluationSettings {
-    fn default() -> Self {
-        Self {
-            generation_backend: EvaluationGenerationBackend::Ollama,
-            generation_model: default_generation_model(),
-            question_count: default_question_count(),
-            excerpt_similarity_threshold_milli: default_excerpt_similarity_threshold_milli(),
-            duplicate_similarity_threshold_milli: default_duplicate_similarity_threshold_milli(),
-            top_k: default_top_k(),
-            min_score_milli: 0,
-        }
-    }
-}
-
-impl EvaluationSettings {
-    pub fn excerpt_similarity_threshold(&self) -> f32 {
-        milli_to_f32(self.excerpt_similarity_threshold_milli)
-    }
-
-    pub fn duplicate_similarity_threshold(&self) -> f32 {
-        milli_to_f32(self.duplicate_similarity_threshold_milli)
-    }
-
-    pub fn min_score(&self) -> f32 {
-        milli_to_f32(self.min_score_milli)
-    }
-}
-
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub struct OrderedF32(pub f32);
 
@@ -452,22 +374,6 @@ pub struct EvaluationRunSummary {
 
 fn milli_to_f32(value: u32) -> f32 {
     value as f32 / 1000.0
-}
-
-fn default_generation_model() -> String {
-    "granite4.1:8b".into()
-}
-
-fn default_question_count() -> u32 {
-    30
-}
-
-fn default_excerpt_similarity_threshold_milli() -> u32 {
-    360
-}
-
-fn default_duplicate_similarity_threshold_milli() -> u32 {
-    820
 }
 
 fn default_top_k() -> u32 {

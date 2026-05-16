@@ -1,4 +1,3 @@
-pub mod file_evaluation_defaults_store;
 pub mod postgres_chunking_configuration_repository;
 pub mod postgres_embedding_model_repository;
 pub mod postgres_generation_model_repository;
@@ -6,7 +5,6 @@ pub mod postgres_pipeline_configuration_repository;
 pub mod postgres_sweep_template_repository;
 pub mod postgres_vector_index_repository;
 
-pub use file_evaluation_defaults_store::FileEvaluationDefaultsStore;
 pub use postgres_chunking_configuration_repository::PostgresChunkingConfigurationRepository;
 pub use postgres_embedding_model_repository::PostgresEmbeddingModelRepository;
 pub use postgres_generation_model_repository::PostgresGenerationModelRepository;

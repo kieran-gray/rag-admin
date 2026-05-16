@@ -6,7 +6,6 @@ use crate::server::application::chunking::chunkers::{
     register_builtin_chunkers, BuiltinChunkerDeps,
 };
 use crate::server::application::chunking::ChunkerRegistry;
-use crate::server::application::configuration::ports::EvaluationDefaultsStore;
 use crate::server::application::configuration::{
     ChunkingConfigurationQueryService, ChunkingConfigurationService, ConfigurationQueryService,
     EmbeddingModelCatalogCommandHandler, GenerationModelCatalogCommandHandler,
@@ -28,7 +27,6 @@ use crate::server::application::source_document::{
 };
 use crate::server::application::{ActivityRegistry, JobRegistry};
 use crate::server::infrastructure::clients::{CloudflareApi, OllamaApi};
-use crate::server::infrastructure::configuration::FileEvaluationDefaultsStore;
 use crate::server::infrastructure::embedding::{OllamaEmbedder, WorkersAiEmbedder};
 use crate::server::infrastructure::evaluation::{LlmEvaluationGenerator, PgvectorRetriever};
 use crate::server::infrastructure::http_client::ReqwestHttpClient;
@@ -42,7 +40,7 @@ use crate::server::setup::compose::event_sourcing::AggregateWirings;
 use crate::server::setup::compose::repositories::Repositories;
 use crate::server::setup::config::Config;
 use crate::server::setup::exceptions::SetupError;
-use crate::server::setup::paths::{evaluation_defaults_path, tokenizer_path};
+use crate::server::setup::paths::tokenizer_path;
 
 use sqlx::PgPool;
 
@@ -70,7 +68,6 @@ pub struct Services {
     pub vector_index_resolver: Arc<VectorIndexResolver>,
     pub pipeline_resolver: Arc<PipelineResolver>,
 
-    pub evaluation_defaults_store: Arc<dyn EvaluationDefaultsStore>,
     pub evaluation_generator: Arc<dyn EvaluationGenerator>,
     pub evaluation_retriever: Arc<dyn Retriever>,
     pub chunking_engine: Arc<ChunkerRegistry>,
@@ -161,9 +158,6 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         Arc::clone(&generation_service),
         Arc::clone(&vector_index_resolver),
     );
-
-    let evaluation_defaults_store: Arc<dyn EvaluationDefaultsStore> =
-        FileEvaluationDefaultsStore::new(evaluation_defaults_path());
 
     let evaluation_generator: Arc<dyn EvaluationGenerator> =
         LlmEvaluationGenerator::new(Arc::clone(&generation_service));
@@ -258,7 +252,6 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         generation_service,
         vector_index_resolver,
         pipeline_resolver,
-        evaluation_defaults_store,
         evaluation_generator,
         evaluation_retriever,
         chunking_engine,

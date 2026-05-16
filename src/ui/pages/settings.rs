@@ -1,17 +1,14 @@
 use leptos::prelude::*;
-use leptos::task::spawn_local;
 
 use crate::catalog::{AiProviderKind, VectorStoreKind};
 use crate::contracts::{
     aggregate_type, AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto,
     ConfigurationDto, EmbeddingModelCommandDto, EmbeddingModelDto, GenerationModelCommandDto,
     GenerationModelDto, RemoveEmbeddingModelDto, RemoveGenerationModelDto, RemoveVectorIndexDto,
-    SettingsDto, UpdateEmbeddingModelDto, UpdateGenerationModelDto, UpdateVectorIndexDto,
-    VectorIndexCommandDto, VectorIndexDto,
+    UpdateEmbeddingModelDto, UpdateGenerationModelDto, UpdateVectorIndexDto, VectorIndexCommandDto,
+    VectorIndexDto,
 };
-use crate::core::EvaluationGenerationBackend;
 use crate::server_functions::configuration::get_configuration;
-use crate::server_functions::settings::{load_settings, save_settings};
 use crate::ui::components::event_bus::use_invalidator;
 use crate::ui::components::primitives::{Dialog, EmptyState, PageHeader, Surface};
 use crate::ui::pages::configuration::commands::{
@@ -80,10 +77,6 @@ pub fn SettingsPage() -> impl IntoView {
         move || (invalidator.get(), refresh.get()),
         |_| async move { get_configuration().await.map_err(|e| e.to_string()) },
     );
-    let settings = Resource::new(
-        || (),
-        |_| async move { load_settings().await.map_err(|e| e.to_string()) },
-    );
 
     let (busy, set_busy) = signal(false);
     let (status, set_status) = signal::<Option<(bool, String)>>(None);
@@ -92,7 +85,7 @@ pub fn SettingsPage() -> impl IntoView {
         <div>
             <PageHeader
                 title="Settings"
-                subtitle="Catalogue of models and indexes that pipelines compose. Plus defaults for the evaluation generator.".to_string()
+                subtitle="Catalogue of models and indexes that pipelines compose.".to_string()
             />
 
             <StatusBanner status=status />
@@ -115,19 +108,6 @@ pub fn SettingsPage() -> impl IntoView {
                     }.into_any(),
                 })}
             </Transition>
-
-            <div class="mt-8">
-                <Transition fallback=|| view! { <p class="muted">"Loading defaults…"</p> }>
-                    {move || settings.get().map(|res| match res {
-                        Err(e) => view! {
-                            <Surface>
-                                <div class="log-line-error">{format!("Failed to load settings: {e}")}</div>
-                            </Surface>
-                        }.into_any(),
-                        Ok(s) => view! { <EvaluationDefaults initial=s /> }.into_any(),
-                    })}
-                </Transition>
-            </div>
         </div>
     }
 }
@@ -700,115 +680,6 @@ fn RegistryDeleteDialog(
 }
 
 #[component]
-fn EvaluationDefaults(initial: SettingsDto) -> impl IntoView {
-    let (eval, set_eval) = signal(initial.evaluation.clone());
-    let (status, set_status) = signal::<Option<(bool, String)>>(None);
-    let (saving, set_saving) = signal(false);
-
-    let initial_stored = StoredValue::new(initial);
-
-    let on_save = move |ev: leptos::ev::SubmitEvent| {
-        ev.prevent_default();
-        let mut payload = initial_stored.get_value();
-        payload.evaluation = eval.get();
-        set_saving.set(true);
-        set_status.set(None);
-        spawn_local(async move {
-            let result = save_settings(payload).await;
-            set_saving.set(false);
-            match result {
-                Ok(()) => set_status.set(Some((true, "Saved".into()))),
-                Err(e) => set_status.set(Some((false, format!("Save failed: {e}")))),
-            }
-        });
-    };
-
-    view! {
-        <Surface
-            title="Evaluation defaults".to_string()
-            actions=Box::new(move || view! {
-                <span class="text-xs faint">"Used by the synthetic dataset generator."</span>
-            }.into_any())
-        >
-            <form on:submit=on_save class="space-y-4">
-                <p class="muted text-sm">
-                    "These tune the question-generation pipeline that builds evaluation datasets. \
-                     They are intentionally separate from a pipeline's embedding/generation model selection."
-                </p>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <LabelledSelectStatic
-                        label="Generation backend".to_string()
-                        value=Signal::derive(move || eval.get().generation_backend.as_str().to_string())
-                        on_change=move |v: String| set_eval.update(|c| {
-                            c.generation_backend = match v.as_str() {
-                                "workers_ai" => EvaluationGenerationBackend::WorkersAi,
-                                _ => EvaluationGenerationBackend::Ollama,
-                            };
-                        })
-                        options=vec![
-                            ("ollama".to_string(), "Ollama".to_string()),
-                            ("workers_ai".to_string(), "Workers AI".to_string()),
-                        ]
-                    />
-                    <LabelledInputDirect
-                        label="Generation model".to_string()
-                        hint="Chat model used to generate questions".to_string()
-                        value=Signal::derive(move || eval.get().generation_model.clone())
-                        on_change=move |v: String| set_eval.update(|c| c.generation_model = v)
-                    />
-                    <LabelledNumDirect
-                        label="Question count".to_string()
-                        hint="Target questions per document".to_string()
-                        value=Signal::derive(move || eval.get().question_count)
-                        on_change=move |v| set_eval.update(|c| c.question_count = v)
-                        min=1
-                    />
-                    <LabelledNumDirect
-                        label="Top-k".to_string()
-                        hint="Default chunks retrieved per question".to_string()
-                        value=Signal::derive(move || eval.get().top_k)
-                        on_change=move |v| set_eval.update(|c| c.top_k = v)
-                        min=1
-                    />
-                    <LabelledNumDirect
-                        label="Min score (milli)".to_string()
-                        hint="0–1000 cosine threshold".to_string()
-                        value=Signal::derive(move || eval.get().min_score_milli)
-                        on_change=move |v| set_eval.update(|c| c.min_score_milli = v.min(1000))
-                        min=0
-                    />
-                    <LabelledNumDirect
-                        label="Excerpt threshold (milli)".to_string()
-                        hint="Filters weak query/reference pairs".to_string()
-                        value=Signal::derive(move || eval.get().excerpt_similarity_threshold_milli)
-                        on_change=move |v| set_eval.update(|c| c.excerpt_similarity_threshold_milli = v.min(1000))
-                        min=0
-                    />
-                    <LabelledNumDirect
-                        label="Duplicate threshold (milli)".to_string()
-                        hint="Filters near-duplicate questions".to_string()
-                        value=Signal::derive(move || eval.get().duplicate_similarity_threshold_milli)
-                        on_change=move |v| set_eval.update(|c| c.duplicate_similarity_threshold_milli = v.min(1000))
-                        min=0
-                    />
-                </div>
-
-                <div class="flex items-center gap-3 pt-2">
-                    <button type="submit" class="btn btn-primary" disabled=saving>
-                        {move || if saving.get() { "Saving…" } else { "Save defaults" }}
-                    </button>
-                    {move || status.get().map(|(ok, msg)| {
-                        let cls = if ok { "text-sm" } else { "text-sm log-line-error" };
-                        view! { <span class=cls>{msg}</span> }
-                    })}
-                </div>
-            </form>
-        </Surface>
-    }
-}
-
-#[component]
 fn LabelledInput(
     label: String,
     hint: String,
@@ -847,82 +718,6 @@ fn LabelledNum(
                 on:input=move |e| {
                     let v: u32 = event_target_value(&e).parse().unwrap_or(min);
                     set_value.set(v.max(min));
-                }
-            />
-            <span class="text-xs faint">{hint}</span>
-        </label>
-    }
-}
-
-#[component]
-fn LabelledSelectStatic(
-    label: String,
-    value: Signal<String>,
-    on_change: impl Fn(String) + Send + Sync + 'static,
-    options: Vec<(String, String)>,
-) -> impl IntoView {
-    let on_change = StoredValue::new(on_change);
-    view! {
-        <label class="block space-y-1.5">
-            <span class="eyebrow">{label}</span>
-            <select
-                class="input"
-                on:change=move |e| on_change.with_value(|f| f(event_target_value(&e)))
-            >
-                {options.into_iter().map(|(v, lab)| {
-                    let v_clone = v.clone();
-                    view! {
-                        <option value=v.clone() selected=move || value.get() == v_clone>
-                            {lab}
-                        </option>
-                    }
-                }).collect_view()}
-            </select>
-        </label>
-    }
-}
-
-#[component]
-fn LabelledInputDirect(
-    label: String,
-    hint: String,
-    value: Signal<String>,
-    on_change: impl Fn(String) + Send + Sync + 'static,
-) -> impl IntoView {
-    let on_change = StoredValue::new(on_change);
-    view! {
-        <label class="block space-y-1.5">
-            <span class="eyebrow">{label}</span>
-            <input
-                class="input"
-                prop:value=move || value.get()
-                on:input=move |e| on_change.with_value(|f| f(event_target_value(&e)))
-            />
-            <span class="text-xs faint">{hint}</span>
-        </label>
-    }
-}
-
-#[component]
-fn LabelledNumDirect(
-    label: String,
-    hint: String,
-    value: Signal<u32>,
-    on_change: impl Fn(u32) + Send + Sync + 'static,
-    #[prop(default = 0)] min: u32,
-) -> impl IntoView {
-    let on_change = StoredValue::new(on_change);
-    view! {
-        <label class="block space-y-1.5">
-            <span class="eyebrow">{label}</span>
-            <input
-                class="input"
-                type="number"
-                min=min
-                prop:value=move || value.get().to_string()
-                on:input=move |e| {
-                    let v: u32 = event_target_value(&e).parse().unwrap_or(min);
-                    on_change.with_value(|f| f(v.max(min)));
                 }
             />
             <span class="text-xs faint">{hint}</span>

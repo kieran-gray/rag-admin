@@ -11,7 +11,6 @@ use leptos::context::provide_context;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 
-use crate::server::application::configuration::ports::EvaluationDefaultsStore;
 use crate::server::application::configuration::{
     ChunkingConfigurationQueryService, ChunkingConfigurationService, ConfigurationQueryService,
     EmbeddingModelCatalogCommandHandler, GenerationModelCatalogCommandHandler,
@@ -64,7 +63,6 @@ pub struct App {
     pub generation_service: Arc<GenerationService>,
     pub pipeline_resolver: Arc<PipelineResolver>,
     pub vector_index_resolver: Arc<VectorIndexResolver>,
-    pub evaluation_defaults_store: Arc<dyn EvaluationDefaultsStore>,
     pub job_registry: Arc<JobRegistry>,
     pub activity_registry: Arc<ActivityRegistry>,
     pub source_document_ingest_service: Arc<SourceDocumentIngestService>,
@@ -140,7 +138,6 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         generation_service: services.generation_service,
         pipeline_resolver: services.pipeline_resolver,
         vector_index_resolver: services.vector_index_resolver,
-        evaluation_defaults_store: services.evaluation_defaults_store,
         job_registry: services.job_registry,
         activity_registry: services.activity_registry,
         source_document_ingest_service: workflows.source_document_ingest_service,
@@ -173,7 +170,6 @@ impl App {
         provide_context(Arc::clone(&self.generation_service));
         provide_context(Arc::clone(&self.pipeline_resolver));
         provide_context(Arc::clone(&self.vector_index_resolver));
-        provide_context(Arc::clone(&self.evaluation_defaults_store));
         provide_context(Arc::clone(&self.job_registry));
         provide_context(Arc::clone(&self.activity_registry));
         provide_context(Arc::clone(&self.source_document_ingest_service));

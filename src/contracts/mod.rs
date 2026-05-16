@@ -5,7 +5,6 @@ pub mod evaluation;
 pub mod events;
 pub mod ingest;
 pub mod query;
-pub mod settings;
 pub mod source_document;
 
 pub use activity::{
@@ -35,7 +34,6 @@ pub use evaluation::{
 pub use events::{aggregate as aggregate_type, PublishedEvent};
 pub use ingest::{IngestOptions, LogEvent, LogLevel};
 pub use query::{QueryHit, QueryRequest, QueryResult};
-pub use settings::SettingsDto;
 pub use source_document::{
     ChunkDto, DocumentListItemDto, IndexingDto, MarkdownBlockDto, MarkdownBlockKindDto,
     SourceDocumentDetailDto, SourceDocumentDto, SourceDocumentMarkdownDto,

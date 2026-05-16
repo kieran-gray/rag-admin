@@ -9,7 +9,7 @@ use crate::contracts::{
 };
 
 #[cfg(feature = "ssr")]
-use crate::server::application::configuration::{ports::EvaluationDefaultsStore, PipelineResolver};
+use crate::server::application::configuration::PipelineResolver;
 #[cfg(feature = "ssr")]
 use crate::server::application::evaluation::query_service::EvaluationQueryService;
 #[cfg(feature = "ssr")]
@@ -113,17 +113,13 @@ pub async fn start_generate_synthetic_dataset(
     document_id: Uuid,
     pipeline_configuration_id: Uuid,
     label: String,
+    question_count: u32,
+    excerpt_similarity_threshold_milli: u32,
+    duplicate_similarity_threshold_milli: u32,
 ) -> Result<EvaluationJobInfo, ServerFnError> {
-    let defaults = ctx::<Arc<dyn EvaluationDefaultsStore>>()?;
     let pipelines = ctx::<Arc<PipelineResolver>>()?;
     let documents = ctx::<Arc<SourceDocumentQueryService>>()?;
     let dataset_processor = ctx::<Arc<CommandProcessor<EvaluationDataset>>>()?;
-
-    let eval_settings = defaults
-        .load()
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
-        .evaluation;
 
     let pipeline = pipelines
         .resolve(pipeline_configuration_id)
@@ -140,7 +136,7 @@ pub async fn start_generate_synthetic_dataset(
     let dataset_id = UuidGenerator.new_uuid();
     let occurred_at = SystemClock.now();
 
-    let target = eval_settings.question_count.max(1);
+    let target = question_count.max(1);
     let max_attempts = target.saturating_mul(12).max(target.saturating_add(12));
 
     dataset_processor
@@ -155,10 +151,9 @@ pub async fn start_generate_synthetic_dataset(
                 target_question_count: target,
                 generation_model_id: pipeline.generation_model.generation_model_id,
                 generation_model: pipeline.generation_model.model.clone(),
-                excerpt_similarity_threshold_milli: eval_settings
-                    .excerpt_similarity_threshold_milli,
-                duplicate_similarity_threshold_milli: eval_settings
-                    .duplicate_similarity_threshold_milli,
+                excerpt_similarity_threshold_milli: excerpt_similarity_threshold_milli.min(1000),
+                duplicate_similarity_threshold_milli: duplicate_similarity_threshold_milli
+                    .min(1000),
                 embedding_model_id: pipeline.embedding_model.embedding_model_id,
                 max_attempts,
                 grammar_variants_enabled: true,

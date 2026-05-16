@@ -102,6 +102,9 @@ fn EvaluationWorkspace(
     let (job_running, set_job_running) = signal(false);
     let (launch_error, set_launch_error) = signal::<Option<String>>(None);
     let (dataset_label, set_dataset_label) = signal("synthetic-default".to_string());
+    let (question_count, set_question_count) = signal(30u32);
+    let (excerpt_threshold, set_excerpt_threshold) = signal(360u32);
+    let (duplicate_threshold, set_duplicate_threshold) = signal(820u32);
 
     let on_generate = move |_| {
         let label = dataset_label.get();
@@ -112,11 +115,21 @@ fn EvaluationWorkspace(
             ));
             return;
         };
+        let target = question_count.get();
+        let excerpt = excerpt_threshold.get();
+        let duplicate = duplicate_threshold.get();
         set_launch_error.set(None);
         set_job_running.set(true);
         spawn_local(async move {
-            match start_generate_synthetic_dataset(document_id, pipeline_configuration_id, label)
-                .await
+            match start_generate_synthetic_dataset(
+                document_id,
+                pipeline_configuration_id,
+                label,
+                target,
+                excerpt,
+                duplicate,
+            )
+            .await
             {
                 Ok(_job) => {
                     set_job_running.set(false);
@@ -156,6 +169,12 @@ fn EvaluationWorkspace(
                                 <DatasetGenerateForm
                                     dataset_label=dataset_label
                                     set_dataset_label=set_dataset_label
+                                    question_count=question_count
+                                    set_question_count=set_question_count
+                                    excerpt_threshold=excerpt_threshold
+                                    set_excerpt_threshold=set_excerpt_threshold
+                                    duplicate_threshold=duplicate_threshold
+                                    set_duplicate_threshold=set_duplicate_threshold
                                     on_generate=Box::new(on_generate)
                                     running=job_running
                                 />
@@ -178,6 +197,12 @@ fn EvaluationWorkspace(
                                     <DatasetGenerateForm
                                         dataset_label=dataset_label
                                         set_dataset_label=set_dataset_label
+                                        question_count=question_count
+                                        set_question_count=set_question_count
+                                        excerpt_threshold=excerpt_threshold
+                                        set_excerpt_threshold=set_excerpt_threshold
+                                        duplicate_threshold=duplicate_threshold
+                                        set_duplicate_threshold=set_duplicate_threshold
                                         on_generate=Box::new(on_generate)
                                         running=job_running
                                     />
@@ -259,28 +284,93 @@ fn EvaluationWorkspace(
 fn DatasetGenerateForm(
     dataset_label: ReadSignal<String>,
     set_dataset_label: WriteSignal<String>,
+    question_count: ReadSignal<u32>,
+    set_question_count: WriteSignal<u32>,
+    excerpt_threshold: ReadSignal<u32>,
+    set_excerpt_threshold: WriteSignal<u32>,
+    duplicate_threshold: ReadSignal<u32>,
+    set_duplicate_threshold: WriteSignal<u32>,
     on_generate: Box<dyn Fn(leptos::ev::MouseEvent) + Send + Sync>,
     running: ReadSignal<bool>,
 ) -> impl IntoView {
     let on_generate = StoredValue::new(on_generate);
+    let label_invalid = move || dataset_label.with(|v| v.trim().is_empty());
     view! {
-        <div class="flex items-center gap-2">
-            <span class="eyebrow shrink-0">"Generate"</span>
+        <div class="space-y-4">
+            <label class="block space-y-1">
+                <span class="eyebrow">"Label"</span>
+                <input
+                    class="input"
+                    placeholder="dataset label"
+                    prop:value=move || dataset_label.get()
+                    on:input=move |ev| set_dataset_label.set(event_target_value(&ev))
+                />
+            </label>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <NumOption
+                    label="Question count".to_string()
+                    hint="Target questions per dataset".to_string()
+                    value=question_count
+                    set_value=set_question_count
+                    min=1
+                    max=10_000
+                />
+                <NumOption
+                    label="Excerpt threshold (milli)".to_string()
+                    hint="0–1000 · filters weak query/reference pairs".to_string()
+                    value=excerpt_threshold
+                    set_value=set_excerpt_threshold
+                    min=0
+                    max=1000
+                />
+                <NumOption
+                    label="Duplicate threshold (milli)".to_string()
+                    hint="0–1000 · filters near-duplicate questions".to_string()
+                    value=duplicate_threshold
+                    set_value=set_duplicate_threshold
+                    min=0
+                    max=1000
+                />
+            </div>
+            <div class="flex justify-end pt-4 border-t border-[var(--color-border)]">
+                <button
+                    type="button"
+                    class="btn btn-primary"
+                    disabled=move || running.get() || label_invalid()
+                    on:click=move |ev| on_generate.with_value(|f| f(ev))
+                >
+                    {move || if running.get() { "Generating…" } else { "Generate dataset" }}
+                </button>
+            </div>
+        </div>
+    }
+}
+
+#[component]
+fn NumOption(
+    label: String,
+    hint: String,
+    value: ReadSignal<u32>,
+    set_value: WriteSignal<u32>,
+    #[prop(default = 0)] min: u32,
+    #[prop(default = u32::MAX)] max: u32,
+) -> impl IntoView {
+    view! {
+        <label class="block space-y-1">
+            <span class="eyebrow">{label}</span>
             <input
                 class="input"
-                placeholder="dataset label"
-                prop:value=move || dataset_label.get()
-                on:input=move |ev| set_dataset_label.set(event_target_value(&ev))
+                type="number"
+                min=min
+                max=max
+                prop:value=move || value.get().to_string()
+                on:input=move |e| {
+                    let v: u32 = event_target_value(&e).parse().unwrap_or(min);
+                    set_value.set(v.clamp(min, max));
+                }
             />
-            <button
-                type="button"
-                class="btn"
-                disabled=move || running.get()
-                on:click=move |ev| on_generate.with_value(|f| f(ev))
-            >
-                {move || if running.get() { "Generating…" } else { "Generate" }}
-            </button>
-        </div>
+            <span class="text-xs faint">{hint}</span>
+        </label>
     }
 }
 
@@ -366,6 +456,7 @@ fn eval_status(status: &str) -> (Status, &'static str) {
         "running" => (Status::Pending, "Running"),
         "generating" => (Status::Pending, "Generating"),
         "pending" => (Status::Pending, "Pending"),
+        "cancelled" => (Status::Cancel, "Cancelled"),
         _ => (Status::Neutral, "Unknown"),
     }
 }

@@ -3,7 +3,6 @@ pub mod embedding_model_command_handler;
 pub mod generation_model_command_handler;
 pub mod pipeline_configuration_service;
 pub mod pipeline_resolver;
-pub mod ports;
 pub mod query_service;
 pub mod sweep_template_command_handler;
 pub mod vector_index_command_handler;

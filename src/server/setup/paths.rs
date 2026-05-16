@@ -13,7 +13,3 @@ pub fn tokenizer_path() -> PathBuf {
 pub fn post_chunking_config_path() -> PathBuf {
     data_dir().join("post-chunking.json")
 }
-
-pub fn evaluation_defaults_path() -> PathBuf {
-    data_dir().join("evaluation-defaults.json")
-}

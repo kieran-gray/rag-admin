@@ -8,10 +8,9 @@ pub use chunking::{BertChunkingConfig, ChunkingConfig, LlmChunkingConfig, Sectio
 pub use embedding::{EmbedResult, EmbedderBackend, EmbeddingModel};
 pub use evaluation::{
     evaluation_score, ordered_f32_vec, plain_f32_vec, ChunkingVariant, EvaluationAutotuneRequest,
-    EvaluationAutotuneSummary, EvaluationGenerationBackend, EvaluationMetrics,
-    EvaluationQuestionResult, EvaluationReferenceResult, EvaluationResultSplit,
-    EvaluationRunOptions, EvaluationRunResult, EvaluationRunSummary, EvaluationScorePolicy,
-    EvaluationScoreWeights, EvaluationSettings, EvaluationVariantResult, OptimizationBudget,
-    OptimizationConfig, OptimizationScope, OrderedF32, ReliabilityFlag,
+    EvaluationAutotuneSummary, EvaluationMetrics, EvaluationQuestionResult,
+    EvaluationReferenceResult, EvaluationResultSplit, EvaluationRunOptions, EvaluationRunResult,
+    EvaluationRunSummary, EvaluationScorePolicy, EvaluationScoreWeights, EvaluationVariantResult,
+    OptimizationBudget, OptimizationConfig, OptimizationScope, OrderedF32, ReliabilityFlag,
 };
 pub use pareto::{pareto_frontier, ParetoPoint};

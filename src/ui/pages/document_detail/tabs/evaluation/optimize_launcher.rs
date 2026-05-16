@@ -112,7 +112,7 @@ pub fn OptimizeLauncher(
                 />
             </div>
 
-            <div class="flex items-center justify-between items-end gap-4 mt-4 mb-2">
+            <div class="flex items-center justify-between items-end gap-4 mt-4 mb-2 pt-4 border-t border-[var(--color-border)]">
                 <label class="flex items-center gap-2 text-sm muted">
                     <input
                         type="checkbox"
