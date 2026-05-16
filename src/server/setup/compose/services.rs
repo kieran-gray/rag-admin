@@ -19,6 +19,7 @@ use crate::server::application::evaluation::query_service::EvaluationQueryServic
 use crate::server::application::indexing::IndexingCommandHandler;
 use crate::server::application::indexing::VectorIndexResolver;
 use crate::server::application::llm::GenerationService;
+use crate::server::application::ports::Tokenizer;
 use crate::server::application::ports::{Clock, GenerationClient, IdGenerator, MarkdownParser};
 use crate::server::application::query::QueryService;
 use crate::server::application::source_document::ports::VectorIndexProvider;
@@ -32,7 +33,7 @@ use crate::server::infrastructure::evaluation::{LlmEvaluationGenerator, Pgvector
 use crate::server::infrastructure::http_client::ReqwestHttpClient;
 use crate::server::infrastructure::llm::{OllamaGenerationClient, WorkersAiGenerationClient};
 use crate::server::infrastructure::markdown::MarkdownRsParser;
-use crate::server::infrastructure::tokenizer::HuggingFaceTokenizer;
+use crate::server::infrastructure::tokenizer::{TiktokenTokenizer, DEFAULT_TIKTOKEN_MODEL};
 use crate::server::infrastructure::vector::{
     CloudflareVectorIndexProvider, PostgresVectorIndexProvider,
 };
@@ -40,7 +41,6 @@ use crate::server::setup::compose::event_sourcing::AggregateWirings;
 use crate::server::setup::compose::repositories::Repositories;
 use crate::server::setup::config::Config;
 use crate::server::setup::exceptions::SetupError;
-use crate::server::setup::paths::tokenizer_path;
 
 use sqlx::PgPool;
 
@@ -102,8 +102,7 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         wirings,
     } = deps;
 
-    let tokenizer = HuggingFaceTokenizer::load_or_fetch(tokenizer_path(), Arc::clone(&http))
-        .await
+    let tokenizer: Arc<dyn Tokenizer> = TiktokenTokenizer::for_model(DEFAULT_TIKTOKEN_MODEL)
         .map_err(|e| SetupError::Internal(format!("tokenizer: {e}")))?;
     let markdown_parser: Arc<dyn MarkdownParser> = Arc::new(MarkdownRsParser);
 
@@ -262,7 +261,7 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
 }
 
 fn build_chunking_engine(
-    tokenizer: Arc<HuggingFaceTokenizer>,
+    tokenizer: Arc<dyn Tokenizer>,
     markdown_parser: Arc<dyn MarkdownParser>,
     generation_client: Arc<dyn GenerationClient>,
     generation_models: Arc<

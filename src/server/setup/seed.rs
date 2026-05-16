@@ -10,7 +10,10 @@ use crate::contracts::{
     GenerationModelCommandDto, PipelineConfigurationCommandDto, SetDefaultSweepTemplateDto,
     SweepTemplateCommandDto, VectorIndexCommandDto,
 };
-use crate::core::{BertChunkingConfig, ChunkingConfig, LlmChunkingConfig, SectionChunkingConfig};
+use crate::core::{
+    BertChunkingConfig, ChunkingConfig, DarnChunkingConfig, DarnGranularity, LlmChunkingConfig,
+    SectionChunkingConfig,
+};
 use crate::server::application::configuration::{
     ChunkingConfigurationQueryService, ChunkingConfigurationService, ConfigurationQueryService,
     EmbeddingModelCatalogCommandHandler, GenerationModelCatalogCommandHandler,
@@ -112,6 +115,17 @@ pub fn seed_definitions(llm_generation_model_id: Option<Uuid>) -> Vec<ChunkingSe
                 target_tokens: target,
                 overlap_tokens: overlap,
                 min_tokens: 96,
+            }),
+        });
+    }
+
+    for (max_chunk_size, overlap) in [(500u32, 50u32), (1000, 100)] {
+        seeds.push(ChunkingSeed {
+            name: leak_name(format!("darn-{max_chunk_size}-{overlap}")),
+            config: ChunkingConfig::Darn(DarnChunkingConfig {
+                max_chunk_size,
+                overlap,
+                granularity: DarnGranularity::Characters,
             }),
         });
     }

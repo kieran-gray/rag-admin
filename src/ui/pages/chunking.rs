@@ -8,7 +8,10 @@ use crate::contracts::{
     DeleteSweepTemplateDto, SetDefaultSweepTemplateDto, SweepTemplateCommandDto, SweepTemplateDto,
     UpdateChunkingConfigurationDto, UpdateSweepTemplateDto,
 };
-use crate::core::{BertChunkingConfig, ChunkingConfig, LlmChunkingConfig, SectionChunkingConfig};
+use crate::core::{
+    BertChunkingConfig, ChunkingConfig, DarnChunkingConfig, DarnGranularity, LlmChunkingConfig,
+    SectionChunkingConfig,
+};
 use crate::server_functions::configuration::{
     get_chunking_configurations, get_configuration, get_sweep_templates,
 };
@@ -340,6 +343,7 @@ fn ChunkingFormDialog(
     let (section_cfg, set_section_cfg) = signal(SectionChunkingConfig::default());
     let (bert_cfg, set_bert_cfg) = signal(BertChunkingConfig::default());
     let (llm_cfg, set_llm_cfg) = signal(default_llm());
+    let (darn_cfg, set_darn_cfg) = signal(DarnChunkingConfig::default());
     let (is_default, set_is_default) = signal(false);
     let (dialog_error, set_dialog_error) = signal::<Option<String>>(None);
 
@@ -353,6 +357,7 @@ fn ChunkingFormDialog(
                 set_section_cfg.set(SectionChunkingConfig::default());
                 set_bert_cfg.set(BertChunkingConfig::default());
                 set_llm_cfg.set(default_llm());
+                set_darn_cfg.set(DarnChunkingConfig::default());
                 set_is_default.set(false);
             }
             Some(FormMode::Edit(cc)) => {
@@ -363,6 +368,7 @@ fn ChunkingFormDialog(
                     ChunkingConfig::Section(c) => set_section_cfg.set(c),
                     ChunkingConfig::Bert(c) => set_bert_cfg.set(c),
                     ChunkingConfig::Llm(c) => set_llm_cfg.set(c),
+                    ChunkingConfig::Darn(c) => set_darn_cfg.set(c),
                 }
             }
         }
@@ -372,6 +378,7 @@ fn ChunkingFormDialog(
         ChunkStrategy::Section => ChunkingConfig::Section(section_cfg.get()),
         ChunkStrategy::Bert => ChunkingConfig::Bert(bert_cfg.get()),
         ChunkStrategy::Llm => ChunkingConfig::Llm(llm_cfg.get()),
+        ChunkStrategy::Darn => ChunkingConfig::Darn(darn_cfg.get()),
     };
 
     let close = Callback::new(move |_| {
@@ -457,6 +464,8 @@ fn ChunkingFormDialog(
                     set_bert_cfg=set_bert_cfg
                     llm_cfg=llm_cfg
                     set_llm_cfg=set_llm_cfg
+                    darn_cfg=darn_cfg
+                    set_darn_cfg=set_darn_cfg
                     generation_models=Memo::new(move |_| config.with_value(|c| {
                         c.generation_models
                             .iter()
@@ -532,6 +541,8 @@ fn ParamFields(
     set_bert_cfg: WriteSignal<BertChunkingConfig>,
     llm_cfg: ReadSignal<LlmChunkingConfig>,
     set_llm_cfg: WriteSignal<LlmChunkingConfig>,
+    darn_cfg: ReadSignal<DarnChunkingConfig>,
+    set_darn_cfg: WriteSignal<DarnChunkingConfig>,
     generation_models: Memo<Vec<(Uuid, String)>>,
 ) -> impl IntoView {
     view! {
@@ -615,6 +626,60 @@ fn ParamFields(
                             }).collect_view()}
                         </select>
                         <span class="text-xs faint">"Registry-backed. Used to select chunk boundaries over micro-chunks."</span>
+                    </label>
+                </div>
+            }.into_any(),
+            ChunkStrategy::Darn => view! {
+                <div class="space-y-3">
+                    <NumberField
+                        label="MAX_CHUNK_SIZE".to_string()
+                        hint="darn: maximum chunk size (characters or tokens)".to_string()
+                        min=1
+                        value=Signal::derive(move || darn_cfg.get().max_chunk_size)
+                        on_change=Callback::new(move |v: u32| {
+                            set_darn_cfg.update(|c| c.max_chunk_size = v);
+                        })
+                    />
+                    <NumberField
+                        label="OVERLAP".to_string()
+                        hint="darn: characters or tokens repeated at chunk boundaries".to_string()
+                        min=0
+                        value=Signal::derive(move || darn_cfg.get().overlap)
+                        on_change=Callback::new(move |v: u32| {
+                            set_darn_cfg.update(|c| c.overlap = v);
+                        })
+                    />
+                    <label class="block space-y-1.5">
+                        <span class="eyebrow">"GRANULARITY"</span>
+                        <div class="flex gap-2 flex-wrap">
+                            <button
+                                type="button"
+                                class=move || {
+                                    if darn_cfg.get().granularity == DarnGranularity::Characters {
+                                        "btn btn-primary"
+                                    } else {
+                                        "btn"
+                                    }
+                                }
+                                on:click=move |_| set_darn_cfg.update(|c| c.granularity = DarnGranularity::Characters)
+                            >
+                                "characters"
+                            </button>
+                            <button
+                                type="button"
+                                class=move || {
+                                    if darn_cfg.get().granularity == DarnGranularity::Tokens {
+                                        "btn btn-primary"
+                                    } else {
+                                        "btn"
+                                    }
+                                }
+                                on:click=move |_| set_darn_cfg.update(|c| c.granularity = DarnGranularity::Tokens)
+                            >
+                                "tokens"
+                            </button>
+                        </div>
+                        <span class="text-xs faint">"Locked at config time; not swept by evaluation."</span>
                     </label>
                 </div>
             }.into_any(),

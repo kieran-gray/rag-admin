@@ -21,4 +21,23 @@ impl Tokenizer for MockTokenizer {
         let count = tokens.len() as u32;
         Ok(Tokenized { tokens, count })
     }
+
+    fn token_byte_offsets(&self, text: &str) -> Result<Vec<usize>, AppError> {
+        let bytes = text.as_bytes();
+        let mut offsets = Vec::new();
+        let mut i = 0;
+        while i < bytes.len() {
+            while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+                i += 1;
+            }
+            if i >= bytes.len() {
+                break;
+            }
+            offsets.push(i);
+            while i < bytes.len() && !bytes[i].is_ascii_whitespace() {
+                i += 1;
+            }
+        }
+        Ok(offsets)
+    }
 }

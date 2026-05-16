@@ -7,6 +7,7 @@ pub enum ChunkStrategy {
     #[default]
     Section,
     Llm,
+    Darn,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -16,6 +17,8 @@ pub enum ChunkParamKey {
     OverlapTokens,
     MinTokens,
     LlmMicroChunkTokens,
+    DarnMaxChunkSize,
+    DarnOverlap,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,6 +66,21 @@ const BERT_PARAMS: &[ChunkParamDefinition] = &[
     },
 ];
 
+const DARN_PARAMS: &[ChunkParamDefinition] = &[
+    ChunkParamDefinition {
+        key: ChunkParamKey::DarnMaxChunkSize,
+        label: "MAX_CHUNK_SIZE",
+        hint: "darn: maximum chunk size in characters or tokens (set at config time)",
+        min: 1,
+    },
+    ChunkParamDefinition {
+        key: ChunkParamKey::DarnOverlap,
+        label: "OVERLAP",
+        hint: "darn: characters or tokens repeated at chunk boundaries",
+        min: 0,
+    },
+];
+
 const LLM_PARAMS: &[ChunkParamDefinition] = &[
     ChunkParamDefinition {
         key: ChunkParamKey::TargetTokens,
@@ -99,6 +117,13 @@ pub const CHUNKER_DEFINITIONS: &[ChunkerDefinition] = &[
         label: "llm",
         hint: "LLM-selected semantic boundaries over micro chunks",
         params: LLM_PARAMS,
+    },
+    ChunkerDefinition {
+        strategy: ChunkStrategy::Darn,
+        id: "darn",
+        label: "darn",
+        hint: "mathematically optimal cuts via DP over markdown structure penalties",
+        params: DARN_PARAMS,
     },
 ];
 

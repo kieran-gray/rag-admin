@@ -9,6 +9,35 @@ pub enum ChunkingConfig {
     Bert(BertChunkingConfig),
     Section(SectionChunkingConfig),
     Llm(LlmChunkingConfig),
+    Darn(DarnChunkingConfig),
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum DarnGranularity {
+    #[default]
+    Characters,
+    Tokens,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DarnChunkingConfig {
+    #[serde(deserialize_with = "crate::core::serde_compat::u32_from_string")]
+    pub max_chunk_size: u32,
+    #[serde(deserialize_with = "crate::core::serde_compat::u32_from_string")]
+    pub overlap: u32,
+    #[serde(default)]
+    pub granularity: DarnGranularity,
+}
+
+impl Default for DarnChunkingConfig {
+    fn default() -> Self {
+        Self {
+            max_chunk_size: 500,
+            overlap: 50,
+            granularity: DarnGranularity::Characters,
+        }
+    }
 }
 
 impl Default for ChunkingConfig {
@@ -78,6 +107,7 @@ impl ChunkingConfig {
             Self::Bert(_) => ChunkStrategy::Bert,
             Self::Section(_) => ChunkStrategy::Section,
             Self::Llm(_) => ChunkStrategy::Llm,
+            Self::Darn(_) => ChunkStrategy::Darn,
         }
     }
 
@@ -86,6 +116,7 @@ impl ChunkingConfig {
             ChunkStrategy::Bert => Self::Bert(BertChunkingConfig::default()),
             ChunkStrategy::Section => Self::Section(SectionChunkingConfig::default()),
             ChunkStrategy::Llm => Self::Llm(LlmChunkingConfig::default()),
+            ChunkStrategy::Darn => Self::Darn(DarnChunkingConfig::default()),
         }
     }
 
@@ -97,6 +128,8 @@ impl ChunkingConfig {
             (Self::Bert(c), ChunkParamKey::MinTokens) => c.min_tokens,
             (Self::Llm(c), ChunkParamKey::TargetTokens) => c.target_tokens,
             (Self::Llm(c), ChunkParamKey::LlmMicroChunkTokens) => c.micro_chunk_tokens,
+            (Self::Darn(c), ChunkParamKey::DarnMaxChunkSize) => c.max_chunk_size,
+            (Self::Darn(c), ChunkParamKey::DarnOverlap) => c.overlap,
             _ => 0,
         }
     }
@@ -109,6 +142,8 @@ impl ChunkingConfig {
             (Self::Bert(c), ChunkParamKey::MinTokens) => c.min_tokens = value,
             (Self::Llm(c), ChunkParamKey::TargetTokens) => c.target_tokens = value,
             (Self::Llm(c), ChunkParamKey::LlmMicroChunkTokens) => c.micro_chunk_tokens = value,
+            (Self::Darn(c), ChunkParamKey::DarnMaxChunkSize) => c.max_chunk_size = value,
+            (Self::Darn(c), ChunkParamKey::DarnOverlap) => c.overlap = value,
             _ => {}
         }
     }
@@ -118,6 +153,7 @@ impl ChunkingConfig {
             Self::Bert(c) => c.target_tokens.min(token_limit),
             Self::Section(c) => c.max_section_tokens.min(token_limit),
             Self::Llm(c) => c.target_tokens.min(token_limit),
+            Self::Darn(c) => c.max_chunk_size.min(token_limit),
         }
     }
 
@@ -128,6 +164,7 @@ impl ChunkingConfig {
             }
             Self::Section(config) => format!("section:{}", config.max_section_tokens),
             Self::Llm(config) => format!("llm:{}", config.micro_chunk_tokens),
+            Self::Darn(config) => format!("darn:{}/{}", config.max_chunk_size, config.overlap),
         }
     }
 
@@ -141,6 +178,12 @@ impl ChunkingConfig {
             Self::Llm(config) => {
                 format!("llm · micro_chunk_tokens={}", config.micro_chunk_tokens)
             }
+            Self::Darn(config) => format!(
+                "darn · max_chunk_size={} · overlap={} · granularity={}",
+                config.max_chunk_size,
+                config.overlap,
+                config.granularity.as_str()
+            ),
         }
     }
 
@@ -158,6 +201,29 @@ impl ChunkingConfig {
                 "STRATEGY: LLM · TOKEN_LIMIT: {} · TARGET: {} · MICRO_CHUNK_TOKENS: {}",
                 size_limit, config.target_tokens, config.micro_chunk_tokens
             ),
+            Self::Darn(config) => format!(
+                "STRATEGY: DARN · MAX_CHUNK_SIZE: {} · OVERLAP: {} · GRANULARITY: {}",
+                config.max_chunk_size,
+                config.overlap,
+                config.granularity.as_str().to_uppercase()
+            ),
+        }
+    }
+}
+
+impl DarnGranularity {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Characters => "characters",
+            Self::Tokens => "tokens",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "characters" => Some(Self::Characters),
+            "tokens" => Some(Self::Tokens),
+            _ => None,
         }
     }
 }

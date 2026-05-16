@@ -6,8 +6,8 @@ use crate::contracts::{
     ChunkingConfigurationDto, PipelineConfigurationDto, RunEvaluationRequestDto, SweepTemplateDto,
 };
 use crate::core::{
-    BertChunkingConfig, ChunkingConfig, ChunkingVariant, EvaluationAutotuneRequest,
-    EvaluationRunOptions, LlmChunkingConfig, SectionChunkingConfig,
+    BertChunkingConfig, ChunkingConfig, ChunkingVariant, DarnChunkingConfig, DarnGranularity,
+    EvaluationAutotuneRequest, EvaluationRunOptions, LlmChunkingConfig, SectionChunkingConfig,
 };
 use crate::ui::components::primitives::Surface;
 
@@ -78,6 +78,8 @@ pub fn EvaluationLauncher(
     let (bert_target, set_bert_target) = signal(384u32);
     let (bert_overlap, set_bert_overlap) = signal(64u32);
     let (llm_micro, set_llm_micro) = signal(96u32);
+    let (darn_size, set_darn_size) = signal(500u32);
+    let (darn_overlap, set_darn_overlap) = signal(50u32);
 
     let (sweep_strategy, set_sweep_strategy) = signal(ChunkStrategy::Section);
     let (sweep_section_tokens_input, set_sweep_section_tokens_input) =
@@ -86,6 +88,8 @@ pub fn EvaluationLauncher(
         signal("256,320,384,448".to_string());
     let (sweep_bert_overlaps_input, set_sweep_bert_overlaps_input) = signal("0,48,64".to_string());
     let (sweep_llm_micro_input, set_sweep_llm_micro_input) = signal("64,96,128".to_string());
+    let (sweep_darn_sizes_input, set_sweep_darn_sizes_input) =
+        signal("300,500,800,1000".to_string());
 
     let (custom_variants, set_custom_variants) = signal::<Vec<ChunkingVariant>>(Vec::new());
 
@@ -160,6 +164,8 @@ pub fn EvaluationLauncher(
             bert_target.get(),
             bert_overlap.get(),
             llm_micro.get(),
+            darn_size.get(),
+            darn_overlap.get(),
             active_gen_model.get(),
         )
         .map(|v| vec![v])
@@ -212,6 +218,9 @@ pub fn EvaluationLauncher(
             ChunkStrategy::Llm => parse_u32_values(&sweep_llm_micro_input.get(), 32, 1024, 32)
                 .map(|values| build_llm_sweep(values, active_gen_model.get()))
                 .map_err(|e| format!("llm sweep: {e}")),
+            ChunkStrategy::Darn => parse_u32_values(&sweep_darn_sizes_input.get(), 1, 8192, 100)
+                .map(|values| build_darn_sweep(values, darn_overlap.get()))
+                .map_err(|e| format!("darn sweep: {e}")),
         },
         VariantsMode::Custom => {
             let list = custom_variants.get();
@@ -342,6 +351,10 @@ pub fn EvaluationLauncher(
                         set_bert_overlap=set_bert_overlap
                         llm_micro=llm_micro
                         set_llm_micro=set_llm_micro
+                        darn_size=darn_size
+                        set_darn_size=set_darn_size
+                        darn_overlap=darn_overlap
+                        set_darn_overlap=set_darn_overlap
                         sweep_strategy=sweep_strategy
                         set_sweep_strategy=set_sweep_strategy
                         sweep_section_tokens_input=sweep_section_tokens_input
@@ -352,6 +365,8 @@ pub fn EvaluationLauncher(
                         set_sweep_bert_overlaps_input=set_sweep_bert_overlaps_input
                         sweep_llm_micro_input=sweep_llm_micro_input
                         set_sweep_llm_micro_input=set_sweep_llm_micro_input
+                        sweep_darn_sizes_input=sweep_darn_sizes_input
+                        set_sweep_darn_sizes_input=set_sweep_darn_sizes_input
                         custom_variants=custom_variants
                         set_custom_variants=set_custom_variants
                         sweep_templates=sweep_templates
@@ -494,6 +509,10 @@ fn VariantsPicker(
     set_bert_overlap: WriteSignal<u32>,
     llm_micro: ReadSignal<u32>,
     set_llm_micro: WriteSignal<u32>,
+    darn_size: ReadSignal<u32>,
+    set_darn_size: WriteSignal<u32>,
+    darn_overlap: ReadSignal<u32>,
+    set_darn_overlap: WriteSignal<u32>,
     sweep_strategy: ReadSignal<ChunkStrategy>,
     set_sweep_strategy: WriteSignal<ChunkStrategy>,
     sweep_section_tokens_input: ReadSignal<String>,
@@ -504,6 +523,8 @@ fn VariantsPicker(
     set_sweep_bert_overlaps_input: WriteSignal<String>,
     sweep_llm_micro_input: ReadSignal<String>,
     set_sweep_llm_micro_input: WriteSignal<String>,
+    sweep_darn_sizes_input: ReadSignal<String>,
+    set_sweep_darn_sizes_input: WriteSignal<String>,
     custom_variants: ReadSignal<Vec<ChunkingVariant>>,
     set_custom_variants: WriteSignal<Vec<ChunkingVariant>>,
     sweep_templates: StoredValue<Vec<SweepTemplateDto>>,
@@ -538,6 +559,10 @@ fn VariantsPicker(
                         set_bert_overlap=set_bert_overlap
                         llm_micro=llm_micro
                         set_llm_micro=set_llm_micro
+                        darn_size=darn_size
+                        set_darn_size=set_darn_size
+                        darn_overlap=darn_overlap
+                        set_darn_overlap=set_darn_overlap
                     />
                 }.into_any(),
                 VariantsMode::StrategySweep => view! {
@@ -552,6 +577,8 @@ fn VariantsPicker(
                         set_bert_overlaps_input=set_sweep_bert_overlaps_input
                         llm_micro_input=sweep_llm_micro_input
                         set_llm_micro_input=set_sweep_llm_micro_input
+                        darn_sizes_input=sweep_darn_sizes_input
+                        set_darn_sizes_input=set_sweep_darn_sizes_input
                     />
                 }.into_any(),
                 VariantsMode::SweepTemplate => view! {
@@ -598,6 +625,10 @@ fn SingleVariantFields(
     set_bert_overlap: WriteSignal<u32>,
     llm_micro: ReadSignal<u32>,
     set_llm_micro: WriteSignal<u32>,
+    darn_size: ReadSignal<u32>,
+    set_darn_size: WriteSignal<u32>,
+    darn_overlap: ReadSignal<u32>,
+    set_darn_overlap: WriteSignal<u32>,
 ) -> impl IntoView {
     view! {
         <div class="space-y-3">
@@ -619,6 +650,12 @@ fn SingleVariantFields(
                         <NumField label="Micro-chunk tokens".to_string() value=llm_micro set_value=set_llm_micro min=32 />
                     </FieldRow>
                 }.into_any(),
+                ChunkStrategy::Darn => view! {
+                    <FieldRow>
+                        <NumField label="Max chunk size".to_string() value=darn_size set_value=set_darn_size min=1 />
+                        <NumField label="Overlap".to_string() value=darn_overlap set_value=set_darn_overlap min=0 />
+                    </FieldRow>
+                }.into_any(),
             }}
         </div>
     }
@@ -636,6 +673,8 @@ fn StrategySweepFields(
     set_bert_overlaps_input: WriteSignal<String>,
     llm_micro_input: ReadSignal<String>,
     set_llm_micro_input: WriteSignal<String>,
+    darn_sizes_input: ReadSignal<String>,
+    set_darn_sizes_input: WriteSignal<String>,
 ) -> impl IntoView {
     view! {
         <div class="space-y-3">
@@ -677,6 +716,16 @@ fn StrategySweepFields(
                         />
                     </FieldRow>
                 }.into_any(),
+                ChunkStrategy::Darn => view! {
+                    <FieldRow>
+                        <TextField
+                            label="Darn chunk sizes".to_string()
+                            hint="e.g. 300,500,800,1000".to_string()
+                            value=darn_sizes_input
+                            set_value=set_darn_sizes_input
+                        />
+                    </FieldRow>
+                }.into_any(),
             }}
         </div>
     }
@@ -692,6 +741,8 @@ fn CustomVariantsList(
     let (draft_tokens, set_draft_tokens) = signal(512u32);
     let (draft_overlap, set_draft_overlap) = signal(64u32);
     let (draft_micro, set_draft_micro) = signal(96u32);
+    let (draft_darn_size, set_draft_darn_size) = signal(500u32);
+    let (draft_darn_overlap, set_draft_darn_overlap) = signal(50u32);
 
     let add = move |_| {
         let v = match draft_strategy.get() {
@@ -715,6 +766,18 @@ fn CustomVariantsList(
                     target_tokens: 384,
                     micro_chunk_tokens: draft_micro.get(),
                     generation_model_id: active_gen_model.get(),
+                }),
+            },
+            ChunkStrategy::Darn => ChunkingVariant {
+                label: format!(
+                    "darn:{}/{}",
+                    draft_darn_size.get(),
+                    draft_darn_overlap.get()
+                ),
+                config: ChunkingConfig::Darn(DarnChunkingConfig {
+                    max_chunk_size: draft_darn_size.get(),
+                    overlap: draft_darn_overlap.get(),
+                    granularity: DarnGranularity::Characters,
                 }),
             },
         };
@@ -741,6 +804,12 @@ fn CustomVariantsList(
                     }.into_any(),
                     ChunkStrategy::Llm => view! {
                         <NumField label="Micro-chunk tokens".to_string() value=draft_micro set_value=set_draft_micro min=32 />
+                    }.into_any(),
+                    ChunkStrategy::Darn => view! {
+                        <div class="flex gap-2">
+                            <NumField label="Max chunk size".to_string() value=draft_darn_size set_value=set_draft_darn_size min=1 />
+                            <NumField label="Overlap".to_string() value=draft_darn_overlap set_value=set_draft_darn_overlap min=0 />
+                        </div>
                     }.into_any(),
                 }}
                 <button type="button" class="btn" on:click=add>"+ Add variant"</button>
@@ -960,6 +1029,7 @@ fn StrategyPicker(
                     (ChunkStrategy::Section, "section"),
                     (ChunkStrategy::Bert, "bert"),
                     (ChunkStrategy::Llm, "llm"),
+                    (ChunkStrategy::Darn, "darn"),
                 ]
             />
         </div>
@@ -1053,12 +1123,15 @@ fn options_summary(computed: Memo<Result<Vec<EvaluationRunOptions>, String>>) ->
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_single_variant(
     strategy: ChunkStrategy,
     section: u32,
     bert_target: u32,
     bert_overlap: u32,
     llm_micro: u32,
+    darn_size: u32,
+    darn_overlap: u32,
     generation_model_id: Uuid,
 ) -> Result<ChunkingVariant, String> {
     Ok(match strategy {
@@ -1082,6 +1155,14 @@ fn build_single_variant(
                 target_tokens: 384,
                 micro_chunk_tokens: llm_micro,
                 generation_model_id,
+            }),
+        },
+        ChunkStrategy::Darn => ChunkingVariant {
+            label: format!("darn:{darn_size}/{darn_overlap}"),
+            config: ChunkingConfig::Darn(DarnChunkingConfig {
+                max_chunk_size: darn_size,
+                overlap: darn_overlap,
+                granularity: DarnGranularity::Characters,
             }),
         },
     })
@@ -1239,6 +1320,20 @@ fn build_llm_sweep(values: Vec<u32>, generation_model_id: Uuid) -> Vec<ChunkingV
                 target_tokens: 384,
                 micro_chunk_tokens: micro,
                 generation_model_id,
+            }),
+        })
+        .collect()
+}
+
+fn build_darn_sweep(values: Vec<u32>, overlap: u32) -> Vec<ChunkingVariant> {
+    values
+        .into_iter()
+        .map(|size| ChunkingVariant {
+            label: format!("darn:{size}/{overlap}"),
+            config: ChunkingConfig::Darn(DarnChunkingConfig {
+                max_chunk_size: size,
+                overlap,
+                granularity: DarnGranularity::Characters,
             }),
         })
         .collect()

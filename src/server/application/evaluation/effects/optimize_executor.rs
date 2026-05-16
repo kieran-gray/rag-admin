@@ -926,7 +926,7 @@ pub fn build_default_search_space(scope: OptimizationScope) -> SearchSpace {
     if matches!(scope, OptimizationScope::Chunking | OptimizationScope::Both) {
         params.push(Parameter::Categorical {
             name: "strategy".into(),
-            values: vec!["section".into(), "bert".into(), "llm".into()],
+            values: vec!["section".into(), "bert".into(), "llm".into(), "darn".into()],
         });
         params.push(Parameter::Conditional {
             gate_parameter: "strategy".into(),
@@ -955,6 +955,16 @@ pub fn build_default_search_space(scope: OptimizationScope) -> SearchSpace {
                 name: "micro_chunk_tokens".into(),
                 low: 32,
                 high: 512,
+                log_scale: true,
+            }),
+        });
+        params.push(Parameter::Conditional {
+            gate_parameter: "strategy".into(),
+            gate_value: Value::String("darn".into()),
+            inner: Box::new(Parameter::IntRange {
+                name: "darn_max_chunk_size".into(),
+                low: 128,
+                high: 2048,
                 log_scale: true,
             }),
         });

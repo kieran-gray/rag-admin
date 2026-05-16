@@ -1,4 +1,5 @@
 pub mod bert;
+pub mod darn;
 pub mod llm;
 pub mod section;
 
@@ -9,6 +10,7 @@ use crate::server::application::ports::GenerationClient;
 use crate::server::domain::configuration::generation_model::GenerationModelRepository;
 
 pub use bert::BertChunker;
+pub use darn::DarnChunker;
 pub use llm::LlmChunker;
 pub use section::SectionChunker;
 
@@ -20,6 +22,7 @@ pub struct BuiltinChunkerDeps {
 pub fn register_builtin_chunkers(registry: &mut ChunkerRegistry, deps: BuiltinChunkerDeps) {
     registry.add(Arc::new(SectionChunker {}));
     registry.add(Arc::new(BertChunker {}));
+    registry.add(Arc::new(DarnChunker {}));
     registry.add(Arc::new(LlmChunker::create(
         deps.generation_client,
         deps.generation_models,

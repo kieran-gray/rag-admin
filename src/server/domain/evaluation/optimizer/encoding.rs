@@ -4,8 +4,8 @@ use serde_json::{json, Map};
 use uuid::Uuid;
 
 use crate::core::{
-    BertChunkingConfig, ChunkingConfig, EvaluationRunOptions, LlmChunkingConfig,
-    SectionChunkingConfig,
+    BertChunkingConfig, ChunkingConfig, DarnChunkingConfig, DarnGranularity, EvaluationRunOptions,
+    LlmChunkingConfig, SectionChunkingConfig,
 };
 
 use super::search_space::Value;
@@ -81,6 +81,24 @@ pub fn params_to_run_config(
                 target_tokens: defaults.target_tokens,
                 micro_chunk_tokens,
                 generation_model_id,
+            })
+        }
+        "darn" => {
+            let defaults = DarnChunkingConfig::default();
+            let max_chunk_size = params
+                .get("darn_max_chunk_size")
+                .and_then(|v| v.as_int())
+                .map(|n| n.clamp(1, 8192) as u32)
+                .unwrap_or(defaults.max_chunk_size);
+            let overlap = params
+                .get("darn_overlap")
+                .and_then(|v| v.as_int())
+                .map(|n| n.clamp(0, 8192) as u32)
+                .unwrap_or(defaults.overlap);
+            ChunkingConfig::Darn(DarnChunkingConfig {
+                max_chunk_size,
+                overlap,
+                granularity: DarnGranularity::Characters,
             })
         }
         _ => {

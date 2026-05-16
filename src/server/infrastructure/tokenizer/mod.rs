@@ -1,3 +1,3 @@
-pub mod huggingface;
+pub mod tiktoken;
 
-pub use huggingface::{HuggingFaceTokenizer, EMBEDDING_TOKEN_LIMIT};
+pub use tiktoken::{TiktokenTokenizer, DEFAULT_CHUNK_TOKEN_LIMIT, DEFAULT_TIKTOKEN_MODEL};
