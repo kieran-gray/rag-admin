@@ -11,6 +11,7 @@ use crate::server::application::evaluation::effects::{
 use crate::server::application::evaluation::ports::LlmJudge;
 use crate::server::application::evaluation::scoring::TrialScorer;
 use crate::server::application::indexing::{IndexingEffect, IndexingEffectExecutor};
+use crate::server::application::ports::HtmlToMarkdown;
 use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::source_document::ports::SourceAdapterRegistry;
 use crate::server::application::source_document::{
@@ -45,6 +46,7 @@ use crate::server::infrastructure::evaluation::LlmJudgeAdapter;
 use crate::server::infrastructure::event_sourcing::{
     spawn_postgres_event_listener, PostgresEffectLedger,
 };
+use crate::server::infrastructure::html::HtmdConverter;
 use crate::server::infrastructure::http_client::ReqwestHttpClient;
 use crate::server::infrastructure::source_document::HttpBlogAdapter;
 use crate::server::setup::compose::event_sourcing::{spawn_driver, AggregateWirings};
@@ -274,11 +276,12 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
     spawn_postgres_event_listener(pool, wakeups);
 
     let mut source_adapter_registry = SourceAdapterRegistry::new();
-    source_adapter_registry.register(HttpBlogAdapter::new(
-        Arc::clone(&http),
-        config.blog_url.clone(),
-    ));
+    if let Some(blog_url) = config.blog_url.clone() {
+        source_adapter_registry.register(HttpBlogAdapter::new(Arc::clone(&http), blog_url));
+    }
     let source_adapter_registry = Arc::new(source_adapter_registry);
+
+    let html_to_markdown: Arc<dyn HtmlToMarkdown> = HtmdConverter::new();
 
     let source_document_ingest_service =
         SourceDocumentIngestService::new(SourceDocumentIngestServiceDeps {
@@ -288,6 +291,8 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
             blob_store: Arc::clone(&repos.blob_store),
             source_adapter_registry: Arc::clone(&source_adapter_registry),
             pipeline_resolver: Arc::clone(&services.pipeline_resolver),
+            http_client: Arc::clone(&http),
+            html_to_markdown,
             clock,
             id_generator,
         });

@@ -3,18 +3,18 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::contracts::{
-    ChunkDto, IndexingDto, MarkdownBlockDto, MarkdownBlockKindDto, SourceDocumentDetailDto,
-    SourceDocumentDto, SourceDocumentMarkdownDto,
+    ChunkDto, DocumentListItemDto, IndexingDto, MarkdownBlockDto, MarkdownBlockKindDto,
+    SourceDocumentDetailDto, SourceDocumentDto, SourceDocumentMarkdownDto,
 };
 use crate::server::application::markdown::{Block, BlockKind};
 use crate::server::application::ports::MarkdownParser;
 use crate::server::application::source_document::ports::BlobStore;
 use crate::server::application::AppError;
 use crate::server::domain::chunk_set::repository::ChunkSetRepository;
+use crate::server::domain::indexing::read_model::IndexingReadModel;
 use crate::server::domain::indexing::repository::IndexingRepository;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::server::domain::source_document::source_ref::SourceRef;
-use crate::server::domain::source_document::version::DocumentMetadata;
 
 pub struct SourceDocumentQueryService {
     source_document_repository: Arc<dyn SourceDocumentRepository>,
@@ -44,6 +44,44 @@ impl SourceDocumentQueryService {
     pub async fn list(&self) -> Result<Vec<SourceDocumentDto>, AppError> {
         let docs = self.source_document_repository.list().await?;
         Ok(docs.into_iter().map(map_doc_to_dto).collect())
+    }
+
+    pub async fn list_documents(&self) -> Result<Vec<DocumentListItemDto>, AppError> {
+        let docs = self.source_document_repository.list().await?;
+        let document_ids: Vec<Uuid> = docs.iter().map(|d| d.document_id).collect();
+
+        let indexings = self
+            .indexing_repository
+            .list_for_documents(&document_ids)
+            .await?;
+
+        let mut indexings_by_doc: std::collections::HashMap<Uuid, Vec<IndexingDto>> =
+            std::collections::HashMap::new();
+        for indexing in indexings {
+            indexings_by_doc
+                .entry(indexing.document_id)
+                .or_default()
+                .push(map_indexing_to_dto(indexing));
+        }
+
+        Ok(docs
+            .into_iter()
+            .map(|doc| {
+                let indexings = indexings_by_doc
+                    .remove(&doc.document_id)
+                    .unwrap_or_default();
+                let dto = map_doc_to_dto(doc);
+                DocumentListItemDto {
+                    source_ref_key: dto.source_ref_key,
+                    document_type: dto.document_type,
+                    title: dto.title,
+                    document_id: Some(dto.document_id),
+                    latest_version: Some(dto.latest_version),
+                    latest_content_hash: Some(dto.latest_content_hash),
+                    indexings,
+                }
+            })
+            .collect())
     }
 
     pub async fn get_detail_by_source_ref(
@@ -76,19 +114,7 @@ impl SourceDocumentQueryService {
 
                 Ok(Some(SourceDocumentDetailDto {
                     document: map_doc_to_dto(doc),
-                    indexings: indexings
-                        .into_iter()
-                        .map(|i| IndexingDto {
-                            indexing_id: i.indexing_id,
-                            pipeline_configuration_id: i.pipeline_configuration_id,
-                            document_version: i.document_version,
-                            status: format!("{:?}", i.status),
-                            attempts: i.attempts,
-                            chunk_set_id: i.chunk_set_id,
-                            embedding_set_id: i.embedding_set_id,
-                            removed: i.removed,
-                        })
-                        .collect(),
+                    indexings: indexings.into_iter().map(map_indexing_to_dto).collect(),
                 }))
             }
         }
@@ -115,13 +141,11 @@ impl SourceDocumentQueryService {
         let parsed = self.markdown_parser.parse(&source)?;
         let blocks = parsed.blocks.iter().map(block_to_dto).collect();
 
-        let title = match &doc.latest_metadata {
-            DocumentMetadata::BlogPost(m) => m.title.clone(),
-        };
+        let title = doc.latest_metadata.title().to_string();
 
         Ok(Some(SourceDocumentMarkdownDto {
             document_id: doc.document_id,
-            source_ref_key: doc.source_ref.natural_key().to_string(),
+            source_ref_key: doc.source_ref.natural_key(),
             title,
             version: doc.latest_version_number,
             source,
@@ -166,17 +190,27 @@ fn block_to_dto(block: &Block) -> MarkdownBlockDto {
     }
 }
 
+fn map_indexing_to_dto(i: IndexingReadModel) -> IndexingDto {
+    IndexingDto {
+        indexing_id: i.indexing_id,
+        pipeline_configuration_id: i.pipeline_configuration_id,
+        document_version: i.document_version,
+        status: format!("{:?}", i.status),
+        attempts: i.attempts,
+        chunk_set_id: i.chunk_set_id,
+        embedding_set_id: i.embedding_set_id,
+        removed: i.removed,
+    }
+}
+
 fn map_doc_to_dto(
     doc: crate::server::domain::source_document::read_model::SourceDocumentReadModel,
 ) -> SourceDocumentDto {
-    use crate::server::domain::source_document::version::DocumentMetadata;
-    let title = match &doc.latest_metadata {
-        DocumentMetadata::BlogPost(m) => m.title.clone(),
-    };
+    let title = doc.latest_metadata.title().to_string();
     SourceDocumentDto {
         document_id: doc.document_id,
         document_type: format!("{:?}", doc.document_type),
-        source_ref_key: doc.source_ref.natural_key().to_string(),
+        source_ref_key: doc.source_ref.natural_key(),
         title,
         latest_version: doc.latest_version_number,
         latest_content_hash: doc.latest_content_hash.as_hex().to_string(),

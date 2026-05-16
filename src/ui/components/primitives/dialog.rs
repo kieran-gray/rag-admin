@@ -22,7 +22,7 @@ pub fn Dialog(
                     }
                 }
             >
-                <div class="surface w-full max-w-lg mx-4 max-h-[80vh] flex flex-col overflow-hidden">
+                <div class="surface w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col overflow-hidden">
                     <div class="flex items-start justify-between gap-3 px-5 py-4 border-b border-[var(--color-border)]">
                         <div class="min-w-0">
                             <h2 class="section-title">{title.clone()}</h2>

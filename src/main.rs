@@ -8,6 +8,7 @@ async fn main() {
     use rag_admin::server::api::events_ws::events_ws_handler;
     use rag_admin::server::api::health::health_check;
     use rag_admin::server::api::sse::job_logs_handler;
+    use rag_admin::server::api::upload::upload_document;
     use rag_admin::server::setup::bootstrap;
     use std::sync::Arc;
     use tracing_subscriber::EnvFilter;
@@ -32,6 +33,10 @@ async fn main() {
         )
         .route("/api/events/ws", axum::routing::get(events_ws_handler))
         .route("/api/health", axum::routing::get(health_check))
+        .route(
+            "/api/source_documents/upload",
+            axum::routing::post(upload_document),
+        )
         .leptos_routes_with_context(
             &leptos_options,
             routes,

@@ -186,6 +186,7 @@ impl App {
         router
             .layer(Extension(Arc::clone(&self.event_bus)))
             .layer(Extension(Arc::clone(&self.job_registry)))
+            .layer(Extension(Arc::clone(&self.source_document_ingest_service)))
     }
 
     async fn seed_if_empty(&self) {
@@ -193,10 +194,12 @@ impl App {
             &self.chunking_configuration_query_service,
             &self.sweep_template_query_service,
             &self.configuration_query_service,
+            &self.pipeline_configuration_query_service,
             &self.embedding_model_command_handler,
             &self.generation_model_command_handler,
             &self.vector_index_command_handler,
             &self.chunking_configuration_service,
+            &self.pipeline_configuration_service,
             &self.sweep_template_command_handler,
         )
         .await
@@ -212,9 +215,9 @@ async fn connect_database(url: &str) -> Result<PgPool, SetupError> {
         .connect(url)
         .await
         .map_err(|e| SetupError::Internal(format!("postgres pool: {e}")))?;
-    // sqlx::migrate!("./migrations")
-    //     .run(&pool)
-    //     .await
-    //     .map_err(|e| SetupError::Internal(format!("migrations: {e}")))?;
+    sqlx::migrate!("./migrations")
+        .run(&pool)
+        .await
+        .map_err(|e| SetupError::Internal(format!("migrations: {e}")))?;
     Ok(pool)
 }

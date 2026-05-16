@@ -8,4 +8,5 @@ pub struct PipelineConfigurationReadModel {
     pub embedding_model_id: Uuid,
     pub generation_model_id: Uuid,
     pub vector_index_id: Uuid,
+    pub is_default: bool,
 }

@@ -24,11 +24,9 @@ impl ChunkingConfigurationRepository for PostgresChunkingConfigurationRepository
         &self,
     ) -> Result<Vec<ChunkingConfigurationReadModel>, ChunkingConfigurationRepositoryError> {
         let rows: Vec<ChunkingConfigurationRow> = sqlx::query_as(
-            r#"
-            SELECT id, name, config
-            FROM chunking_configurations
-            ORDER BY created_at ASC
-            "#,
+            "SELECT id, name, config, is_default
+             FROM chunking_configurations
+             ORDER BY created_at ASC",
         )
         .fetch_all(&self.pool)
         .await
@@ -43,14 +41,30 @@ impl ChunkingConfigurationRepository for PostgresChunkingConfigurationRepository
         &self,
         id: Uuid,
     ) -> Result<Option<ChunkingConfigurationReadModel>, ChunkingConfigurationRepositoryError> {
-        let row: Option<ChunkingConfigurationRow> =
-            sqlx::query_as("SELECT id, name, config FROM chunking_configurations WHERE id = $1")
-                .bind(id)
-                .fetch_optional(&self.pool)
-                .await
-                .map_err(|e| {
-                    ChunkingConfigurationRepositoryError::Internal(format!("find_by_id: {e}"))
-                })?;
+        let row: Option<ChunkingConfigurationRow> = sqlx::query_as(
+            "SELECT id, name, config, is_default FROM chunking_configurations WHERE id = $1",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| ChunkingConfigurationRepositoryError::Internal(format!("find_by_id: {e}")))?;
+        row.map(TryInto::try_into).transpose()
+    }
+
+    async fn find_default(
+        &self,
+    ) -> Result<Option<ChunkingConfigurationReadModel>, ChunkingConfigurationRepositoryError> {
+        let row: Option<ChunkingConfigurationRow> = sqlx::query_as(
+            "SELECT id, name, config, is_default
+             FROM chunking_configurations
+             WHERE is_default = TRUE
+             LIMIT 1",
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| {
+            ChunkingConfigurationRepositoryError::Internal(format!("find_default: {e}"))
+        })?;
         row.map(TryInto::try_into).transpose()
     }
 
@@ -102,6 +116,39 @@ impl ChunkingConfigurationRepository for PostgresChunkingConfigurationRepository
         if affected.rows_affected() == 0 {
             return Err(ChunkingConfigurationRepositoryError::NotFound(row.id));
         }
+        Ok(())
+    }
+
+    async fn set_default(&self, id: Uuid) -> Result<(), ChunkingConfigurationRepositoryError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| ChunkingConfigurationRepositoryError::Internal(format!("tx: {e}")))?;
+
+        sqlx::query("UPDATE chunking_configurations SET is_default = FALSE WHERE is_default")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| {
+                ChunkingConfigurationRepositoryError::Internal(format!("clear default: {e}"))
+            })?;
+
+        let affected =
+            sqlx::query("UPDATE chunking_configurations SET is_default = TRUE WHERE id = $1")
+                .bind(id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| {
+                    ChunkingConfigurationRepositoryError::Internal(format!("set default: {e}"))
+                })?;
+
+        if affected.rows_affected() == 0 {
+            return Err(ChunkingConfigurationRepositoryError::NotFound(id));
+        }
+
+        tx.commit()
+            .await
+            .map_err(|e| ChunkingConfigurationRepositoryError::Internal(format!("commit: {e}")))?;
         Ok(())
     }
 
@@ -157,6 +204,7 @@ struct ChunkingConfigurationRow {
     id: Uuid,
     name: String,
     config: serde_json::Value,
+    is_default: bool,
 }
 
 impl sqlx::FromRow<'_, sqlx::postgres::PgRow> for ChunkingConfigurationRow {
@@ -166,6 +214,7 @@ impl sqlx::FromRow<'_, sqlx::postgres::PgRow> for ChunkingConfigurationRow {
             id: row.try_get("id")?,
             name: row.try_get("name")?,
             config: row.try_get("config")?,
+            is_default: row.try_get("is_default")?,
         })
     }
 }
@@ -181,6 +230,7 @@ impl TryFrom<ChunkingConfigurationRow> for ChunkingConfigurationReadModel {
             chunking_configuration_id: row.id,
             name: row.name,
             config,
+            is_default: row.is_default,
         })
     }
 }

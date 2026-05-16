@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::sync::Arc;
 
 use uuid::Uuid;
@@ -5,7 +6,7 @@ use uuid::Uuid;
 use crate::contracts::SourceDocumentDto;
 use crate::core::ChunkingConfig;
 use crate::server::application::configuration::PipelineResolver;
-use crate::server::application::ports::{Clock, IdGenerator};
+use crate::server::application::ports::{Clock, HtmlToMarkdown, IdGenerator};
 use crate::server::application::AppError;
 use crate::server::domain::indexing::aggregate::Indexing;
 use crate::server::domain::indexing::commands::{IndexingCommand, RequestIngest};
@@ -15,12 +16,18 @@ use crate::server::domain::source_document::commands::{
 use crate::server::domain::source_document::document_type::DocumentType;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::server::domain::source_document::source_ref::SourceRef;
+use crate::server::domain::source_document::version::{
+    ContentHash, DocumentMetadata, PlainMetadata, WebPageMetadata,
+};
+use crate::server::infrastructure::http_client::ReqwestHttpClient;
 
 use super::{
     command_handler::SourceDocumentCommandHandler,
     ports::{BlobStore, SourceAdapterRegistry},
 };
 use crate::server::application::indexing::command_handler::IndexingCommandHandler;
+use reqwest::header::HeaderMap;
+use reqwest::Method;
 
 pub struct SourceDocumentIngestServiceDeps {
     pub source_document_command_handler: Arc<SourceDocumentCommandHandler>,
@@ -29,6 +36,8 @@ pub struct SourceDocumentIngestServiceDeps {
     pub blob_store: Arc<dyn BlobStore>,
     pub source_adapter_registry: Arc<SourceAdapterRegistry>,
     pub pipeline_resolver: Arc<PipelineResolver>,
+    pub http_client: Arc<ReqwestHttpClient>,
+    pub html_to_markdown: Arc<dyn HtmlToMarkdown>,
     pub clock: Arc<dyn Clock>,
     pub id_generator: Arc<dyn IdGenerator>,
 }
@@ -40,6 +49,8 @@ pub struct SourceDocumentIngestService {
     blob_store: Arc<dyn BlobStore>,
     source_adapter_registry: Arc<SourceAdapterRegistry>,
     pipeline_resolver: Arc<PipelineResolver>,
+    http_client: Arc<ReqwestHttpClient>,
+    html_to_markdown: Arc<dyn HtmlToMarkdown>,
     clock: Arc<dyn Clock>,
     id_generator: Arc<dyn IdGenerator>,
 }
@@ -53,6 +64,8 @@ impl SourceDocumentIngestService {
             blob_store: deps.blob_store,
             source_adapter_registry: deps.source_adapter_registry,
             pipeline_resolver: deps.pipeline_resolver,
+            http_client: deps.http_client,
+            html_to_markdown: deps.html_to_markdown,
             clock: deps.clock,
             id_generator: deps.id_generator,
         })
@@ -63,7 +76,6 @@ impl SourceDocumentIngestService {
         source_ref: SourceRef,
         document_type: DocumentType,
     ) -> Result<SourceDocumentDto, AppError> {
-        let occurred_at = self.clock.now();
         let adapter = self
             .source_adapter_registry
             .get(&document_type)
@@ -74,7 +86,76 @@ impl SourceDocumentIngestService {
             .fetch(&source_ref)
             .await
             .map_err(|e| AppError::Upstream(format!("fetch failed: {e}")))?;
-        let content_hash = self.blob_store.put(&fetched.content).await?;
+
+        self.persist_document(source_ref, document_type, fetched.content, fetched.metadata)
+            .await
+    }
+
+    pub async fn import_upload(
+        &self,
+        bytes: Vec<u8>,
+        filename: String,
+    ) -> Result<SourceDocumentDto, AppError> {
+        let document_type = document_type_from_filename(&filename);
+        let title = derive_title_from_filename(&filename);
+        let metadata = match document_type {
+            DocumentType::Markdown => DocumentMetadata::Markdown(PlainMetadata { title }),
+            DocumentType::PlainText => DocumentMetadata::PlainText(PlainMetadata { title }),
+            DocumentType::BlogPost | DocumentType::WebPage => {
+                return Err(AppError::Validation(format!(
+                    "uploads cannot create {document_type:?}; supported types are Markdown and PlainText"
+                )));
+            }
+        };
+
+        let source_ref = SourceRef::Upload {
+            upload_id: self.id_generator.new_uuid(),
+        };
+        self.persist_document(source_ref, document_type, bytes, metadata)
+            .await
+    }
+
+    pub async fn import_url(&self, url: String) -> Result<SourceDocumentDto, AppError> {
+        let url = url.trim().to_string();
+        if url.is_empty() {
+            return Err(AppError::Validation("url is empty".into()));
+        }
+
+        let (status, body) = self
+            .http_client
+            .request_text(Method::GET, &url, HeaderMap::new(), None)
+            .await?;
+        if !(200..300).contains(&status) {
+            return Err(AppError::Upstream(format!("GET {url} returned {status}")));
+        }
+
+        let extracted = self.html_to_markdown.convert(&body)?;
+        let title = extracted.title.unwrap_or_else(|| url.clone());
+
+        let metadata = DocumentMetadata::WebPage(WebPageMetadata {
+            title,
+            source_url: url.clone(),
+            fetched_at: self.clock.now(),
+        });
+
+        self.persist_document(
+            SourceRef::Url { url },
+            DocumentType::WebPage,
+            extracted.markdown.into_bytes(),
+            metadata,
+        )
+        .await
+    }
+
+    async fn persist_document(
+        &self,
+        source_ref: SourceRef,
+        document_type: DocumentType,
+        content: Vec<u8>,
+        metadata: DocumentMetadata,
+    ) -> Result<SourceDocumentDto, AppError> {
+        let occurred_at = self.clock.now();
+        let content_hash = self.blob_store.put(&content).await?;
 
         let existing = self
             .source_document_repository
@@ -91,7 +172,7 @@ impl SourceDocumentIngestService {
                         source_ref: source_ref.clone(),
                         initial_version: NewVersion {
                             content_hash: content_hash.clone(),
-                            metadata: fetched.metadata.clone(),
+                            metadata: metadata.clone(),
                         },
                         occurred_at: occurred_at.clone(),
                     }))
@@ -107,7 +188,7 @@ impl SourceDocumentIngestService {
                             document_id: existing_doc.document_id,
                             version: NewVersion {
                                 content_hash: content_hash.clone(),
-                                metadata: fetched.metadata.clone(),
+                                metadata: metadata.clone(),
                             },
                             occurred_at: occurred_at.clone(),
                         }))
@@ -120,21 +201,14 @@ impl SourceDocumentIngestService {
             }
         };
 
-        let title = match &fetched.metadata {
-            crate::server::domain::source_document::version::DocumentMetadata::BlogPost(meta) => {
-                meta.title.clone()
-            }
-        };
-
-        Ok(SourceDocumentDto {
+        Ok(map_to_dto(
             document_id,
-            document_type: format!("{document_type:?}"),
-            source_ref_key: source_ref.natural_key().to_string(),
-            title,
-            latest_version: document_version,
-            latest_content_hash: content_hash.as_hex().to_string(),
-            deleted: false,
-        })
+            document_type,
+            source_ref,
+            metadata,
+            document_version,
+            content_hash,
+        ))
     }
 
     pub async fn request_indexing(
@@ -216,5 +290,45 @@ impl SourceDocumentIngestService {
                 ),
             )
             .await
+    }
+}
+
+fn document_type_from_filename(filename: &str) -> DocumentType {
+    let ext = Path::new(filename)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_ascii_lowercase())
+        .unwrap_or_default();
+    match ext.as_str() {
+        "md" | "markdown" => DocumentType::Markdown,
+        _ => DocumentType::PlainText,
+    }
+}
+
+fn derive_title_from_filename(filename: &str) -> String {
+    Path::new(filename)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(str::to_string)
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| filename.to_string())
+}
+
+fn map_to_dto(
+    document_id: Uuid,
+    document_type: DocumentType,
+    source_ref: SourceRef,
+    metadata: DocumentMetadata,
+    document_version: u32,
+    content_hash: ContentHash,
+) -> SourceDocumentDto {
+    SourceDocumentDto {
+        document_id,
+        document_type: format!("{document_type:?}"),
+        source_ref_key: source_ref.natural_key(),
+        title: metadata.title().to_string(),
+        latest_version: document_version,
+        latest_content_hash: content_hash.as_hex().to_string(),
+        deleted: false,
     }
 }

@@ -32,7 +32,7 @@ The Compose stack starts Ollama, stores its model files in the `ollama-data`
 volume, and populates the local models seeded by the app:
 
 - `qwen3-embedding:0.6b` for embeddings
-- `ministral-3:14b` for generation
+- `gemma3:12b-it-qat` for generation
 
 The first run downloads the model files and can take a while. Adjust
 `OLLAMA_MEMORY_RESERVATION` and `OLLAMA_MEMORY_LIMIT` in `.env` if Docker does
@@ -47,10 +47,10 @@ Environment variables (see `.env.example`):
 | Variable | Purpose |
 | --- | --- |
 | `DATABASE_URL` | Postgres connection string (pgvector required) |
-| `BLOG_URL` | Source-document adapter base URL |
+| `BLOG_URL` | Optional. Base URL of an upstream blog API to expose as a source adapter |
 | `OLLAMA_BASE_URL` | Optional. Defaults to `http://localhost:11434` |
 | `OLLAMA_MEMORY_RESERVATION`, `OLLAMA_MEMORY_LIMIT` | Docker Compose memory settings for the local Ollama service |
-| `OLLAMA_NUM_CTX` | Ollama generation context size. Defaults to `16384` |
+| `OLLAMA_CONTEXT_LENGTH` | Ollama generation context size. Defaults to `16384` |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` | Required if using Cloudflare Workers AI / Vectorize |
 | `CLOUDFLARE_KV_NAMESPACE_ID` | Required when `KV_BACKEND=cloudflare` |
 | `KV_BACKEND` | `postgres` (default) or `cloudflare` |

@@ -119,6 +119,7 @@ impl PipelineConfigurationQueryService {
                     .find(|i| i.index_id == pc.vector_index_id)
                     .map(|i| i.name.clone()),
                 vector_index_id: pc.vector_index_id,
+                is_default: pc.is_default,
             })
             .collect())
     }
@@ -142,6 +143,7 @@ impl ChunkingConfigurationQueryService {
                 chunking_configuration_id: cc.chunking_configuration_id,
                 name: cc.name,
                 config: cc.config,
+                is_default: cc.is_default,
             })
             .collect())
     }

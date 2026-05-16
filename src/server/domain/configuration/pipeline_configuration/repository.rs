@@ -43,6 +43,10 @@ pub trait PipelineConfigurationRepository: Send + Sync {
         id: Uuid,
     ) -> Result<Option<PipelineConfigurationReadModel>, PipelineConfigurationRepositoryError>;
 
+    async fn find_default(
+        &self,
+    ) -> Result<Option<PipelineConfigurationReadModel>, PipelineConfigurationRepositoryError>;
+
     async fn create(
         &self,
         row: NewPipelineConfiguration,
@@ -52,6 +56,8 @@ pub trait PipelineConfigurationRepository: Send + Sync {
         &self,
         row: PipelineConfigurationUpdate,
     ) -> Result<(), PipelineConfigurationRepositoryError>;
+
+    async fn set_default(&self, id: Uuid) -> Result<(), PipelineConfigurationRepositoryError>;
 
     async fn delete(&self, id: Uuid) -> Result<(), PipelineConfigurationRepositoryError>;
 }

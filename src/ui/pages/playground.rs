@@ -83,6 +83,7 @@ fn PlaygroundBody(pipelines: Vec<PipelineConfigurationDto>) -> impl IntoView {
                 query: q.clone(),
                 top_k: k,
                 min_score: m,
+                document_id: None,
             };
             match query_documents(req).await {
                 Ok(res) => {

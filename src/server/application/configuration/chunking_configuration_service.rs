@@ -33,13 +33,17 @@ impl ChunkingConfigurationService {
 
     async fn create(&self, dto: CreateChunkingConfigurationDto) -> Result<(), AppError> {
         validate_non_empty("chunking configuration name", &dto.name)?;
+        let id = Uuid::new_v4();
         self.repository
             .create(NewChunkingConfiguration {
-                id: Uuid::new_v4(),
+                id,
                 name: dto.name,
                 config: dto.config,
             })
             .await?;
+        if dto.is_default {
+            self.repository.set_default(id).await?;
+        }
         Ok(())
     }
 
@@ -52,6 +56,11 @@ impl ChunkingConfigurationService {
                 config: dto.config,
             })
             .await?;
+        if dto.is_default {
+            self.repository
+                .set_default(dto.chunking_configuration_id)
+                .await?;
+        }
         Ok(())
     }
 

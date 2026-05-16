@@ -17,7 +17,7 @@ services:
       - ./.env
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_BASE_URL=http://ollama:11435
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -34,21 +34,31 @@ services:
     image: ollama/ollama:latest
     restart: "no"
     ports:
-      - "11434:11434"
+      - "11435:11435"
     volumes:
       - ollama-data:/root/.ollama
     environment:
+      - OLLAMA_CONTEXT_LENGTH=32768
       - OLLAMA_KEEP_ALIVE=10m
       - OLLAMA_MAX_LOADED_MODELS=1
       - OLLAMA_NUM_PARALLEL=1
-    mem_reservation: ${OLLAMA_MEMORY_RESERVATION:-16g}
-    mem_limit: ${OLLAMA_MEMORY_LIMIT:-24g}
+      - OLLAMA_HOST=0.0.0.0:11435
     healthcheck:
       test: [ "CMD", "ollama", "list" ]
       interval: 10s
       timeout: 5s
       retries: 12
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: ${OLLAMA_MEMORY_LIMIT:-24g}
+        reservations:
+          memory: ${OLLAMA_MEMORY_RESERVATION:-16g}
+          devices:
+            - driver: nvidia
+              count: all 
+              capabilities: [gpu]
 
   ollama-pull-embedding:
     image: ollama/ollama:latest
@@ -57,7 +67,7 @@ services:
       ollama:
         condition: service_healthy
     environment:
-      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_HOST=http://ollama:11435
     entrypoint: [ "ollama" ]
     command: [ "pull", "qwen3-embedding:0.6b" ]
 
@@ -68,7 +78,7 @@ services:
       ollama:
         condition: service_healthy
     environment:
-      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_HOST=http://ollama:11435
     entrypoint: [ "ollama" ]
     command: [ "pull", "gemma3:12b-it-qat" ]
 

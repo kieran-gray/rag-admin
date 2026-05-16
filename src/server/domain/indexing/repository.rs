@@ -23,4 +23,9 @@ pub trait IndexingRepository: Send + Sync {
         &self,
         document_id: Uuid,
     ) -> Result<Vec<IndexingReadModel>, IndexingRepositoryError>;
+
+    async fn list_for_documents(
+        &self,
+        document_ids: &[Uuid],
+    ) -> Result<Vec<IndexingReadModel>, IndexingRepositoryError>;
 }

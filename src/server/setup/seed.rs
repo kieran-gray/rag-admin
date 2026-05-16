@@ -5,18 +5,25 @@ use uuid::Uuid;
 use crate::catalog::{AiProviderKind, VectorStoreKind};
 use crate::contracts::{
     AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto,
-    ChunkingConfigurationCommandDto, CreateChunkingConfigurationDto, CreateSweepTemplateDto,
-    EmbeddingModelCommandDto, GenerationModelCommandDto, SetDefaultSweepTemplateDto,
+    ChunkingConfigurationCommandDto, CreateChunkingConfigurationDto,
+    CreatePipelineConfigurationDto, CreateSweepTemplateDto, EmbeddingModelCommandDto,
+    GenerationModelCommandDto, PipelineConfigurationCommandDto, SetDefaultSweepTemplateDto,
     SweepTemplateCommandDto, VectorIndexCommandDto,
 };
 use crate::core::{BertChunkingConfig, ChunkingConfig, LlmChunkingConfig, SectionChunkingConfig};
 use crate::server::application::configuration::{
     ChunkingConfigurationQueryService, ChunkingConfigurationService, ConfigurationQueryService,
     EmbeddingModelCatalogCommandHandler, GenerationModelCatalogCommandHandler,
-    SweepTemplateCommandHandler, SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
+    PipelineConfigurationQueryService, PipelineConfigurationService, SweepTemplateCommandHandler,
+    SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
 };
 
 const DEFAULT_SWEEP_NAME: &str = "default-sweep";
+const DEFAULT_PIPELINE_NAME: &str = "default";
+const DEFAULT_CHUNKING_NAME: &str = "section-384";
+const DEFAULT_VECTOR_INDEX_NAME: &str = "default-pgvector";
+const DEFAULT_EMBEDDING_MODEL: &str = "qwen3-embedding:0.6b";
+const DEFAULT_GENERATION_MODEL: &str = "gemma3:12b-it-qat";
 
 pub struct ChunkingSeed {
     pub name: &'static str,
@@ -69,17 +76,24 @@ const GENERATION_SEEDS: &[GenerationSeed] = &[
     },
     GenerationSeed {
         kind: AiProviderKind::Ollama,
-        model: "ministral-3:14b",
+        model: "gemma3:12b-it-qat",
     },
 ];
 
-const VECTOR_INDEX_SEEDS: &[VectorIndexSeed] = &[VectorIndexSeed {
-    kind: VectorStoreKind::CloudflareVectorize,
-    name: "blog-chunks",
-    dimensions: 1024,
-}];
+const VECTOR_INDEX_SEEDS: &[VectorIndexSeed] = &[
+    VectorIndexSeed {
+        kind: VectorStoreKind::CloudflareVectorize,
+        name: "blog-chunks",
+        dimensions: 1024,
+    },
+    VectorIndexSeed {
+        kind: VectorStoreKind::Postgres,
+        name: DEFAULT_VECTOR_INDEX_NAME,
+        dimensions: 1024,
+    },
+];
 
-const LLM_CHUNKING_MODEL: &str = "ministral-3:14b";
+const LLM_CHUNKING_MODEL: &str = "gemma3:12b-it-qat";
 
 pub fn seed_definitions(llm_generation_model_id: Option<Uuid>) -> Vec<ChunkingSeed> {
     let mut seeds = Vec::new();
@@ -127,22 +141,75 @@ pub async fn seed_if_empty(
     chunking_query: &Arc<ChunkingConfigurationQueryService>,
     sweep_template_query: &Arc<SweepTemplateQueryService>,
     configuration_query: &Arc<ConfigurationQueryService>,
+    pipeline_query: &Arc<PipelineConfigurationQueryService>,
     embedding_handler: &Arc<EmbeddingModelCatalogCommandHandler>,
     generation_handler: &Arc<GenerationModelCatalogCommandHandler>,
     vector_index_handler: &Arc<VectorIndexCatalogCommandHandler>,
     chunking_service: &Arc<ChunkingConfigurationService>,
+    pipeline_service: &Arc<PipelineConfigurationService>,
     sweep_template_handler: &Arc<SweepTemplateCommandHandler>,
 ) -> Result<(), String> {
     seed_models_if_empty(configuration_query, embedding_handler, generation_handler).await?;
     seed_vector_indexes_if_empty(configuration_query, vector_index_handler).await?;
     seed_chunking_configurations_if_empty(chunking_query, configuration_query, chunking_service)
         .await?;
+    seed_default_pipeline_if_empty(configuration_query, pipeline_query, pipeline_service).await?;
     seed_default_sweep_template_if_empty(
         chunking_query,
         sweep_template_query,
         sweep_template_handler,
     )
     .await?;
+    Ok(())
+}
+
+async fn seed_default_pipeline_if_empty(
+    configuration_query: &Arc<ConfigurationQueryService>,
+    pipeline_query: &Arc<PipelineConfigurationQueryService>,
+    pipeline_service: &Arc<PipelineConfigurationService>,
+) -> Result<(), String> {
+    let existing = pipeline_query.list().await.map_err(|e| e.to_string())?;
+    if !existing.is_empty() {
+        return Ok(());
+    }
+
+    let catalog = configuration_query.get().await.map_err(|e| e.to_string())?;
+    let Some(embedding) = catalog
+        .embedding_models
+        .iter()
+        .find(|m| m.model == DEFAULT_EMBEDDING_MODEL && m.kind == AiProviderKind::Ollama)
+    else {
+        return Ok(());
+    };
+    let Some(generation) = catalog
+        .generation_models
+        .iter()
+        .find(|m| m.model == DEFAULT_GENERATION_MODEL && m.kind == AiProviderKind::Ollama)
+    else {
+        return Ok(());
+    };
+    let Some(vector_index) = catalog
+        .vector_indexes
+        .iter()
+        .find(|i| i.name == DEFAULT_VECTOR_INDEX_NAME && i.kind == VectorStoreKind::Postgres)
+    else {
+        return Ok(());
+    };
+
+    pipeline_service
+        .handle_dto(
+            PipelineConfigurationCommandDto::CreatePipelineConfiguration(
+                CreatePipelineConfigurationDto {
+                    name: DEFAULT_PIPELINE_NAME.to_owned(),
+                    embedding_model_id: embedding.embedding_model_id,
+                    generation_model_id: generation.generation_model_id,
+                    vector_index_id: vector_index.index_id,
+                    is_default: true,
+                },
+            ),
+        )
+        .await
+        .map_err(|e| format!("seed default pipeline: {e}"))?;
     Ok(())
 }
 
@@ -278,12 +345,14 @@ async fn seed_chunking_configurations_if_empty(
         .map(|m| m.generation_model_id);
 
     for seed in seed_definitions(llm_generation_model_id) {
+        let is_default = seed.name == DEFAULT_CHUNKING_NAME;
         chunking_service
             .handle_dto(
                 ChunkingConfigurationCommandDto::CreateChunkingConfiguration(
                     CreateChunkingConfigurationDto {
                         name: seed.name.to_owned(),
                         config: seed.config,
+                        is_default,
                     },
                 ),
             )

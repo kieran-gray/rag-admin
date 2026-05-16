@@ -61,6 +61,58 @@ pub async fn start_source_document_ingest(
 }
 
 #[server(
+    name = StartIndexingWithDefaults,
+    prefix = "/api",
+    endpoint = "start_indexing_with_defaults"
+)]
+pub async fn start_indexing_with_defaults(
+    source_ref_slug: String,
+) -> Result<uuid::Uuid, ServerFnError> {
+    use crate::server::application::configuration::{
+        ChunkingConfigurationQueryService, PipelineConfigurationQueryService,
+    };
+    use crate::server::application::AppError;
+
+    let ingest = ctx::<Arc<SourceDocumentIngestService>>()?;
+    let pipeline_query = ctx::<Arc<PipelineConfigurationQueryService>>()?;
+    let chunking_query = ctx::<Arc<ChunkingConfigurationQueryService>>()?;
+
+    let pipeline = pipeline_query
+        .list()
+        .await
+        .map_err(map_app_error)?
+        .into_iter()
+        .find(|p| p.is_default)
+        .ok_or_else(|| {
+            map_app_error(AppError::Validation(
+                "no default pipeline configured".into(),
+            ))
+        })?;
+
+    let chunking = chunking_query
+        .list()
+        .await
+        .map_err(map_app_error)?
+        .into_iter()
+        .find(|c| c.is_default)
+        .ok_or_else(|| {
+            map_app_error(AppError::Validation(
+                "no default chunking configuration".into(),
+            ))
+        })?;
+
+    ingest
+        .request_indexing(
+            SourceRef::parse_route_key(&source_ref_slug),
+            pipeline.pipeline_configuration_id,
+            chunking.config,
+            true,
+        )
+        .await
+        .map_err(map_app_error)
+}
+
+#[server(
     name = ImportSourceDocument,
     prefix = "/api",
     endpoint = "import_source_document"
@@ -75,6 +127,20 @@ pub async fn import_source_document(
             },
             DocumentType::BlogPost,
         )
+        .await
+        .map_err(map_app_error)
+}
+
+#[server(
+    name = ImportSourceDocumentFromUrl,
+    prefix = "/api",
+    endpoint = "import_source_document_from_url"
+)]
+pub async fn import_source_document_from_url(
+    url: String,
+) -> Result<SourceDocumentDto, ServerFnError> {
+    ctx::<Arc<SourceDocumentIngestService>>()?
+        .import_url(url)
         .await
         .map_err(map_app_error)
 }
@@ -128,11 +194,23 @@ pub async fn requeue_indexing(indexing_id: uuid::Uuid) -> Result<(), ServerFnErr
 }
 
 #[server(
-    name = ListDocumentsWithStatus,
+    name = ListDocuments,
     prefix = "/api",
-    endpoint = "list_documents_with_status"
+    endpoint = "list_documents"
 )]
-pub async fn list_documents_with_status() -> Result<Vec<DocumentListItemDto>, ServerFnError> {
+pub async fn list_documents() -> Result<Vec<DocumentListItemDto>, ServerFnError> {
+    ctx::<Arc<SourceDocumentQueryService>>()?
+        .list_documents()
+        .await
+        .map_err(map_app_error)
+}
+
+#[server(
+    name = ListAdapterDocuments,
+    prefix = "/api",
+    endpoint = "list_adapter_documents"
+)]
+pub async fn list_adapter_documents() -> Result<Vec<DocumentListItemDto>, ServerFnError> {
     let adapters = ctx::<Arc<SourceAdapterRegistry>>()?;
     let query = ctx::<Arc<SourceDocumentQueryService>>()?;
 
@@ -140,48 +218,26 @@ pub async fn list_documents_with_status() -> Result<Vec<DocumentListItemDto>, Se
 
     let existing: Vec<SourceDocumentDto> = query.list().await.map_err(map_app_error)?;
 
-    let mut existing_map: std::collections::HashMap<String, SourceDocumentDto> = existing
+    let existing_map: std::collections::HashMap<String, SourceDocumentDto> = existing
         .into_iter()
         .map(|d| (d.source_ref_key.clone(), d))
         .collect();
 
-    let mut items: Vec<DocumentListItemDto> = available
-        .into_iter()
-        .map(|(doc_type, summary)| {
-            let key = summary.source_ref.natural_key().to_string();
-            match existing_map.remove(&key) {
-                Some(existing_doc) => DocumentListItemDto {
-                    source_ref_key: key,
-                    document_type: doc_type,
-                    title: summary.title,
-                    document_id: Some(existing_doc.document_id),
-                    latest_version: Some(existing_doc.latest_version),
-                    latest_content_hash: Some(existing_doc.latest_content_hash),
-                    indexings: vec![],
-                },
-                None => DocumentListItemDto {
-                    source_ref_key: key,
-                    document_type: doc_type,
-                    title: summary.title,
-                    document_id: None,
-                    latest_version: None,
-                    latest_content_hash: None,
-                    indexings: vec![],
-                },
-            }
-        })
-        .collect();
+    let mut items = vec![];
 
-    for leftover in existing_map.into_values() {
-        items.push(DocumentListItemDto {
-            source_ref_key: leftover.source_ref_key.clone(),
-            document_type: leftover.document_type,
-            title: leftover.title,
-            document_id: Some(leftover.document_id),
-            latest_version: Some(leftover.latest_version),
-            latest_content_hash: Some(leftover.latest_content_hash),
-            indexings: vec![],
-        });
+    for (doc_type, summary) in available {
+        let key = summary.source_ref.natural_key();
+        if !existing_map.contains_key(&key) {
+            items.push(DocumentListItemDto {
+                source_ref_key: key,
+                document_type: doc_type,
+                title: summary.title,
+                document_id: None,
+                latest_version: None,
+                latest_content_hash: None,
+                indexings: vec![],
+            })
+        }
     }
 
     Ok(items)
@@ -196,9 +252,7 @@ pub async fn get_document_detail_by_source_ref(
     source_ref_slug: String,
 ) -> Result<Option<SourceDocumentDetailDto>, ServerFnError> {
     ctx::<Arc<SourceDocumentQueryService>>()?
-        .get_detail_by_source_ref(&SourceRef::UpstreamSlug {
-            slug: source_ref_slug,
-        })
+        .get_detail_by_source_ref(&SourceRef::parse_route_key(&source_ref_slug))
         .await
         .map_err(map_app_error)
 }
@@ -226,9 +280,7 @@ pub async fn get_document_source(
     source_ref_slug: String,
 ) -> Result<Option<SourceDocumentMarkdownDto>, ServerFnError> {
     ctx::<Arc<SourceDocumentQueryService>>()?
-        .get_source_markdown(&SourceRef::UpstreamSlug {
-            slug: source_ref_slug,
-        })
+        .get_source_markdown(&SourceRef::parse_route_key(&source_ref_slug))
         .await
         .map_err(map_app_error)
 }

@@ -41,6 +41,10 @@ pub trait ChunkingConfigurationRepository: Send + Sync {
         id: Uuid,
     ) -> Result<Option<ChunkingConfigurationReadModel>, ChunkingConfigurationRepositoryError>;
 
+    async fn find_default(
+        &self,
+    ) -> Result<Option<ChunkingConfigurationReadModel>, ChunkingConfigurationRepositoryError>;
+
     async fn create(
         &self,
         row: NewChunkingConfiguration,
@@ -50,6 +54,8 @@ pub trait ChunkingConfigurationRepository: Send + Sync {
         &self,
         row: ChunkingConfigurationUpdate,
     ) -> Result<(), ChunkingConfigurationRepositoryError>;
+
+    async fn set_default(&self, id: Uuid) -> Result<(), ChunkingConfigurationRepositoryError>;
 
     async fn delete(&self, id: Uuid) -> Result<(), ChunkingConfigurationRepositoryError>;
 }

@@ -278,11 +278,17 @@ fn ChunkingCard(
     let name = cc.name.clone();
     let strategy_id = cc.config.strategy().as_str();
     let descriptor = cc.config.describe();
+    let is_default = cc.is_default;
 
     view! {
         <div class="surface p-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div class="space-y-2 min-w-0">
-                <h3 class="section-title">{name}</h3>
+                <h3 class="section-title flex items-center gap-2">
+                    {name}
+                    {is_default.then(|| view! {
+                        <span class="pill pill-accent text-xs">"default"</span>
+                    })}
+                </h3>
                 <div class="flex gap-1.5 flex-wrap text-sm muted">
                     <span class="pill pill-neutral">{format!("strategy · {strategy_id}")}</span>
                     <span class="pill pill-neutral">{descriptor}</span>
@@ -334,6 +340,7 @@ fn ChunkingFormDialog(
     let (section_cfg, set_section_cfg) = signal(SectionChunkingConfig::default());
     let (bert_cfg, set_bert_cfg) = signal(BertChunkingConfig::default());
     let (llm_cfg, set_llm_cfg) = signal(default_llm());
+    let (is_default, set_is_default) = signal(false);
     let (dialog_error, set_dialog_error) = signal::<Option<String>>(None);
 
     Effect::new(move |_| {
@@ -346,10 +353,12 @@ fn ChunkingFormDialog(
                 set_section_cfg.set(SectionChunkingConfig::default());
                 set_bert_cfg.set(BertChunkingConfig::default());
                 set_llm_cfg.set(default_llm());
+                set_is_default.set(false);
             }
             Some(FormMode::Edit(cc)) => {
                 set_name.set(cc.name);
                 set_strategy.set(cc.config.strategy());
+                set_is_default.set(cc.is_default);
                 match cc.config {
                     ChunkingConfig::Section(c) => set_section_cfg.set(c),
                     ChunkingConfig::Bert(c) => set_bert_cfg.set(c),
@@ -384,11 +393,13 @@ fn ChunkingFormDialog(
                 return;
             }
         }
+        let default_flag = is_default.get();
         let command = match form_mode.get() {
             Some(FormMode::Add) => ChunkingConfigurationCommandDto::CreateChunkingConfiguration(
                 CreateChunkingConfigurationDto {
                     name: name_val,
                     config,
+                    is_default: default_flag,
                 },
             ),
             Some(FormMode::Edit(cc)) => {
@@ -397,6 +408,7 @@ fn ChunkingFormDialog(
                         chunking_configuration_id: cc.chunking_configuration_id,
                         name: name_val,
                         config,
+                        is_default: default_flag,
                     },
                 )
             }
@@ -452,6 +464,15 @@ fn ChunkingFormDialog(
                             .collect::<Vec<_>>()
                     }))
                 />
+
+                <label class="flex items-center gap-2 text-sm">
+                    <input
+                        type="checkbox"
+                        prop:checked=is_default
+                        on:change=move |ev| set_is_default.set(event_target_checked(&ev))
+                    />
+                    <span>"Use as default chunking configuration"</span>
+                </label>
 
                 <div class="flex justify-end gap-2 pt-2">
                     <button type="button" class="btn" disabled=busy on:click=move |_| close.run(())>

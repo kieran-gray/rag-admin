@@ -23,11 +23,9 @@ impl PipelineConfigurationRepository for PostgresPipelineConfigurationRepository
         &self,
     ) -> Result<Vec<PipelineConfigurationReadModel>, PipelineConfigurationRepositoryError> {
         let rows: Vec<PipelineConfigurationRow> = sqlx::query_as(
-            r#"
-            SELECT id, name, embedding_model_id, generation_model_id, vector_index_id
-            FROM pipeline_configurations
-            ORDER BY created_at ASC
-            "#,
+            "SELECT id, name, embedding_model_id, generation_model_id, vector_index_id, is_default
+             FROM pipeline_configurations
+             ORDER BY created_at ASC",
         )
         .fetch_all(&self.pool)
         .await
@@ -41,16 +39,31 @@ impl PipelineConfigurationRepository for PostgresPipelineConfigurationRepository
         id: Uuid,
     ) -> Result<Option<PipelineConfigurationReadModel>, PipelineConfigurationRepositoryError> {
         let row: Option<PipelineConfigurationRow> = sqlx::query_as(
-            r#"
-            SELECT id, name, embedding_model_id, generation_model_id, vector_index_id
-            FROM pipeline_configurations
-            WHERE id = $1
-            "#,
+            "SELECT id, name, embedding_model_id, generation_model_id, vector_index_id, is_default
+             FROM pipeline_configurations
+             WHERE id = $1",
         )
         .bind(id)
         .fetch_optional(&self.pool)
         .await
         .map_err(|e| PipelineConfigurationRepositoryError::Internal(format!("find_by_id: {e}")))?;
+        Ok(row.map(Into::into))
+    }
+
+    async fn find_default(
+        &self,
+    ) -> Result<Option<PipelineConfigurationReadModel>, PipelineConfigurationRepositoryError> {
+        let row: Option<PipelineConfigurationRow> = sqlx::query_as(
+            "SELECT id, name, embedding_model_id, generation_model_id, vector_index_id, is_default
+             FROM pipeline_configurations
+             WHERE is_default = TRUE
+             LIMIT 1",
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| {
+            PipelineConfigurationRepositoryError::Internal(format!("find_default: {e}"))
+        })?;
         Ok(row.map(Into::into))
     }
 
@@ -110,6 +123,39 @@ impl PipelineConfigurationRepository for PostgresPipelineConfigurationRepository
         Ok(())
     }
 
+    async fn set_default(&self, id: Uuid) -> Result<(), PipelineConfigurationRepositoryError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| PipelineConfigurationRepositoryError::Internal(format!("tx: {e}")))?;
+
+        sqlx::query("UPDATE pipeline_configurations SET is_default = FALSE WHERE is_default")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| {
+                PipelineConfigurationRepositoryError::Internal(format!("clear default: {e}"))
+            })?;
+
+        let affected =
+            sqlx::query("UPDATE pipeline_configurations SET is_default = TRUE WHERE id = $1")
+                .bind(id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| {
+                    PipelineConfigurationRepositoryError::Internal(format!("set default: {e}"))
+                })?;
+
+        if affected.rows_affected() == 0 {
+            return Err(PipelineConfigurationRepositoryError::NotFound(id));
+        }
+
+        tx.commit()
+            .await
+            .map_err(|e| PipelineConfigurationRepositoryError::Internal(format!("commit: {e}")))?;
+        Ok(())
+    }
+
     async fn delete(&self, id: Uuid) -> Result<(), PipelineConfigurationRepositoryError> {
         let affected = sqlx::query("DELETE FROM pipeline_configurations WHERE id = $1")
             .bind(id)
@@ -149,6 +195,7 @@ struct PipelineConfigurationRow {
     embedding_model_id: Uuid,
     generation_model_id: Uuid,
     vector_index_id: Uuid,
+    is_default: bool,
 }
 
 impl sqlx::FromRow<'_, sqlx::postgres::PgRow> for PipelineConfigurationRow {
@@ -160,6 +207,7 @@ impl sqlx::FromRow<'_, sqlx::postgres::PgRow> for PipelineConfigurationRow {
             embedding_model_id: row.try_get("embedding_model_id")?,
             generation_model_id: row.try_get("generation_model_id")?,
             vector_index_id: row.try_get("vector_index_id")?,
+            is_default: row.try_get("is_default")?,
         })
     }
 }
@@ -172,6 +220,7 @@ impl From<PipelineConfigurationRow> for PipelineConfigurationReadModel {
             embedding_model_id: row.embedding_model_id,
             generation_model_id: row.generation_model_id,
             vector_index_id: row.vector_index_id,
+            is_default: row.is_default,
         }
     }
 }

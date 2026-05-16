@@ -2,30 +2,36 @@ use leptos::prelude::*;
 use leptos_router::components::A;
 
 use crate::contracts::{aggregate_type, DocumentListItemDto};
-use crate::server_functions::source_document::list_documents_with_status;
+use crate::server_functions::source_document::list_documents;
 use crate::ui::components::event_bus::use_invalidator;
+use crate::ui::components::import_dialog::ImportDialog;
 use crate::ui::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
 
 #[component]
-pub fn PostsListPage() -> impl IntoView {
+pub fn DocumentsPage() -> impl IntoView {
     let invalidator = use_invalidator(|e| {
         e.from_any(&[aggregate_type::SOURCE_DOCUMENT, aggregate_type::INDEXING])
     });
     let docs = Resource::new(
         move || invalidator.get(),
-        |_| async move { list_documents_with_status().await },
+        |_| async move { list_documents().await },
     );
+
+    let (dialog_open, set_dialog_open) = signal(false);
+    let open_signal: Signal<bool> = dialog_open.into();
+    let close_dialog = Callback::new(move |_| set_dialog_open.set(false));
 
     view! {
         <div>
             <PageHeader
                 title="Documents"
-                subtitle="Source documents discovered by the registered adapters.".to_string()
-                actions=Box::new(|| view! {
-
-
-
-                    <button class="btn btn-primary" disabled=true title="Coming soon">
+                subtitle="Documents indexed into your RAG pipelines.".to_string()
+                actions=Box::new(move || view! {
+                    <button
+                        type="button"
+                        class="btn btn-primary"
+                        on:click=move |_| set_dialog_open.set(true)
+                    >
                         "+ Import"
                     </button>
                 }.into_any())
@@ -41,7 +47,16 @@ pub fn PostsListPage() -> impl IntoView {
                         <Surface>
                             <EmptyState
                                 title="No documents yet"
-                                body="Import sources from the upstream blog or another adapter to begin.".to_string()
+                                body="Upload a file, paste a URL, or browse a configured source to begin.".to_string()
+                                action=Box::new(move || view! {
+                                    <button
+                                        type="button"
+                                        class="btn btn-primary"
+                                        on:click=move |_| set_dialog_open.set(true)
+                                    >
+                                        "Import document"
+                                    </button>
+                                }.into_any())
                             />
                         </Surface>
                     }.into_any(),
@@ -53,6 +68,8 @@ pub fn PostsListPage() -> impl IntoView {
                     }.into_any(),
                 })}
             </Suspense>
+
+            <ImportDialog open=open_signal on_close=close_dialog />
         </div>
     }
 }
@@ -125,7 +142,7 @@ fn DocumentRow(doc: DocumentListItemDto) -> impl IntoView {
     let href = format!(
         "/documents/{}/{}",
         doc.document_type.to_lowercase(),
-        doc.source_ref_key,
+        urlencoding::encode(&doc.source_ref_key),
     );
     let (status_label, status_kind) = ingest_status(&doc);
     let version_label = doc
@@ -173,6 +190,9 @@ fn ingest_status(doc: &DocumentListItemDto) -> (String, Status) {
 fn document_type_label(doc_type: &str) -> &'static str {
     match doc_type {
         "BlogPost" => "Blog post",
+        "Markdown" => "Markdown",
+        "PlainText" => "Plain text",
+        "WebPage" => "Web page",
         _ => "Document",
     }
 }

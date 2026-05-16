@@ -9,7 +9,6 @@ use crate::server::application::indexing::ports::vector_index::VectorQuery;
 use crate::server::application::indexing::VectorIndexResolver;
 use crate::server::application::AppError;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
-use crate::server::domain::source_document::version::DocumentMetadata;
 
 const SNIPPET_MAX_CHARS: usize = 320;
 
@@ -41,6 +40,11 @@ impl QueryService {
         }
         let top_k = req.top_k.clamp(1, 50);
         let min_score = req.min_score.clamp(0.0, 1.0);
+        let fetch_k = if req.document_id.is_some() {
+            top_k.saturating_mul(8).clamp(1, 200)
+        } else {
+            top_k
+        };
 
         let pipeline = self
             .pipeline_resolver
@@ -60,7 +64,7 @@ impl QueryService {
         let matches = vector_index
             .query(&VectorQuery {
                 vector: query_vector,
-                top_k,
+                top_k: fetch_k,
                 filter: Vec::new(),
             })
             .await?;
@@ -70,11 +74,19 @@ impl QueryService {
             if m.score < min_score {
                 continue;
             }
+            if hits.len() >= top_k as usize {
+                break;
+            }
             let meta = m.metadata;
             let document_id = meta
                 .get("document_id")
                 .and_then(|v| v.as_str())
                 .and_then(|s| Uuid::parse_str(s).ok());
+            if let Some(filter_id) = req.document_id {
+                if document_id != Some(filter_id) {
+                    continue;
+                }
+            }
             let chunk_id = meta
                 .get("chunk_id")
                 .and_then(|v| v.as_str())
@@ -101,10 +113,8 @@ impl QueryService {
             let (source_ref_key, document_title) = match document_id {
                 Some(doc_id) => match self.source_document_repository.load(doc_id).await? {
                     Some(doc) => {
-                        let title = match &doc.latest_metadata {
-                            DocumentMetadata::BlogPost(m) => m.title.clone(),
-                        };
-                        (Some(doc.source_ref.natural_key().to_string()), Some(title))
+                        let title = doc.latest_metadata.title().to_string();
+                        (Some(doc.source_ref.natural_key()), Some(title))
                     }
                     None => (None, None),
                 },

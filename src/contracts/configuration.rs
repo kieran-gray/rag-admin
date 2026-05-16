@@ -45,6 +45,7 @@ pub struct PipelineConfigurationDto {
     pub generation_model_name: Option<String>,
     pub vector_index_id: Uuid,
     pub vector_index_name: Option<String>,
+    pub is_default: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -52,6 +53,7 @@ pub struct ChunkingConfigurationDto {
     pub chunking_configuration_id: Uuid,
     pub name: String,
     pub config: ChunkingConfig,
+    pub is_default: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

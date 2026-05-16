@@ -47,15 +47,19 @@ impl PipelineConfigurationService {
         validate_non_empty("pipeline configuration name", &dto.name)?;
         self.validate_compatibility(dto.embedding_model_id, dto.vector_index_id)
             .await?;
+        let id = Uuid::new_v4();
         self.repository
             .create(NewPipelineConfiguration {
-                id: Uuid::new_v4(),
+                id,
                 name: dto.name,
                 embedding_model_id: dto.embedding_model_id,
                 generation_model_id: dto.generation_model_id,
                 vector_index_id: dto.vector_index_id,
             })
             .await?;
+        if dto.is_default {
+            self.repository.set_default(id).await?;
+        }
         Ok(())
     }
 
@@ -72,6 +76,11 @@ impl PipelineConfigurationService {
                 vector_index_id: dto.vector_index_id,
             })
             .await?;
+        if dto.is_default {
+            self.repository
+                .set_default(dto.pipeline_configuration_id)
+                .await?;
+        }
         Ok(())
     }
 

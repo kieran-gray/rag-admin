@@ -431,6 +431,7 @@ pub async fn promote_variant_to_chunking_config(
         CreateChunkingConfigurationDto {
             name: chosen_name,
             config: chosen.variant_config,
+            is_default: false,
         },
     );
     chunking_service

@@ -7,6 +7,8 @@ pub struct QueryRequest {
     pub query: String,
     pub top_k: u32,
     pub min_score: f32,
+    #[serde(default)]
+    pub document_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

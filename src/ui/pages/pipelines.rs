@@ -205,10 +205,16 @@ fn PipelineCard(
         .clone()
         .unwrap_or_else(|| short_uuid(pc.vector_index_id));
 
+    let is_default = pc.is_default;
     view! {
         <div class="surface p-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div class="space-y-2 min-w-0">
-                <h3 class="section-title">{name}</h3>
+                <h3 class="section-title flex items-center gap-2">
+                    {name}
+                    {is_default.then(|| view! {
+                        <span class="pill pill-accent text-xs">"default"</span>
+                    })}
+                </h3>
                 <div class="flex gap-1.5 flex-wrap text-sm muted">
                     <span class="pill pill-neutral">{format!("embed · {embedding}")}</span>
                     <span class="pill pill-neutral">{format!("gen · {generation}")}</span>
@@ -252,6 +258,7 @@ fn PipelineFormDialog(
     let (embedding_id, set_embedding_id) = signal::<Option<Uuid>>(None);
     let (generation_id, set_generation_id) = signal::<Option<Uuid>>(None);
     let (vector_index_id, set_vector_index_id) = signal::<Option<Uuid>>(None);
+    let (is_default, set_is_default) = signal(false);
     let (dialog_error, set_dialog_error) = signal::<Option<String>>(None);
 
     Effect::new(move |_| {
@@ -269,12 +276,14 @@ fn PipelineFormDialog(
                     }));
                 set_vector_index_id
                     .set(config.with_value(|c| c.vector_indexes.first().map(|i| i.index_id)));
+                set_is_default.set(false);
             }
             Some(FormMode::Edit(pc)) => {
                 set_name.set(pc.name);
                 set_embedding_id.set(Some(pc.embedding_model_id));
                 set_generation_id.set(Some(pc.generation_model_id));
                 set_vector_index_id.set(Some(pc.vector_index_id));
+                set_is_default.set(pc.is_default);
             }
         }
     });
@@ -301,6 +310,7 @@ fn PipelineFormDialog(
             set_dialog_error.set(Some("Pipeline name is required.".into()));
             return;
         }
+        let default_flag = is_default.get();
         let command = match form_mode.get() {
             Some(FormMode::Add) => PipelineConfigurationCommandDto::CreatePipelineConfiguration(
                 CreatePipelineConfigurationDto {
@@ -308,6 +318,7 @@ fn PipelineFormDialog(
                     embedding_model_id: emb,
                     generation_model_id: gen,
                     vector_index_id: idx,
+                    is_default: default_flag,
                 },
             ),
             Some(FormMode::Edit(pc)) => {
@@ -318,6 +329,7 @@ fn PipelineFormDialog(
                         embedding_model_id: emb,
                         generation_model_id: gen,
                         vector_index_id: idx,
+                        is_default: default_flag,
                     },
                 )
             }
@@ -403,6 +415,15 @@ fn PipelineFormDialog(
                             .collect::<Vec<_>>()
                     }))
                 />
+
+                <label class="flex items-center gap-2 text-sm">
+                    <input
+                        type="checkbox"
+                        prop:checked=is_default
+                        on:change=move |ev| set_is_default.set(event_target_checked(&ev))
+                    />
+                    <span>"Use as default pipeline (one-click indexing uses this)"</span>
+                </label>
 
                 <div class="flex justify-end gap-2 pt-2">
                     <button type="button" class="btn" disabled=busy on:click=move |_| close.run(())>

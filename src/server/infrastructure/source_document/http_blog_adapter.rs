@@ -90,7 +90,14 @@ impl SourceAdapter for HttpBlogAdapter {
     }
 
     async fn fetch(&self, source_ref: &SourceRef) -> Result<FetchedDocument, AppError> {
-        let SourceRef::UpstreamSlug { slug } = source_ref;
+        let slug = match source_ref {
+            SourceRef::UpstreamSlug { slug } => slug,
+            other => {
+                return Err(AppError::Validation(format!(
+                    "blog adapter only supports UpstreamSlug; got {other:?}"
+                )))
+            }
+        };
         let base = self.base_url()?;
         let url = format!("{base}/api/posts/{slug}.json");
         let detail: PostDetailWire = self.get_json(&url).await?;

@@ -8,7 +8,7 @@ trait FromEnv: Sized {
 
 #[derive(Clone)]
 pub struct Config {
-    pub blog_url: String,
+    pub blog_url: Option<String>,
     pub database_url: String,
     pub cloudflare: CloudflareConfig,
     pub ollama: OllamaConfig,
@@ -61,7 +61,7 @@ impl FromEnv for OllamaConfig {
         Ok(Self {
             base_url: Config::parse_optional("OLLAMA_BASE_URL")
                 .unwrap_or_else(|| "http://localhost:11434".into()),
-            num_ctx: Config::parse_optional("OLLAMA_NUM_CTX").unwrap_or(16384),
+            num_ctx: Config::parse_optional("OLLAMA_CONTEXT_LENGTH").unwrap_or(16384),
         })
     }
 }
@@ -82,7 +82,7 @@ impl Config {
             ));
         }
         Ok(Self {
-            blog_url: Self::parse("BLOG_URL")?,
+            blog_url: Self::parse_optional("BLOG_URL"),
             database_url: Self::parse("DATABASE_URL")?,
             cloudflare,
             ollama: OllamaConfig::from_env()?,

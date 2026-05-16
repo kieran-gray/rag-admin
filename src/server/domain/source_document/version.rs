@@ -28,9 +28,35 @@ pub struct BlogPostMetadata {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlainMetadata {
+    pub title: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WebPageMetadata {
+    pub title: String,
+    pub source_url: String,
+    pub fetched_at: Timestamp,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum DocumentMetadata {
     BlogPost(BlogPostMetadata),
+    Markdown(PlainMetadata),
+    PlainText(PlainMetadata),
+    WebPage(WebPageMetadata),
+}
+
+impl DocumentMetadata {
+    pub fn title(&self) -> &str {
+        match self {
+            DocumentMetadata::BlogPost(m) => &m.title,
+            DocumentMetadata::Markdown(m) => &m.title,
+            DocumentMetadata::PlainText(m) => &m.title,
+            DocumentMetadata::WebPage(m) => &m.title,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

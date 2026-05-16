@@ -109,6 +109,60 @@ a:hover {
     border-top-right-radius: var(--radius-1);
 }
 
+/* ── Collapsible card (details/summary) ───────────────────────────────── */
+
+.collapsible-card {
+    padding: 0;
+}
+
+.collapsible-card-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+
+.collapsible-card-summary::-webkit-details-marker {
+    display: none;
+}
+
+.collapsible-card-summary:hover {
+    background-color: var(--color-surface-2);
+}
+
+.collapsible-card[open] .collapsible-card-summary {
+    border-bottom: 1px solid var(--color-border);
+}
+
+.collapsible-card-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.collapsible-card-chevron {
+    display: inline-block;
+    color: var(--color-text-faint);
+    transition: transform 0.15s ease;
+}
+
+.collapsible-card[open] .collapsible-card-chevron {
+    transform: rotate(180deg);
+}
+
+.collapsible-card-body {
+    padding: 1rem;
+}
+
+.collapsible-card .when-open { display: none; }
+.collapsible-card .when-closed { display: inline; }
+.collapsible-card[open] .when-open { display: inline; }
+.collapsible-card[open] .when-closed { display: none; }
+
 /* Legacy classes — preserved during migration. New code uses .surface. */
 .card-outer {
     background-color: var(--color-surface-1);

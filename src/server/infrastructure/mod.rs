@@ -3,6 +3,7 @@ pub mod configuration;
 pub mod embedding;
 pub mod evaluation;
 pub mod event_sourcing;
+pub mod html;
 pub mod http_client;
 pub mod id;
 pub mod indexing;

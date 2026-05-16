@@ -113,6 +113,33 @@ impl IndexingRepository for PostgresIndexingRepository {
 
         rows.into_iter().map(IndexingReadModel::try_from).collect()
     }
+
+    async fn list_for_documents(
+        &self,
+        document_ids: &[Uuid],
+    ) -> Result<Vec<IndexingReadModel>, IndexingRepositoryError> {
+        if document_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let rows: Vec<IndexingRow> = sqlx::query_as(
+            r#"
+            SELECT
+                indexing_id, document_id, pipeline_configuration_id, document_version,
+                chunking_config, chunk_set_id, embedding_set_id, status, failure_stage,
+                attempts, removed, auto_advance
+            FROM indexings
+            WHERE document_id = ANY($1)
+            ORDER BY updated_at DESC
+            "#,
+        )
+        .bind(document_ids)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| IndexingRepositoryError::Internal(format!("list_for_documents: {e}")))?;
+
+        rows.into_iter().map(IndexingReadModel::try_from).collect()
+    }
 }
 
 #[derive(sqlx::FromRow)]

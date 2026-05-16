@@ -10,6 +10,7 @@ use crate::ui::components::shell::AppShell;
 use crate::ui::pages::{
     chunking::ChunkingPage,
     document_detail::{DocumentByIdRedirect, DocumentDetailPage},
+    documents_list::DocumentsPage,
     embed_test::EmbedTestPage,
     evaluations::{
         DatasetDetailPage, EvaluationsPage, OptimizeProgressPage, ReplicateComparePage,
@@ -17,7 +18,6 @@ use crate::ui::pages::{
     },
     pipelines::PipelinesPage,
     playground::PlaygroundPage,
-    posts_list::PostsListPage,
     settings::SettingsPage,
 };
 
@@ -51,7 +51,7 @@ pub fn App() -> impl IntoView {
         <Router>
             <AppShell>
                 <Routes fallback=|| view! { <p class="p-8 muted">"Page not found."</p> }>
-                    <Route path=StaticSegment("") view=PostsListPage />
+                    <Route path=StaticSegment("") view=DocumentsPage />
                     <Route
                         path=(
                             StaticSegment("documents"),

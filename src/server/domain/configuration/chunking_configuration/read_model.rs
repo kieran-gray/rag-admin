@@ -8,4 +8,5 @@ pub struct ChunkingConfigurationReadModel {
     pub chunking_configuration_id: Uuid,
     pub name: String,
     pub config: ChunkingConfig,
+    pub is_default: bool,
 }

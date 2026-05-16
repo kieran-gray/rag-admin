@@ -68,6 +68,7 @@ pub struct CreatePipelineConfigurationDto {
     pub embedding_model_id: Uuid,
     pub generation_model_id: Uuid,
     pub vector_index_id: Uuid,
+    pub is_default: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,6 +78,7 @@ pub struct UpdatePipelineConfigurationDto {
     pub embedding_model_id: Uuid,
     pub generation_model_id: Uuid,
     pub vector_index_id: Uuid,
+    pub is_default: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -88,6 +90,7 @@ pub struct DeletePipelineConfigurationDto {
 pub struct CreateChunkingConfigurationDto {
     pub name: String,
     pub config: ChunkingConfig,
+    pub is_default: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -95,6 +98,7 @@ pub struct UpdateChunkingConfigurationDto {
     pub chunking_configuration_id: Uuid,
     pub name: String,
     pub config: ChunkingConfig,
+    pub is_default: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

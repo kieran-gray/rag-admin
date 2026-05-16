@@ -442,7 +442,7 @@ impl IndexingEffectExecutor {
             .load(document_id)
             .await?
             .ok_or_else(|| AppError::NotFound(format!("document {document_id}")))?;
-        let post_slug = document.source_ref.natural_key().to_string();
+        let post_slug = document.source_ref.natural_key();
         let post_version = document_version.to_string();
 
         let doc_id_hex = uuid_hex(document_id);
