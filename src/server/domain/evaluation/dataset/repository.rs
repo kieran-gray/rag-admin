@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::server::domain::evaluation::question::EvaluationQuestion;
 
 use super::read_model::{EvaluationDatasetReadModel, NewDatasetSummary};
+use crate::server::event_sourcing::error::ProjectionError;
 
 #[derive(Debug, Error)]
 pub enum EvaluationDatasetRepositoryError {
@@ -68,4 +69,10 @@ pub trait EvaluationDatasetRepository: Send + Sync {
     ) -> Result<(), EvaluationDatasetRepositoryError>;
 
     async fn mark_deleted(&self, dataset_id: Uuid) -> Result<(), EvaluationDatasetRepositoryError>;
+}
+
+impl From<EvaluationDatasetRepositoryError> for ProjectionError {
+    fn from(value: EvaluationDatasetRepositoryError) -> Self {
+        Self::Storage(value.to_string())
+    }
 }

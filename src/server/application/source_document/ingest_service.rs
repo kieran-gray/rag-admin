@@ -6,10 +6,11 @@ use uuid::Uuid;
 use crate::contracts::SourceDocumentDto;
 use crate::core::ChunkingConfig;
 use crate::server::application::configuration::PipelineResolver;
-use crate::server::application::ports::{Clock, HtmlToMarkdown, IdGenerator};
+use crate::server::application::ports::{Clock, HtmlToMarkdown, HttpClient, IdGenerator};
 use crate::server::application::AppError;
-use crate::server::domain::indexing::aggregate::Indexing;
-use crate::server::domain::indexing::commands::{IndexingCommand, RequestIngest};
+use crate::server::domain::indexing::commands::{
+    IndexingCommand, RequestIngest, RequeueChunking, RequeueEmbedding, RequeueIndexing,
+};
 use crate::server::domain::source_document::commands::{
     AddVersion, CreateDocument, NewVersion, SourceDocumentCommand,
 };
@@ -19,15 +20,12 @@ use crate::server::domain::source_document::source_ref::SourceRef;
 use crate::server::domain::source_document::version::{
     ContentHash, DocumentMetadata, PlainMetadata, WebPageMetadata,
 };
-use crate::server::infrastructure::http_client::ReqwestHttpClient;
 
 use super::{
     command_handler::SourceDocumentCommandHandler,
     ports::{BlobStore, SourceAdapterRegistry},
 };
 use crate::server::application::indexing::command_handler::IndexingCommandHandler;
-use reqwest::header::HeaderMap;
-use reqwest::Method;
 
 pub struct SourceDocumentIngestServiceDeps {
     pub source_document_command_handler: Arc<SourceDocumentCommandHandler>,
@@ -36,7 +34,7 @@ pub struct SourceDocumentIngestServiceDeps {
     pub blob_store: Arc<dyn BlobStore>,
     pub source_adapter_registry: Arc<SourceAdapterRegistry>,
     pub pipeline_resolver: Arc<PipelineResolver>,
-    pub http_client: Arc<ReqwestHttpClient>,
+    pub http_client: Arc<dyn HttpClient>,
     pub html_to_markdown: Arc<dyn HtmlToMarkdown>,
     pub clock: Arc<dyn Clock>,
     pub id_generator: Arc<dyn IdGenerator>,
@@ -49,7 +47,7 @@ pub struct SourceDocumentIngestService {
     blob_store: Arc<dyn BlobStore>,
     source_adapter_registry: Arc<SourceAdapterRegistry>,
     pipeline_resolver: Arc<PipelineResolver>,
-    http_client: Arc<ReqwestHttpClient>,
+    http_client: Arc<dyn HttpClient>,
     html_to_markdown: Arc<dyn HtmlToMarkdown>,
     clock: Arc<dyn Clock>,
     id_generator: Arc<dyn IdGenerator>,
@@ -121,10 +119,7 @@ impl SourceDocumentIngestService {
             return Err(AppError::Validation("url is empty".into()));
         }
 
-        let (status, body) = self
-            .http_client
-            .request_text(Method::GET, &url, HeaderMap::new(), None)
-            .await?;
+        let (status, body) = self.http_client.get_text(&url).await?;
         if !(200..300).contains(&status) {
             return Err(AppError::Upstream(format!("GET {url} returned {status}")));
         }
@@ -236,10 +231,9 @@ impl SourceDocumentIngestService {
 
         let occurred_at = self.clock.now();
         let request_id = self.id_generator.new_uuid();
-        let indexing_id = Indexing::compute_id(document.document_id, pipeline_configuration_id);
 
         self.indexing_command_handler
-            .handle(IndexingCommand::RequestIngest(RequestIngest {
+            .request_ingest(RequestIngest {
                 document_id: document.document_id,
                 pipeline_configuration_id,
                 document_version: document.latest_version_number,
@@ -247,21 +241,17 @@ impl SourceDocumentIngestService {
                 request_id,
                 auto_advance,
                 occurred_at,
-            }))
-            .await?;
-
-        Ok(indexing_id)
+            })
+            .await
     }
 
     pub async fn requeue_chunking(&self, indexing_id: Uuid) -> Result<(), AppError> {
         self.indexing_command_handler
             .handle_for(
                 indexing_id,
-                IndexingCommand::RequeueChunking(
-                    crate::server::domain::indexing::commands::RequeueChunking {
-                        occurred_at: self.clock.now(),
-                    },
-                ),
+                IndexingCommand::RequeueChunking(RequeueChunking {
+                    occurred_at: self.clock.now(),
+                }),
             )
             .await
     }
@@ -270,11 +260,9 @@ impl SourceDocumentIngestService {
         self.indexing_command_handler
             .handle_for(
                 indexing_id,
-                IndexingCommand::RequeueEmbedding(
-                    crate::server::domain::indexing::commands::RequeueEmbedding {
-                        occurred_at: self.clock.now(),
-                    },
-                ),
+                IndexingCommand::RequeueEmbedding(RequeueEmbedding {
+                    occurred_at: self.clock.now(),
+                }),
             )
             .await
     }
@@ -283,11 +271,9 @@ impl SourceDocumentIngestService {
         self.indexing_command_handler
             .handle_for(
                 indexing_id,
-                IndexingCommand::RequeueIndexing(
-                    crate::server::domain::indexing::commands::RequeueIndexing {
-                        occurred_at: self.clock.now(),
-                    },
-                ),
+                IndexingCommand::RequeueIndexing(RequeueIndexing {
+                    occurred_at: self.clock.now(),
+                }),
             )
             .await
     }

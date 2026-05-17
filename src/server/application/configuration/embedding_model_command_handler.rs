@@ -3,7 +3,8 @@ use std::sync::Arc;
 use crate::contracts::EmbeddingModelCommandDto;
 use crate::server::application::AppError;
 use crate::server::domain::configuration::embedding_model::{
-    EmbeddingModelCatalog, EmbeddingModelCatalogCommand,
+    AddEmbeddingModel, EmbeddingModelCatalog, EmbeddingModelCatalogCommand, RemoveEmbeddingModel,
+    UpdateEmbeddingModel,
 };
 use crate::server::event_sourcing::CommandProcessor;
 
@@ -24,7 +25,31 @@ impl EmbeddingModelCatalogCommandHandler {
     }
 
     pub async fn handle_dto(&self, command: EmbeddingModelCommandDto) -> Result<(), AppError> {
-        self.handle(EmbeddingModelCatalogCommand::from_dto(command))
-            .await
+        self.handle(from_dto(command)).await
+    }
+}
+
+fn from_dto(dto: EmbeddingModelCommandDto) -> EmbeddingModelCatalogCommand {
+    match dto {
+        EmbeddingModelCommandDto::AddEmbeddingModel(d) => {
+            EmbeddingModelCatalogCommand::AddEmbeddingModel(AddEmbeddingModel {
+                kind: d.kind,
+                model: d.model,
+                dimensions: d.dimensions,
+            })
+        }
+        EmbeddingModelCommandDto::UpdateEmbeddingModel(d) => {
+            EmbeddingModelCatalogCommand::UpdateEmbeddingModel(UpdateEmbeddingModel {
+                model_id: d.model_id,
+                kind: d.kind,
+                model: d.model,
+                dimensions: d.dimensions,
+            })
+        }
+        EmbeddingModelCommandDto::RemoveEmbeddingModel(d) => {
+            EmbeddingModelCatalogCommand::RemoveEmbeddingModel(RemoveEmbeddingModel {
+                model_id: d.model_id,
+            })
+        }
     }
 }

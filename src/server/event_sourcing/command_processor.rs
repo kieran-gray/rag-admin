@@ -3,11 +3,10 @@ use std::sync::Arc;
 use tracing::{debug, info};
 use uuid::Uuid;
 
-use crate::server::application::AppError;
-
 use super::aggregate::Aggregate;
 use super::aggregate_repository::AggregateRepository;
 use super::envelope::EventEnvelope;
+use super::error::{CommandError, EsError};
 
 const SNAPSHOT_AFTER_EVENTS: usize = 16;
 
@@ -21,7 +20,6 @@ where
 impl<A> CommandProcessor<A>
 where
     A: Aggregate,
-    AppError: From<A::Error>,
 {
     pub fn new(repository: Arc<AggregateRepository<A>>) -> Self {
         Self { repository }
@@ -31,7 +29,7 @@ where
         &self,
         stream_id: Uuid,
         command: A::Command,
-    ) -> Result<Vec<EventEnvelope<A::Event>>, AppError> {
+    ) -> Result<Vec<EventEnvelope<A::Event>>, CommandError<A::Error>> {
         let loaded = self.repository.load(stream_id).await?;
         let (state_ref, expected_version, prior_tail) = match &loaded {
             Some(l) => (
@@ -42,7 +40,7 @@ where
             None => (None, 0, 0),
         };
 
-        let new_events = A::handle_command(state_ref, command).map_err(AppError::from)?;
+        let new_events = A::handle_command(state_ref, command).map_err(CommandError::Aggregate)?;
         if new_events.is_empty() {
             debug!(
                 aggregate = A::aggregate_type(),
@@ -79,10 +77,10 @@ where
                 state
             }
             None => A::from_events(&new_events).ok_or_else(|| {
-                AppError::Internal(format!(
+                CommandError::EventStore(EsError::Storage(format!(
                     "aggregate {} produced events without a valid creation event",
                     A::aggregate_type()
-                ))
+                )))
             })?,
         };
 

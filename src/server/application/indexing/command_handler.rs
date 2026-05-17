@@ -3,7 +3,10 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::server::application::AppError;
-use crate::server::domain::indexing::{aggregate::Indexing, commands::IndexingCommand};
+use crate::server::domain::indexing::{
+    aggregate::Indexing,
+    commands::{IndexingCommand, RequestIngest},
+};
 use crate::server::event_sourcing::CommandProcessor;
 
 pub struct IndexingCommandHandler {
@@ -15,17 +18,13 @@ impl IndexingCommandHandler {
         Arc::new(Self { processor })
     }
 
-    pub async fn handle(&self, command: IndexingCommand) -> Result<(), AppError> {
-        let stream_id = match &command {
-            IndexingCommand::RequestIngest(cmd) => {
-                Indexing::compute_id(cmd.document_id, cmd.pipeline_configuration_id)
-            }
-            _ => panic!(
-                "stage-completion commands must be dispatched via handle_for(aggregate_id, command)"
-            ),
-        };
-        self.processor.handle(stream_id, command).await?;
-        Ok(())
+    pub async fn request_ingest(&self, command: RequestIngest) -> Result<Uuid, AppError> {
+        let stream_id =
+            Indexing::compute_id(command.document_id, command.pipeline_configuration_id);
+        self.processor
+            .handle(stream_id, IndexingCommand::RequestIngest(command))
+            .await?;
+        Ok(stream_id)
     }
 
     pub async fn handle_for(

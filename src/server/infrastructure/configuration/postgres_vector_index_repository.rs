@@ -3,9 +3,11 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::catalog::VectorStoreKind;
+use crate::server::domain::configuration::catalog::CatalogRepository;
 use crate::server::domain::configuration::vector_index::{
     VectorIndex, VectorIndexRepository, VectorIndexRepositoryError,
 };
+use crate::server::event_sourcing::error::ProjectionError;
 
 pub struct PostgresVectorIndexRepository {
     pool: PgPool,
@@ -14,6 +16,40 @@ pub struct PostgresVectorIndexRepository {
 impl PostgresVectorIndexRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
+    }
+}
+
+#[async_trait]
+impl CatalogRepository<VectorIndex> for PostgresVectorIndexRepository {
+    async fn upsert(&self, index: VectorIndex) -> Result<(), ProjectionError> {
+        sqlx::query(
+            r#"
+            INSERT INTO vector_indexes (id, kind, name, dimensions)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (id) DO UPDATE SET
+                kind       = $2,
+                name       = $3,
+                dimensions = $4,
+                updated_at = NOW()
+            "#,
+        )
+        .bind(index.index_id)
+        .bind(index.kind.as_str())
+        .bind(&index.name)
+        .bind(index.dimensions as i32)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| ProjectionError::Storage(format!("save: {e}")))?;
+        Ok(())
+    }
+
+    async fn delete(&self, index_id: Uuid) -> Result<(), ProjectionError> {
+        sqlx::query("DELETE FROM vector_indexes WHERE id = $1")
+            .bind(index_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| ProjectionError::Storage(format!("delete: {e}")))?;
+        Ok(())
     }
 }
 
@@ -44,37 +80,6 @@ impl VectorIndexRepository for PostgresVectorIndexRepository {
                 .await
                 .map_err(|e| VectorIndexRepositoryError::Internal(format!("find_by_id: {e}")))?;
         Ok(row.map(Into::into))
-    }
-
-    async fn save(&self, index: VectorIndex) -> Result<(), VectorIndexRepositoryError> {
-        sqlx::query(
-            r#"
-            INSERT INTO vector_indexes (id, kind, name, dimensions)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (id) DO UPDATE SET
-                kind       = $2,
-                name       = $3,
-                dimensions = $4,
-                updated_at = NOW()
-            "#,
-        )
-        .bind(index.index_id)
-        .bind(index.kind.as_str())
-        .bind(&index.name)
-        .bind(index.dimensions as i32)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| VectorIndexRepositoryError::Internal(format!("save: {e}")))?;
-        Ok(())
-    }
-
-    async fn delete(&self, index_id: Uuid) -> Result<(), VectorIndexRepositoryError> {
-        sqlx::query("DELETE FROM vector_indexes WHERE id = $1")
-            .bind(index_id)
-            .execute(&self.pool)
-            .await
-            .map_err(|e| VectorIndexRepositoryError::Internal(format!("delete: {e}")))?;
-        Ok(())
     }
 }
 

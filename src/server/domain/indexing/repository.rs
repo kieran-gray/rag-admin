@@ -2,6 +2,8 @@ use async_trait::async_trait;
 use thiserror::Error;
 use uuid::Uuid;
 
+use crate::server::event_sourcing::error::ProjectionError;
+
 use super::read_model::IndexingReadModel;
 
 #[derive(Debug, Error)]
@@ -28,4 +30,10 @@ pub trait IndexingRepository: Send + Sync {
         &self,
         document_ids: &[Uuid],
     ) -> Result<Vec<IndexingReadModel>, IndexingRepositoryError>;
+}
+
+impl From<IndexingRepositoryError> for ProjectionError {
+    fn from(value: IndexingRepositoryError) -> Self {
+        Self::Storage(value.to_string())
+    }
 }

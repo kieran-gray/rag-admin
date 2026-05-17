@@ -3,6 +3,66 @@ use uuid::Uuid;
 
 use crate::contracts::events::{aggregate as aggregate_type, PublishedEvent};
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActivityJobDto {
+    pub stream_id: Uuid,
+    pub aggregate_type: String,
+    pub kind: ActivityKind,
+    pub label: String,
+    pub status: ActivityStatus,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+    pub stream_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ActivityKind {
+    Indexing,
+    EvaluationDataset,
+    EvaluationRun,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ActivityStatus {
+    Running,
+    Completed,
+    Failed,
+}
+
+impl ActivityStatus {
+    pub fn is_terminal(self) -> bool {
+        matches!(self, ActivityStatus::Completed | ActivityStatus::Failed)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ActivityDelta {
+    Start(ActivityStart),
+    Complete {
+        stream_id: Uuid,
+        occurred_at: String,
+    },
+    Fail {
+        stream_id: Uuid,
+        occurred_at: String,
+    },
+    Remove {
+        stream_id: Uuid,
+    },
+    Refresh {
+        stream_id: Uuid,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct ActivityStart {
+    pub stream_id: Uuid,
+    pub aggregate_type: String,
+    pub kind: ActivityKind,
+    pub label: String,
+    pub started_at: String,
+}
+
 pub fn classify(
     stream_id: Uuid,
     aggregate_type_str: &str,
@@ -101,66 +161,6 @@ pub fn classify(
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ActivityJobDto {
-    pub stream_id: Uuid,
-    pub aggregate_type: String,
-    pub kind: ActivityKind,
-    pub label: String,
-    pub status: ActivityStatus,
-    pub started_at: String,
-    pub finished_at: Option<String>,
-    pub stream_url: Option<String>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ActivityKind {
-    Indexing,
-    EvaluationDataset,
-    EvaluationRun,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ActivityStatus {
-    Running,
-    Completed,
-    Failed,
-}
-
-impl ActivityStatus {
-    pub fn is_terminal(self) -> bool {
-        matches!(self, ActivityStatus::Completed | ActivityStatus::Failed)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum ActivityDelta {
-    Start(ActivityStart),
-    Complete {
-        stream_id: Uuid,
-        occurred_at: String,
-    },
-    Fail {
-        stream_id: Uuid,
-        occurred_at: String,
-    },
-    Remove {
-        stream_id: Uuid,
-    },
-    Refresh {
-        stream_id: Uuid,
-    },
-}
-
-#[derive(Debug, Clone)]
-pub struct ActivityStart {
-    pub stream_id: Uuid,
-    pub aggregate_type: String,
-    pub kind: ActivityKind,
-    pub label: String,
-    pub started_at: String,
-}
-
 pub fn classify_event(event: &PublishedEvent) -> Option<ActivityDelta> {
     classify(
         event.stream_id,
@@ -183,7 +183,6 @@ fn event_payload(event_data: &serde_json::Value) -> &serde_json::Value {
 mod tests {
     use super::*;
     use serde_json::json;
-    use uuid::Uuid;
 
     fn stream_id() -> Uuid {
         Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap()

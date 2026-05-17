@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::server::application::AppError;
 use crate::server::event_sourcing::envelope::EventEnvelope;
+use crate::server::event_sourcing::error::ProjectionError;
 use crate::server::event_sourcing::projector::Projector;
 
 use super::events::IndexingEvent;
@@ -29,7 +29,10 @@ impl Projector<IndexingEvent> for IndexingProjector {
         Self::NAME
     }
 
-    async fn project(&self, events: &[EventEnvelope<IndexingEvent>]) -> Result<(), AppError> {
+    async fn project(
+        &self,
+        events: &[EventEnvelope<IndexingEvent>],
+    ) -> Result<(), ProjectionError> {
         for envelope in events {
             let indexing_id = envelope.metadata.stream_id;
             match &envelope.event {
@@ -116,7 +119,7 @@ impl Projector<IndexingEvent> for IndexingProjector {
 }
 
 impl IndexingProjector {
-    async fn update<F>(&self, indexing_id: uuid::Uuid, mutate: F) -> Result<(), AppError>
+    async fn update<F>(&self, indexing_id: uuid::Uuid, mutate: F) -> Result<(), ProjectionError>
     where
         F: FnOnce(&mut IndexingReadModel),
     {

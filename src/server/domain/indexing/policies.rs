@@ -1,10 +1,10 @@
-use crate::server::application::indexing::effects::{
-    ExecuteChunkingEffect, ExecuteEmbeddingEffect, ExecuteIndexingEffect, IndexingEffect,
-};
 use crate::server::event_sourcing::envelope::EventEnvelope;
 use crate::server::event_sourcing::job_queue::{IdempotencyKey, NewJob};
 
 use super::aggregate::Indexing;
+use super::effects::{
+    ExecuteChunkingEffect, ExecuteEmbeddingEffect, ExecuteIndexingEffect, IndexingEffect,
+};
 use super::events::IndexingEvent;
 
 const CHUNKING: &str = "execute_chunking";

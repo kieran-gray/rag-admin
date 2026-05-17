@@ -2,7 +2,10 @@ use async_trait::async_trait;
 use thiserror::Error;
 use uuid::Uuid;
 
+use crate::server::domain::configuration::catalog::CatalogRepository;
+
 use super::entity::GenerationModel;
+use crate::server::event_sourcing::error::ProjectionError;
 
 #[derive(Debug, Error)]
 pub enum GenerationModelRepositoryError {
@@ -11,15 +14,17 @@ pub enum GenerationModelRepositoryError {
 }
 
 #[async_trait]
-pub trait GenerationModelRepository: Send + Sync {
+pub trait GenerationModelRepository: CatalogRepository<GenerationModel> {
     async fn load_all(&self) -> Result<Vec<GenerationModel>, GenerationModelRepositoryError>;
 
     async fn find_by_id(
         &self,
         model_id: Uuid,
     ) -> Result<Option<GenerationModel>, GenerationModelRepositoryError>;
+}
 
-    async fn save(&self, model: GenerationModel) -> Result<(), GenerationModelRepositoryError>;
-
-    async fn delete(&self, model_id: Uuid) -> Result<(), GenerationModelRepositoryError>;
+impl From<GenerationModelRepositoryError> for ProjectionError {
+    fn from(value: GenerationModelRepositoryError) -> Self {
+        Self::Storage(value.to_string())
+    }
 }

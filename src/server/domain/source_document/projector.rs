@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::server::application::AppError;
 use crate::server::event_sourcing::envelope::EventEnvelope;
+use crate::server::event_sourcing::error::ProjectionError;
 use crate::server::event_sourcing::projector::Projector;
 
 use super::events::SourceDocumentEvent;
@@ -28,7 +28,10 @@ impl Projector<SourceDocumentEvent> for SourceDocumentProjector {
         Self::NAME
     }
 
-    async fn project(&self, events: &[EventEnvelope<SourceDocumentEvent>]) -> Result<(), AppError> {
+    async fn project(
+        &self,
+        events: &[EventEnvelope<SourceDocumentEvent>],
+    ) -> Result<(), ProjectionError> {
         for envelope in events {
             let document_id = envelope.metadata.stream_id;
             match &envelope.event {
@@ -57,7 +60,7 @@ impl Projector<SourceDocumentEvent> for SourceDocumentProjector {
                                 })
                                 .next_back()
                                 .ok_or_else(|| {
-                                    AppError::Internal(format!(
+                                    ProjectionError::Storage(format!(
                                         "VersionAdded for {document_id} without prior DocumentCreated"
                                     ))
                                 })?;

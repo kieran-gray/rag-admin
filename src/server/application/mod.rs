@@ -17,4 +17,6 @@ pub mod test_support;
 
 pub use activity::{spawn_activity_projection, ActivityRegistry};
 pub use exceptions::AppError;
-pub use job::{InternalLogEvent, InternalLogLevel, Job, JobMessage, JobRegistry};
+pub use job::{
+    InternalLogEvent, InternalLogLevel, Job, JobIdStrategy, JobMessage, JobRegistry, JobSession,
+};

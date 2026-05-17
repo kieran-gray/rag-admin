@@ -10,22 +10,23 @@ use crate::server::application::evaluation::scoring::{
     PreparedVariant, QuestionSubset, RunContext, TrialScorer,
 };
 use crate::server::application::ports::Clock;
-use crate::server::application::{ActivityRegistry, AppError, InternalLogEvent, Job, JobRegistry};
+use crate::server::application::{
+    ActivityRegistry, AppError, InternalLogEvent, Job, JobIdStrategy, JobRegistry, JobSession,
+};
 use crate::server::domain::evaluation::run::aggregate::EvaluationRun;
 use crate::server::domain::evaluation::run::commands::{
-    CompleteRun, EvaluationRunCommand, MarkVariantPrepared, ScoreVariant,
+    CompleteRun, EvaluationRunCommand, FailRun, MarkVariantPrepared, ScoreVariant,
 };
 use crate::server::domain::evaluation::run::events::RetrievalTraceEntry;
 use crate::server::domain::evaluation::split::{split_questions, DatasetSplit};
 use crate::server::event_sourcing::command_processor::CommandProcessor;
 
-use super::run::ExecuteRunEffect;
-use super::run_session::RunSession;
+use crate::server::domain::evaluation::run::effects::ExecuteRunEffect;
 
 pub struct EvaluationRunEffectExecutor {
     trial_scorer: Arc<TrialScorer>,
     command_processor: Arc<CommandProcessor<EvaluationRun>>,
-    session: RunSession,
+    session: JobSession<EvaluationRun>,
     clock: Arc<dyn Clock>,
 }
 struct ScoredCombo {
@@ -84,7 +85,7 @@ impl EvaluationRunEffectExecutor {
         activity_registry: Arc<ActivityRegistry>,
         clock: Arc<dyn Clock>,
     ) -> Arc<Self> {
-        let session = RunSession::new(
+        let session = JobSession::new(
             job_registry,
             activity_registry,
             Arc::clone(&command_processor),
@@ -99,10 +100,22 @@ impl EvaluationRunEffectExecutor {
     }
 
     pub(crate) async fn run(&self, effect: &ExecuteRunEffect) -> Result<(), AppError> {
+        let run_id = effect.run_id;
+        let clock_for_fail = Arc::clone(&self.clock);
         self.session
-            .run(effect.run_id, "Evaluation run failed", |job| {
-                self.run_inner(effect, job)
-            })
+            .run(
+                run_id,
+                JobIdStrategy::Fresh,
+                "Evaluation run failed",
+                move |reason| {
+                    EvaluationRunCommand::FailRun(FailRun {
+                        run_id,
+                        reason,
+                        occurred_at: clock_for_fail.now(),
+                    })
+                },
+                |job| self.run_inner(effect, job),
+            )
             .await
     }
 

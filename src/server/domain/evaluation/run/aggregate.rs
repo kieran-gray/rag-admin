@@ -100,16 +100,46 @@ impl EvaluationRun {
         autotune_request: Option<&EvaluationAutotuneRequest>,
         optimization: Option<&OptimizationConfig>,
     ) -> Uuid {
-        let key = serde_json::to_string(&(
-            dataset_id,
-            pipeline_configuration_id,
-            variants,
-            options,
-            autotune_request,
-            optimization,
-        ))
-        .unwrap_or_default();
-        Uuid::new_v5(&EVAL_RUN_NAMESPACE, key.as_bytes())
+        use sha2::{Digest, Sha256};
+
+        let mut hasher = Sha256::new();
+        hasher.update(b"v1|");
+        hasher.update(dataset_id.as_bytes());
+        hasher.update(b"|");
+        hasher.update(pipeline_configuration_id.as_bytes());
+
+        hasher.update(b"|variants=");
+        hasher.update((variants.len() as u32).to_le_bytes());
+        for v in variants {
+            hash_str(&mut hasher, &v.label);
+            hash_chunking_config(&mut hasher, &v.config);
+        }
+
+        hasher.update(b"|options=");
+        hasher.update((options.len() as u32).to_le_bytes());
+        for o in options {
+            hash_run_options(&mut hasher, o);
+        }
+
+        hasher.update(b"|autotune=");
+        if let Some(a) = autotune_request {
+            hasher.update(b"some");
+            hasher.update(a.holdout_top_n.to_le_bytes());
+            hasher.update(a.tuning_fraction_milli.to_le_bytes());
+        } else {
+            hasher.update(b"none");
+        }
+
+        hasher.update(b"|opt=");
+        if let Some(o) = optimization {
+            hasher.update(b"some");
+            hash_optimization(&mut hasher, o);
+        } else {
+            hasher.update(b"none");
+        }
+
+        let digest = hasher.finalize();
+        Uuid::new_v5(&EVAL_RUN_NAMESPACE, &digest)
     }
 
     fn from_requested(e: &RunRequested) -> Self {
@@ -404,6 +434,77 @@ impl Aggregate for EvaluationRun {
         }
 
         state
+    }
+}
+
+fn hash_str(hasher: &mut sha2::Sha256, s: &str) {
+    use sha2::Digest;
+    hasher.update((s.len() as u32).to_le_bytes());
+    hasher.update(s.as_bytes());
+}
+
+fn hash_chunking_config(hasher: &mut sha2::Sha256, config: &crate::core::ChunkingConfig) {
+    use crate::core::ChunkingConfig::*;
+    use sha2::Digest;
+    match config {
+        Bert(c) => {
+            hasher.update(b"bert|");
+            hasher.update(c.target_tokens.to_le_bytes());
+            hasher.update(c.overlap_tokens.to_le_bytes());
+            hasher.update(c.min_tokens.to_le_bytes());
+        }
+        Section(c) => {
+            hasher.update(b"section|");
+            hasher.update(c.max_section_tokens.to_le_bytes());
+        }
+        Llm(c) => {
+            hasher.update(b"llm|");
+            hasher.update(c.target_tokens.to_le_bytes());
+            hasher.update(c.micro_chunk_tokens.to_le_bytes());
+            hasher.update(c.generation_model_id.as_bytes());
+        }
+        Darn(c) => {
+            hasher.update(b"darn|");
+            hasher.update(c.max_chunk_size.to_le_bytes());
+            hasher.update(c.overlap.to_le_bytes());
+            let g: u8 = match c.granularity {
+                crate::core::DarnGranularity::Characters => 0,
+                crate::core::DarnGranularity::Tokens => 1,
+            };
+            hasher.update([g]);
+        }
+    }
+}
+
+fn hash_run_options(hasher: &mut sha2::Sha256, o: &EvaluationRunOptions) {
+    use sha2::Digest;
+    hasher.update(o.top_k.to_le_bytes());
+    hasher.update(o.min_score_milli.to_le_bytes());
+}
+
+fn hash_optimization(hasher: &mut sha2::Sha256, o: &OptimizationConfig) {
+    use sha2::Digest;
+    let budget: u8 = match o.budget {
+        OptimizationBudget::Quick => 0,
+        OptimizationBudget::Thorough => 1,
+        OptimizationBudget::Exhaustive => 2,
+    };
+    hasher.update([budget]);
+    let scope: u8 = match o.scope {
+        crate::core::OptimizationScope::Chunking => 0,
+        crate::core::OptimizationScope::Retrieval => 1,
+        crate::core::OptimizationScope::Both => 2,
+    };
+    hasher.update([scope]);
+    hasher.update([o.judges_enabled as u8]);
+    match o.seed {
+        Some(s) => {
+            hasher.update(b"s");
+            hasher.update(s.to_le_bytes());
+        }
+        None => {
+            hasher.update(b"n");
+        }
     }
 }
 
@@ -757,7 +858,7 @@ mod tests {
     }
 
     #[test]
-    fn compute_id_canonical_json_is_locked() {
+    fn compute_id_golden_value_is_locked() {
         let dataset_id = uuid::uuid!("00000000-0000-0000-0000-000000000001");
         let pipeline_id = uuid::uuid!("00000000-0000-0000-0000-000000000002");
         let variants = vec![ChunkingVariant {
@@ -766,25 +867,14 @@ mod tests {
         }];
         let options = vec![EvaluationRunOptions::default()];
 
-        let expected_json = r#"["00000000-0000-0000-0000-000000000001","00000000-0000-0000-0000-000000000002",[{"label":"section-512","config":{"section":{"max_section_tokens":512}}}],[{"top_k":5,"min_score_milli":0}],null,null]"#;
-        let actual_json = serde_json::to_string(&(
-            dataset_id,
-            pipeline_id,
-            &variants,
-            &options,
-            Option::<&crate::core::EvaluationAutotuneRequest>::None,
-            Option::<&OptimizationConfig>::None,
-        ))
-        .unwrap();
-        assert_eq!(
-            actual_json, expected_json,
-            "compute_id JSON payload changed — run IDs will fork"
-        );
-
         let id =
             EvaluationRun::compute_id(dataset_id, pipeline_id, &variants, &options, None, None);
-        let expected_id = uuid::Uuid::new_v5(&EVAL_RUN_NAMESPACE, expected_json.as_bytes());
-        assert_eq!(id, expected_id);
+        let expected = uuid::uuid!("71536527-21ed-52b7-aeb7-2be97f45516f");
+        assert_eq!(
+            id, expected,
+            "compute_id algorithm changed — existing run IDs will fork. \
+             Update this expected UUID only if that is intentional."
+        );
     }
 
     #[test]

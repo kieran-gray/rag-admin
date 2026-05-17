@@ -1,5 +1,6 @@
 pub mod aggregate;
 pub mod commands;
+pub mod effects;
 pub mod events;
 pub mod exceptions;
 pub mod policies;

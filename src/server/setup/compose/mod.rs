@@ -19,6 +19,9 @@ use crate::server::application::configuration::{
 };
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::evaluation::query_service::EvaluationQueryService;
+use crate::server::application::evaluation::{
+    EvaluationDatasetCommandHandler, EvaluationRunCommandHandler,
+};
 use crate::server::application::indexing::VectorIndexResolver;
 use crate::server::application::llm::GenerationService;
 use crate::server::application::ports::{Clock, IdGenerator};
@@ -28,9 +31,6 @@ use crate::server::application::source_document::{
     SourceDocumentIngestService, SourceDocumentQueryService,
 };
 use crate::server::application::{ActivityRegistry, JobRegistry};
-use crate::server::domain::evaluation::dataset::aggregate::EvaluationDataset;
-use crate::server::domain::evaluation::run::aggregate::EvaluationRun;
-use crate::server::event_sourcing::command_processor::CommandProcessor;
 use crate::server::event_sourcing::event_bus::EventBus;
 use crate::server::infrastructure::clients::{CloudflareApi, OllamaApi};
 use crate::server::infrastructure::http_client::ReqwestHttpClient;
@@ -56,8 +56,8 @@ pub struct App {
     pub pipeline_configuration_query_service: Arc<PipelineConfigurationQueryService>,
     pub chunking_configuration_query_service: Arc<ChunkingConfigurationQueryService>,
     pub sweep_template_query_service: Arc<SweepTemplateQueryService>,
-    pub evaluation_dataset_command_processor: Arc<CommandProcessor<EvaluationDataset>>,
-    pub evaluation_run_command_processor: Arc<CommandProcessor<EvaluationRun>>,
+    pub evaluation_dataset_command_handler: Arc<EvaluationDatasetCommandHandler>,
+    pub evaluation_run_command_handler: Arc<EvaluationRunCommandHandler>,
     pub evaluation_query_service: Arc<EvaluationQueryService>,
     pub embedding_service: Arc<EmbeddingService>,
     pub generation_service: Arc<GenerationService>,
@@ -131,8 +131,8 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         pipeline_configuration_query_service: services.pipeline_configuration_query_service,
         chunking_configuration_query_service: services.chunking_configuration_query_service,
         sweep_template_query_service: services.sweep_template_query_service,
-        evaluation_dataset_command_processor: Arc::clone(&wirings.dataset.command_processor),
-        evaluation_run_command_processor: Arc::clone(&wirings.run.command_processor),
+        evaluation_dataset_command_handler: services.evaluation_dataset_command_handler,
+        evaluation_run_command_handler: services.evaluation_run_command_handler,
         evaluation_query_service: services.evaluation_query_service,
         embedding_service: services.embedding_service,
         generation_service: services.generation_service,
@@ -163,8 +163,8 @@ impl App {
         provide_context(Arc::clone(&self.pipeline_configuration_query_service));
         provide_context(Arc::clone(&self.chunking_configuration_query_service));
         provide_context(Arc::clone(&self.sweep_template_query_service));
-        provide_context(Arc::clone(&self.evaluation_dataset_command_processor));
-        provide_context(Arc::clone(&self.evaluation_run_command_processor));
+        provide_context(Arc::clone(&self.evaluation_dataset_command_handler));
+        provide_context(Arc::clone(&self.evaluation_run_command_handler));
         provide_context(Arc::clone(&self.evaluation_query_service));
         provide_context(Arc::clone(&self.embedding_service));
         provide_context(Arc::clone(&self.generation_service));

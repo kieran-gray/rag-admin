@@ -6,9 +6,9 @@ use sqlx::PgPool;
 use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
 
-use crate::server::application::AppError;
 use crate::server::domain::shared::Timestamp;
 use crate::server::event_sourcing::envelope::{EventEnvelope, EventMetadata};
+use crate::server::event_sourcing::error::EsError;
 use crate::server::event_sourcing::event_store::{AppendedEvent, EventStore};
 
 pub struct PostgresEventStore<E> {
@@ -32,7 +32,7 @@ impl<E> EventStore<E> for PostgresEventStore<E>
 where
     E: Serialize + DeserializeOwned + Clone + Send + Sync,
 {
-    async fn load(&self, stream_id: Uuid) -> Result<Vec<EventEnvelope<E>>, AppError> {
+    async fn load(&self, stream_id: Uuid) -> Result<Vec<EventEnvelope<E>>, EsError> {
         let rows: Vec<EventRow> = sqlx::query_as(
             "SELECT id, stream_id, aggregate_type, position, event_type, event_data, occurred_at \
              FROM events \
@@ -43,7 +43,7 @@ where
         .bind(self.aggregate_type)
         .fetch_all(&self.pool)
         .await
-        .map_err(|e| AppError::Internal(format!("load events: {e}")))?;
+        .map_err(|e| EsError::Storage(format!("load events: {e}")))?;
 
         rows.into_iter().map(EventRow::into_envelope).collect()
     }
@@ -52,7 +52,7 @@ where
         &self,
         stream_id: Uuid,
         after_sequence: i64,
-    ) -> Result<Vec<EventEnvelope<E>>, AppError> {
+    ) -> Result<Vec<EventEnvelope<E>>, EsError> {
         let rows: Vec<EventRow> = sqlx::query_as(
             "SELECT id, stream_id, aggregate_type, position, event_type, event_data, occurred_at \
              FROM events \
@@ -64,7 +64,7 @@ where
         .bind(after_sequence)
         .fetch_all(&self.pool)
         .await
-        .map_err(|e| AppError::Internal(format!("load events after: {e}")))?;
+        .map_err(|e| EsError::Storage(format!("load events after: {e}")))?;
 
         rows.into_iter().map(EventRow::into_envelope).collect()
     }
@@ -74,37 +74,41 @@ where
         stream_id: Uuid,
         expected_version: usize,
         events: &[E],
-    ) -> Result<Vec<AppendedEvent<E>>, AppError> {
+    ) -> Result<Vec<AppendedEvent<E>>, EsError> {
         let mut tx = self
             .pool
             .begin()
             .await
-            .map_err(|e| AppError::Internal(format!("begin transaction: {e}")))?;
+            .map_err(|e| EsError::Storage(format!("begin transaction: {e}")))?;
 
-        let (current_count,): (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM events WHERE stream_id = $1 AND aggregate_type = $2",
+        let current_max: Option<(i64,)> = sqlx::query_as(
+            "SELECT position FROM events \
+             WHERE stream_id = $1 AND aggregate_type = $2 \
+             ORDER BY position DESC LIMIT 1 \
+             FOR UPDATE",
         )
         .bind(stream_id)
         .bind(self.aggregate_type)
-        .fetch_one(&mut *tx)
+        .fetch_optional(&mut *tx)
         .await
-        .map_err(|e| AppError::Internal(format!("read stream version: {e}")))?;
+        .map_err(|e| EsError::Storage(format!("read stream version: {e}")))?;
 
-        let current_count =
-            usize::try_from(current_count).map_err(|e| AppError::Internal(e.to_string()))?;
+        let current_version = current_max.map(|(p,)| p as usize).unwrap_or(0);
 
-        if current_count != expected_version {
-            return Err(AppError::Validation(format!(
-                "{} stream {stream_id} version conflict: expected {expected_version}, actual {current_count}",
-                self.aggregate_type
-            )));
+        if current_version != expected_version {
+            return Err(EsError::ConcurrencyConflict {
+                aggregate: self.aggregate_type,
+                stream_id,
+                expected: expected_version as i64,
+                actual: current_version as i64,
+            });
         }
 
         let mut appended: Vec<AppendedEvent<E>> = Vec::with_capacity(events.len());
         for (i, event) in events.iter().enumerate() {
             let position = (expected_version + i + 1) as i64;
             let json = serde_json::to_value(event)
-                .map_err(|e| AppError::Internal(format!("serialize event: {e}")))?;
+                .map_err(|e| EsError::Serialization(format!("serialize event: {e}")))?;
             let event_type = event_type_from_json(&json);
 
             let row: (i64, time::OffsetDateTime) = sqlx::query_as(
@@ -122,13 +126,15 @@ where
             .map_err(|e| {
                 if let sqlx::Error::Database(ref db_err) = e {
                     if db_err.constraint() == Some("events_stream_position_unique") {
-                        return AppError::Validation(format!(
-                            "{} stream version conflict at position {position}",
-                            self.aggregate_type
-                        ));
+                        return EsError::ConcurrencyConflict {
+                            aggregate: self.aggregate_type,
+                            stream_id,
+                            expected: expected_version as i64,
+                            actual: position - 1,
+                        };
                     }
                 }
-                AppError::Internal(format!("append event: {e}"))
+                EsError::Storage(format!("append event: {e}"))
             })?;
 
             appended.push(EventEnvelope {
@@ -146,7 +152,7 @@ where
 
         tx.commit()
             .await
-            .map_err(|e| AppError::Internal(format!("commit transaction: {e}")))?;
+            .map_err(|e| EsError::Storage(format!("commit transaction: {e}")))?;
 
         Ok(appended)
     }
@@ -155,7 +161,7 @@ where
         &self,
         after_log_position: i64,
         limit: i64,
-    ) -> Result<Vec<EventEnvelope<E>>, AppError> {
+    ) -> Result<Vec<EventEnvelope<E>>, EsError> {
         let rows: Vec<EventRow> = sqlx::query_as(
             "SELECT id, stream_id, aggregate_type, position, event_type, event_data, occurred_at \
              FROM events \
@@ -168,7 +174,7 @@ where
         .bind(limit)
         .fetch_all(&self.pool)
         .await
-        .map_err(|e| AppError::Internal(format!("load events global: {e}")))?;
+        .map_err(|e| EsError::Storage(format!("load events global: {e}")))?;
 
         rows.into_iter().map(EventRow::into_envelope).collect()
     }
@@ -186,9 +192,9 @@ struct EventRow {
 }
 
 impl EventRow {
-    fn into_envelope<E: DeserializeOwned>(self) -> Result<EventEnvelope<E>, AppError> {
+    fn into_envelope<E: DeserializeOwned>(self) -> Result<EventEnvelope<E>, EsError> {
         let event = serde_json::from_value::<E>(self.event_data)
-            .map_err(|e| AppError::Internal(format!("deserialize event: {e}")))?;
+            .map_err(|e| EsError::Serialization(format!("deserialize event: {e}")))?;
         Ok(EventEnvelope {
             event,
             metadata: EventMetadata {
@@ -211,8 +217,8 @@ fn event_type_from_json(value: &serde_json::Value) -> String {
         .to_string()
 }
 
-fn format_timestamp(odt: time::OffsetDateTime) -> Result<Timestamp, AppError> {
+fn format_timestamp(odt: time::OffsetDateTime) -> Result<Timestamp, EsError> {
     odt.format(&Rfc3339)
         .map(Timestamp::from)
-        .map_err(|e| AppError::Internal(format!("format timestamp: {e}")))
+        .map_err(|e| EsError::Storage(format!("format timestamp: {e}")))
 }

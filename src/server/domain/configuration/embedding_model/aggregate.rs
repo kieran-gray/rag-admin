@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::server::domain::configuration::catalog::{CatalogEntry, CatalogError, CatalogState};
 use crate::server::event_sourcing::Aggregate;
 
 use super::commands::EmbeddingModelCatalogCommand;
@@ -9,15 +10,12 @@ use super::events::{
     EmbeddingModelAdded, EmbeddingModelCatalogCreated, EmbeddingModelCatalogEvent,
     EmbeddingModelRemoved, EmbeddingModelUpdated,
 };
-use super::exceptions::EmbeddingModelCatalogError;
-use crate::catalog::AiProviderKind;
 
 const EMBEDDING_MODEL_CATALOG_ID: Uuid = uuid::uuid!("8a17e2f1-3a9d-4e58-a9c9-0a0f61d4a001");
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmbeddingModelCatalog {
-    pub catalog_id: Uuid,
-    pub models: Vec<EmbeddingModel>,
+    state: CatalogState<EmbeddingModel>,
 }
 
 impl EmbeddingModelCatalog {
@@ -25,44 +23,21 @@ impl EmbeddingModelCatalog {
         EMBEDDING_MODEL_CATALOG_ID
     }
 
+    pub fn models(&self) -> &[EmbeddingModel] {
+        &self.state.entries
+    }
+
     fn empty(catalog_id: Uuid) -> Self {
         Self {
-            catalog_id,
-            models: Vec::new(),
+            state: CatalogState::empty(catalog_id),
         }
-    }
-
-    fn find(&self, model_id: Uuid) -> Result<&EmbeddingModel, EmbeddingModelCatalogError> {
-        self.models
-            .iter()
-            .find(|m| m.embedding_model_id == model_id)
-            .ok_or(EmbeddingModelCatalogError::NotFound)
-    }
-
-    fn ensure_unique(
-        &self,
-        kind: AiProviderKind,
-        model: &str,
-        excluding: Option<Uuid>,
-    ) -> Result<(), EmbeddingModelCatalogError> {
-        if self
-            .models
-            .iter()
-            .any(|m| m.kind == kind && m.model == model && Some(m.embedding_model_id) != excluding)
-        {
-            return Err(EmbeddingModelCatalogError::ValidationError(format!(
-                "Embedding model {model} already exists for {}",
-                kind.as_str()
-            )));
-        }
-        Ok(())
     }
 }
 
 impl Aggregate for EmbeddingModelCatalog {
     type Event = EmbeddingModelCatalogEvent;
     type Command = EmbeddingModelCatalogCommand;
-    type Error = EmbeddingModelCatalogError;
+    type Error = CatalogError;
 
     fn aggregate_type() -> &'static str {
         "embedding_model_catalog"
@@ -71,10 +46,10 @@ impl Aggregate for EmbeddingModelCatalog {
     fn apply(&mut self, event: &Self::Event) {
         match event {
             Self::Event::EmbeddingModelCatalogCreated(e) => {
-                *self = Self::empty(e.catalog_id);
+                self.state = CatalogState::empty(e.catalog_id);
             }
             Self::Event::EmbeddingModelAdded(e) => {
-                self.models.push(EmbeddingModel {
+                self.state.push(EmbeddingModel {
                     embedding_model_id: e.model_id,
                     kind: e.kind,
                     model: e.model.clone(),
@@ -82,18 +57,15 @@ impl Aggregate for EmbeddingModelCatalog {
                 });
             }
             Self::Event::EmbeddingModelUpdated(e) => {
-                if let Some(m) = self
-                    .models
-                    .iter_mut()
-                    .find(|m| m.embedding_model_id == e.model_id)
-                {
-                    m.kind = e.kind;
-                    m.model = e.model.clone();
-                    m.dimensions = e.dimensions;
-                }
+                self.state.update(EmbeddingModel {
+                    embedding_model_id: e.model_id,
+                    kind: e.kind,
+                    model: e.model.clone(),
+                    dimensions: e.dimensions,
+                });
             }
             Self::Event::EmbeddingModelRemoved(e) => {
-                self.models.retain(|m| m.embedding_model_id != e.model_id);
+                self.state.remove(e.model_id);
             }
         }
     }
@@ -114,36 +86,47 @@ impl Aggregate for EmbeddingModelCatalog {
                 Self::empty(Self::singleton_id())
             }
         };
-        let state = &owned_state;
 
         let mut events = match command {
             EmbeddingModelCatalogCommand::AddEmbeddingModel(cmd) => {
-                validate_non_empty("embedding model", &cmd.model)?;
-                validate_positive("embedding dimensions", cmd.dimensions)?;
-                validate_model_id_format(cmd.kind, &cmd.model)?;
-                state.ensure_unique(cmd.kind, &cmd.model, None)?;
-                vec![Self::Event::EmbeddingModelAdded(EmbeddingModelAdded {
-                    model_id: Uuid::new_v4(),
+                let candidate = EmbeddingModel {
+                    embedding_model_id: Uuid::new_v4(),
                     kind: cmd.kind,
                     model: cmd.model,
                     dimensions: cmd.dimensions,
+                };
+                candidate.validate()?;
+                owned_state
+                    .state
+                    .ensure_unique(&candidate.natural_key(), None)?;
+                vec![Self::Event::EmbeddingModelAdded(EmbeddingModelAdded {
+                    model_id: candidate.embedding_model_id,
+                    kind: candidate.kind,
+                    model: candidate.model,
+                    dimensions: candidate.dimensions,
                 })]
             }
             EmbeddingModelCatalogCommand::UpdateEmbeddingModel(cmd) => {
-                let existing = state.find(cmd.model_id)?;
-                validate_non_empty("embedding model", &cmd.model)?;
-                validate_positive("embedding dimensions", cmd.dimensions)?;
-                validate_model_id_format(cmd.kind, &cmd.model)?;
-                state.ensure_unique(cmd.kind, &cmd.model, Some(existing.embedding_model_id))?;
-                vec![Self::Event::EmbeddingModelUpdated(EmbeddingModelUpdated {
-                    model_id: existing.embedding_model_id,
+                let existing = owned_state.state.find(cmd.model_id)?;
+                let candidate = EmbeddingModel {
+                    embedding_model_id: existing.embedding_model_id,
                     kind: cmd.kind,
                     model: cmd.model,
                     dimensions: cmd.dimensions,
+                };
+                candidate.validate()?;
+                owned_state
+                    .state
+                    .ensure_unique(&candidate.natural_key(), Some(existing.embedding_model_id))?;
+                vec![Self::Event::EmbeddingModelUpdated(EmbeddingModelUpdated {
+                    model_id: candidate.embedding_model_id,
+                    kind: candidate.kind,
+                    model: candidate.model,
+                    dimensions: candidate.dimensions,
                 })]
             }
             EmbeddingModelCatalogCommand::RemoveEmbeddingModel(cmd) => {
-                let existing = state.find(cmd.model_id)?;
+                let existing = owned_state.state.find(cmd.model_id)?;
                 vec![Self::Event::EmbeddingModelRemoved(EmbeddingModelRemoved {
                     model_id: existing.embedding_model_id,
                 })]
@@ -167,37 +150,6 @@ impl Aggregate for EmbeddingModelCatalog {
         }
         state
     }
-}
-
-fn validate_non_empty(field: &str, value: &str) -> Result<(), EmbeddingModelCatalogError> {
-    if value.trim().is_empty() {
-        return Err(EmbeddingModelCatalogError::ValidationError(format!(
-            "{field} cannot be empty"
-        )));
-    }
-    Ok(())
-}
-
-fn validate_positive(field: &str, value: u32) -> Result<(), EmbeddingModelCatalogError> {
-    if value == 0 {
-        return Err(EmbeddingModelCatalogError::ValidationError(format!(
-            "{field} must be greater than zero"
-        )));
-    }
-    Ok(())
-}
-
-fn validate_model_id_format(
-    kind: AiProviderKind,
-    model_id: &str,
-) -> Result<(), EmbeddingModelCatalogError> {
-    if !kind.model_id_well_formed(model_id) {
-        return Err(EmbeddingModelCatalogError::ValidationError(format!(
-            "model id '{model_id}' is not well-formed for provider kind {}",
-            kind.as_str()
-        )));
-    }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -228,12 +180,12 @@ mod tests {
             EmbeddingModelCatalogEvent::EmbeddingModelAdded(_)
         ));
         let state = EmbeddingModelCatalog::from_events(&events).unwrap();
-        assert_eq!(state.models.len(), 1);
+        assert_eq!(state.models().len(), 1);
     }
 
     #[test]
     fn duplicate_kind_and_name_rejected() {
-        let mut events =
+        let events =
             EmbeddingModelCatalog::handle_command(None, add_cmd("@cf/baai/bge-base-en-v1.5", 768))
                 .unwrap();
         let state = EmbeddingModelCatalog::from_events(&events).unwrap();
@@ -242,11 +194,7 @@ mod tests {
             add_cmd("@cf/baai/bge-base-en-v1.5", 768),
         )
         .unwrap_err();
-        assert!(matches!(
-            err,
-            EmbeddingModelCatalogError::ValidationError(_)
-        ));
-        events.clear();
+        assert!(matches!(err, CatalogError::ValidationError(_)));
     }
 
     #[test]
@@ -258,9 +206,6 @@ mod tests {
             add_cmd("text-embedding-3-small", 1536),
         )
         .unwrap_err();
-        assert!(matches!(
-            err,
-            EmbeddingModelCatalogError::ValidationError(_)
-        ));
+        assert!(matches!(err, CatalogError::ValidationError(_)));
     }
 }

@@ -5,33 +5,38 @@ use sqlx::PgPool;
 use tokio::sync::Notify;
 
 use crate::server::application::evaluation::effects::{
-    EvaluationDatasetEffect, EvaluationDatasetEffectExecutor, EvaluationRunEffect,
-    EvaluationRunEffectDispatcher, EvaluationRunEffectExecutor, OptimizeRunEffectExecutor,
+    EvaluationDatasetEffectExecutor, EvaluationRunEffectDispatcher, EvaluationRunEffectExecutor,
+    OptimizeRunEffectExecutor,
 };
 use crate::server::application::evaluation::ports::LlmJudge;
 use crate::server::application::evaluation::scoring::TrialScorer;
 use crate::server::application::indexing::{IndexingEffect, IndexingEffectExecutor};
 use crate::server::application::ports::HtmlToMarkdown;
-use crate::server::application::ports::{Clock, IdGenerator};
+use crate::server::application::ports::{Clock, HttpClient, IdGenerator};
 use crate::server::application::source_document::ports::SourceAdapterRegistry;
 use crate::server::application::source_document::{
     SourceDocumentIngestService, SourceDocumentIngestServiceDeps,
 };
 use crate::server::application::spawn_activity_projection;
+use crate::server::domain::configuration::defaults::{
+    make_configuration_defaults_projector, ConfigurationDefaults,
+};
 use crate::server::domain::configuration::embedding_model::{
-    EmbeddingModelCatalog, EmbeddingModelProjector,
+    make_embedding_model_projector, EmbeddingModelCatalog,
 };
 use crate::server::domain::configuration::generation_model::{
-    GenerationModelCatalog, GenerationModelProjector,
+    make_generation_model_projector, GenerationModelCatalog,
 };
 use crate::server::domain::configuration::sweep_template::{SweepTemplate, SweepTemplateProjector};
 use crate::server::domain::configuration::vector_index::{
-    VectorIndexCatalog, VectorIndexProjector,
+    make_vector_index_projector, VectorIndexCatalog,
 };
 use crate::server::domain::evaluation::dataset::aggregate::EvaluationDataset;
+use crate::server::domain::evaluation::dataset::effects::EvaluationDatasetEffect;
 use crate::server::domain::evaluation::dataset::policies::derive_dataset_effects;
 use crate::server::domain::evaluation::dataset::projector::EvaluationDatasetProjector;
 use crate::server::domain::evaluation::run::aggregate::EvaluationRun;
+use crate::server::domain::evaluation::run::effects::EvaluationRunEffect;
 use crate::server::domain::evaluation::run::policies::derive_run_effects;
 use crate::server::domain::evaluation::run::projector::EvaluationRunProjector;
 use crate::server::domain::indexing::aggregate::Indexing;
@@ -95,9 +100,9 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
 
     spawn_driver::<EmbeddingModelCatalog, ()>(
         Arc::clone(&wirings.embedding_model.event_store),
-        vec![Arc::new(EmbeddingModelProjector::new(Arc::clone(
-            &repos.embedding_model,
-        )))],
+        vec![Arc::new(make_embedding_model_projector(
+            Arc::clone(&repos.embedding_model) as _,
+        ))],
         None,
         Arc::clone(&checkpoint),
         Arc::clone(&event_bus),
@@ -105,9 +110,9 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
     );
     spawn_driver::<GenerationModelCatalog, ()>(
         Arc::clone(&wirings.generation_model.event_store),
-        vec![Arc::new(GenerationModelProjector::new(Arc::clone(
-            &repos.generation_model,
-        )))],
+        vec![Arc::new(make_generation_model_projector(
+            Arc::clone(&repos.generation_model) as _,
+        ))],
         None,
         Arc::clone(&checkpoint),
         Arc::clone(&event_bus),
@@ -115,9 +120,9 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
     );
     spawn_driver::<VectorIndexCatalog, ()>(
         Arc::clone(&wirings.vector_index.event_store),
-        vec![Arc::new(VectorIndexProjector::new(Arc::clone(
-            &repos.vector_index,
-        )))],
+        vec![Arc::new(make_vector_index_projector(
+            Arc::clone(&repos.vector_index) as _,
+        ))],
         None,
         Arc::clone(&checkpoint),
         Arc::clone(&event_bus),
@@ -128,6 +133,18 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
         vec![Arc::new(SweepTemplateProjector::new(Arc::clone(
             &repos.sweep_template,
         )))],
+        None,
+        Arc::clone(&checkpoint),
+        Arc::clone(&event_bus),
+        &mut wakeups,
+    );
+    spawn_driver::<ConfigurationDefaults, ()>(
+        Arc::clone(&wirings.defaults.event_store),
+        vec![Arc::new(make_configuration_defaults_projector(
+            Arc::clone(&repos.chunking_configuration),
+            Arc::clone(&repos.pipeline_configuration),
+            Arc::clone(&repos.sweep_template),
+        ))],
         None,
         Arc::clone(&checkpoint),
         Arc::clone(&event_bus),
@@ -284,6 +301,7 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
 
     let html_to_markdown: Arc<dyn HtmlToMarkdown> = HtmdConverter::new();
 
+    let http_port: Arc<dyn HttpClient> = Arc::clone(&http) as Arc<dyn HttpClient>;
     let source_document_ingest_service =
         SourceDocumentIngestService::new(SourceDocumentIngestServiceDeps {
             source_document_command_handler: Arc::clone(&services.source_document_command_handler),
@@ -292,7 +310,7 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
             blob_store: Arc::clone(&repos.blob_store),
             source_adapter_registry: Arc::clone(&source_adapter_registry),
             pipeline_resolver: Arc::clone(&services.pipeline_resolver),
-            http_client: Arc::clone(&http),
+            http_client: http_port,
             html_to_markdown,
             clock,
             id_generator,

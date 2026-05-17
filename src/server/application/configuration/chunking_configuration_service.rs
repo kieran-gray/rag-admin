@@ -6,6 +6,7 @@ use crate::contracts::{
     ChunkingConfigurationCommandDto, CreateChunkingConfigurationDto,
     DeleteChunkingConfigurationDto, UpdateChunkingConfigurationDto,
 };
+use crate::server::application::configuration::ConfigurationDefaultsCommandHandler;
 use crate::server::application::AppError;
 use crate::server::domain::configuration::chunking_configuration::{
     ChunkingConfigurationRepository, ChunkingConfigurationUpdate, NewChunkingConfiguration,
@@ -13,11 +14,18 @@ use crate::server::domain::configuration::chunking_configuration::{
 
 pub struct ChunkingConfigurationService {
     repository: Arc<dyn ChunkingConfigurationRepository>,
+    defaults: Arc<ConfigurationDefaultsCommandHandler>,
 }
 
 impl ChunkingConfigurationService {
-    pub fn new(repository: Arc<dyn ChunkingConfigurationRepository>) -> Arc<Self> {
-        Arc::new(Self { repository })
+    pub fn new(
+        repository: Arc<dyn ChunkingConfigurationRepository>,
+        defaults: Arc<ConfigurationDefaultsCommandHandler>,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            repository,
+            defaults,
+        })
     }
 
     pub async fn handle_dto(
@@ -42,7 +50,7 @@ impl ChunkingConfigurationService {
             })
             .await?;
         if dto.is_default {
-            self.repository.set_default(id).await?;
+            self.defaults.set_default_chunking_configuration(id).await?;
         }
         Ok(())
     }
@@ -57,8 +65,8 @@ impl ChunkingConfigurationService {
             })
             .await?;
         if dto.is_default {
-            self.repository
-                .set_default(dto.chunking_configuration_id)
+            self.defaults
+                .set_default_chunking_configuration(dto.chunking_configuration_id)
                 .await?;
         }
         Ok(())

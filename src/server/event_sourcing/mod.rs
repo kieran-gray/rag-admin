@@ -4,6 +4,7 @@ pub mod checkpoint;
 pub mod command_processor;
 pub mod effect_dispatcher;
 pub mod envelope;
+pub mod error;
 pub mod event_bus;
 pub mod event_store;
 pub mod job_queue;
@@ -18,6 +19,7 @@ pub use checkpoint::{CheckpointRepository, CheckpointStatus, ProjectionCheckpoin
 pub use command_processor::CommandProcessor;
 pub use effect_dispatcher::EffectDispatcher;
 pub use envelope::{EventEnvelope, EventMetadata, PublishedEvent};
+pub use error::{CommandError, EsError, ProjectionError};
 pub use event_bus::{EventBus, EventBusSubscription};
 pub use event_store::{AppendedEvent, EventStore};
 pub use job_queue::{ClaimedJob, IdempotencyKey, JobQueue, NewJob};

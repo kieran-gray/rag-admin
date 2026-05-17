@@ -1,11 +1,21 @@
 use std::time::Duration;
 
+use async_trait::async_trait;
 use reqwest::{header::HeaderMap, Client, Method};
 
+use crate::server::application::ports::HttpClient;
 use crate::server::application::AppError;
 
 pub struct ReqwestHttpClient {
     client: Client,
+}
+
+#[async_trait]
+impl HttpClient for ReqwestHttpClient {
+    async fn get_text(&self, url: &str) -> Result<(u16, String), AppError> {
+        self.request_text(Method::GET, url, HeaderMap::new(), None)
+            .await
+    }
 }
 
 impl ReqwestHttpClient {

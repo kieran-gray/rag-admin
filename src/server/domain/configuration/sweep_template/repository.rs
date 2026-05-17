@@ -3,6 +3,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use super::read_model::SweepTemplateReadModel;
+use crate::server::event_sourcing::error::ProjectionError;
 
 #[derive(Debug, Error)]
 pub enum SweepTemplateRepositoryError {
@@ -22,4 +23,10 @@ pub trait SweepTemplateRepository: Send + Sync {
     async fn set_default(&self, id: Uuid) -> Result<(), SweepTemplateRepositoryError>;
 
     async fn delete(&self, id: Uuid) -> Result<(), SweepTemplateRepositoryError>;
+}
+
+impl From<SweepTemplateRepositoryError> for ProjectionError {
+    fn from(value: SweepTemplateRepositoryError) -> Self {
+        Self::Storage(value.to_string())
+    }
 }

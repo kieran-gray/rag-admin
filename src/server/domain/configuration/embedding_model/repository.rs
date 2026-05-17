@@ -2,7 +2,10 @@ use async_trait::async_trait;
 use thiserror::Error;
 use uuid::Uuid;
 
+use crate::server::domain::configuration::catalog::CatalogRepository;
+
 use super::entity::EmbeddingModel;
+use crate::server::event_sourcing::error::ProjectionError;
 
 #[derive(Debug, Error)]
 pub enum EmbeddingModelRepositoryError {
@@ -11,15 +14,17 @@ pub enum EmbeddingModelRepositoryError {
 }
 
 #[async_trait]
-pub trait EmbeddingModelRepository: Send + Sync {
+pub trait EmbeddingModelRepository: CatalogRepository<EmbeddingModel> {
     async fn load_all(&self) -> Result<Vec<EmbeddingModel>, EmbeddingModelRepositoryError>;
 
     async fn find_by_id(
         &self,
         model_id: Uuid,
     ) -> Result<Option<EmbeddingModel>, EmbeddingModelRepositoryError>;
+}
 
-    async fn save(&self, model: EmbeddingModel) -> Result<(), EmbeddingModelRepositoryError>;
-
-    async fn delete(&self, model_id: Uuid) -> Result<(), EmbeddingModelRepositoryError>;
+impl From<EmbeddingModelRepositoryError> for ProjectionError {
+    fn from(value: EmbeddingModelRepositoryError) -> Self {
+        Self::Storage(value.to_string())
+    }
 }

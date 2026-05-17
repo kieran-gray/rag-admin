@@ -3,7 +3,8 @@ use std::sync::Arc;
 use crate::contracts::GenerationModelCommandDto;
 use crate::server::application::AppError;
 use crate::server::domain::configuration::generation_model::{
-    GenerationModelCatalog, GenerationModelCatalogCommand,
+    AddGenerationModel, GenerationModelCatalog, GenerationModelCatalogCommand,
+    RemoveGenerationModel, UpdateGenerationModel,
 };
 use crate::server::event_sourcing::CommandProcessor;
 
@@ -24,7 +25,29 @@ impl GenerationModelCatalogCommandHandler {
     }
 
     pub async fn handle_dto(&self, command: GenerationModelCommandDto) -> Result<(), AppError> {
-        self.handle(GenerationModelCatalogCommand::from_dto(command))
-            .await
+        self.handle(from_dto(command)).await
+    }
+}
+
+fn from_dto(dto: GenerationModelCommandDto) -> GenerationModelCatalogCommand {
+    match dto {
+        GenerationModelCommandDto::AddGenerationModel(d) => {
+            GenerationModelCatalogCommand::AddGenerationModel(AddGenerationModel {
+                kind: d.kind,
+                model: d.model,
+            })
+        }
+        GenerationModelCommandDto::UpdateGenerationModel(d) => {
+            GenerationModelCatalogCommand::UpdateGenerationModel(UpdateGenerationModel {
+                model_id: d.model_id,
+                kind: d.kind,
+                model: d.model,
+            })
+        }
+        GenerationModelCommandDto::RemoveGenerationModel(d) => {
+            GenerationModelCatalogCommand::RemoveGenerationModel(RemoveGenerationModel {
+                model_id: d.model_id,
+            })
+        }
     }
 }

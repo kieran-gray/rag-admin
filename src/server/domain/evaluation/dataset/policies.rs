@@ -3,11 +3,8 @@ use crate::server::event_sourcing::job_queue::{IdempotencyKey, NewJob};
 use crate::server::event_sourcing::policy::PolicyContext;
 
 use super::aggregate::{DatasetGenerationStatus, EvaluationDataset};
+use super::effects::{EvaluationDatasetEffect, GenerateParaphraseEffect, GenerateQuestionEffect};
 use super::events::EvaluationDatasetEvent;
-
-use crate::server::application::evaluation::effects::dataset::{
-    EvaluationDatasetEffect, GenerateParaphraseEffect, GenerateQuestionEffect,
-};
 
 const ATTEMPT_EFFECT: &str = "attempt_question_generation";
 const PARAPHRASE_EFFECT: &str = "generate_paraphrase";

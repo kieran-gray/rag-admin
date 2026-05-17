@@ -11,9 +11,12 @@ use crate::server::application::indexing::ports::KvStore;
 use crate::server::application::indexing::VectorIndexResolver;
 use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::source_document::ports::BlobStore;
-use crate::server::application::{ActivityRegistry, AppError, InternalLogEvent, Job, JobRegistry};
+use crate::server::application::{
+    ActivityRegistry, AppError, InternalLogEvent, Job, JobIdStrategy, JobRegistry, JobSession,
+};
 use crate::server::domain::chunk_set::entity::{Chunk, ChunkSet};
 use crate::server::domain::chunk_set::repository::ChunkSetRepository;
+use crate::server::domain::configuration::embedding_model::EmbeddingModel;
 use crate::server::domain::embedding_set::entity::{ChunkEmbedding, EmbeddingSet};
 use crate::server::domain::embedding_set::repository::EmbeddingSetRepository;
 use crate::server::domain::indexing::aggregate::Indexing;
@@ -26,7 +29,7 @@ use crate::server::domain::indexing::status::IngestStage;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::server::domain::VectorRecord;
 use crate::server::event_sourcing::command_processor::CommandProcessor;
-use crate::server::event_sourcing::process_manager::EffectExecutor;
+use crate::server::event_sourcing::process_manager::{EffectError, EffectExecutor};
 
 use super::indexing::{
     ExecuteChunkingEffect, ExecuteEmbeddingEffect, ExecuteIndexingEffect, IndexingEffect,
@@ -48,8 +51,7 @@ pub struct IndexingEffectExecutor {
     pipeline_resolver: Arc<PipelineResolver>,
     kv_store: Arc<dyn KvStore>,
     command_processor: Arc<CommandProcessor<Indexing>>,
-    job_registry: Arc<JobRegistry>,
-    activity_registry: Arc<ActivityRegistry>,
+    session: JobSession<Indexing>,
     clock: Arc<dyn Clock>,
     id_generator: Arc<dyn IdGenerator>,
 }
@@ -73,6 +75,12 @@ impl IndexingEffectExecutor {
         clock: Arc<dyn Clock>,
         id_generator: Arc<dyn IdGenerator>,
     ) -> Arc<Self> {
+        let session = JobSession::new(
+            job_registry,
+            activity_registry,
+            Arc::clone(&command_processor),
+            Arc::clone(&clock),
+        );
         Arc::new(Self {
             source_document_repository,
             indexing_repository,
@@ -85,46 +93,21 @@ impl IndexingEffectExecutor {
             pipeline_resolver,
             kv_store,
             command_processor,
-            job_registry,
-            activity_registry,
+            session,
             clock,
             id_generator,
         })
     }
 
-    async fn open_job(&self, indexing_id: Uuid) -> (String, Arc<Job>) {
-        let (job_id, job) = self.job_registry.create().await;
-        let stream_url = format!("/api/job/logs/{job_id}");
-        self.activity_registry
-            .attach_stream(indexing_id, stream_url)
-            .await;
-        (job_id, job)
-    }
-
-    async fn finish_with_failure(
-        &self,
-        indexing_id: Uuid,
-        stage: IngestStage,
-        job: &Arc<Job>,
-        err: &AppError,
-    ) {
-        job.emit(
-            InternalLogEvent::error(format!("{stage} stage failed: {err}"))
-                .with_meta("stage", json!(stage.to_string()))
-                .with_meta("error", json!(err.to_string())),
-        )
-        .await;
-        let _ = self
-            .command_processor
-            .handle(
-                indexing_id,
-                IndexingCommand::FailIngestion(FailIngestion {
-                    stage,
-                    reason: err.to_string(),
-                    occurred_at: self.clock.now(),
-                }),
-            )
-            .await;
+    fn fail_for(&self, stage: IngestStage) -> impl FnOnce(String) -> IndexingCommand + use<> {
+        let clock = Arc::clone(&self.clock);
+        move |reason| {
+            IndexingCommand::FailIngestion(FailIngestion {
+                stage,
+                reason,
+                occurred_at: clock.now(),
+            })
+        }
     }
 
     async fn load_indexing(&self, indexing_id: Uuid) -> Result<IndexingReadModel, AppError> {
@@ -145,54 +128,45 @@ impl IndexingEffectExecutor {
     }
 
     async fn execute_chunking(&self, effect: &ExecuteChunkingEffect) -> Result<(), AppError> {
-        let (_job_id, job) = self.open_job(effect.indexing_id).await;
-        match self.run_chunking(effect.indexing_id, &job).await {
-            Ok(()) => {
-                job.finish().await;
-                Ok(())
-            }
-            Err(e) => {
-                self.finish_with_failure(effect.indexing_id, IngestStage::Chunking, &job, &e)
-                    .await;
-                job.finish().await;
-                Err(e)
-            }
-        }
+        let indexing_id = effect.indexing_id;
+        self.session
+            .run(
+                indexing_id,
+                JobIdStrategy::Fresh,
+                "chunking stage failed",
+                self.fail_for(IngestStage::Chunking),
+                |job| self.run_chunking(indexing_id, job),
+            )
+            .await
     }
 
     async fn execute_embedding(&self, effect: &ExecuteEmbeddingEffect) -> Result<(), AppError> {
-        let (_job_id, job) = self.open_job(effect.indexing_id).await;
-        match self.run_embedding(effect.indexing_id, &job).await {
-            Ok(()) => {
-                job.finish().await;
-                Ok(())
-            }
-            Err(e) => {
-                self.finish_with_failure(effect.indexing_id, IngestStage::Embedding, &job, &e)
-                    .await;
-                job.finish().await;
-                Err(e)
-            }
-        }
+        let indexing_id = effect.indexing_id;
+        self.session
+            .run(
+                indexing_id,
+                JobIdStrategy::Fresh,
+                "embedding stage failed",
+                self.fail_for(IngestStage::Embedding),
+                |job| self.run_embedding(indexing_id, job),
+            )
+            .await
     }
 
     async fn execute_indexing(&self, effect: &ExecuteIndexingEffect) -> Result<(), AppError> {
-        let (_job_id, job) = self.open_job(effect.indexing_id).await;
-        match self.run_indexing(effect.indexing_id, &job).await {
-            Ok(()) => {
-                job.finish().await;
-                Ok(())
-            }
-            Err(e) => {
-                self.finish_with_failure(effect.indexing_id, IngestStage::Indexing, &job, &e)
-                    .await;
-                job.finish().await;
-                Err(e)
-            }
-        }
+        let indexing_id = effect.indexing_id;
+        self.session
+            .run(
+                indexing_id,
+                JobIdStrategy::Fresh,
+                "indexing stage failed",
+                self.fail_for(IngestStage::Indexing),
+                |job| self.run_indexing(indexing_id, job),
+            )
+            .await
     }
 
-    async fn run_chunking(&self, indexing_id: Uuid, job: &Arc<Job>) -> Result<(), AppError> {
+    async fn run_chunking(&self, indexing_id: Uuid, job: Arc<Job>) -> Result<(), AppError> {
         let indexing = self.load_indexing(indexing_id).await?;
         if indexing.chunk_set_id.is_some() && !is_requeue_safe(&indexing) {
             job.emit(InternalLogEvent::info(
@@ -283,7 +257,7 @@ impl IndexingEffectExecutor {
         Ok(())
     }
 
-    async fn run_embedding(&self, indexing_id: Uuid, job: &Arc<Job>) -> Result<(), AppError> {
+    async fn run_embedding(&self, indexing_id: Uuid, job: Arc<Job>) -> Result<(), AppError> {
         let indexing = self.load_indexing(indexing_id).await?;
         let chunk_set_id = indexing.chunk_set_id.ok_or_else(|| {
             AppError::Validation(
@@ -363,13 +337,12 @@ impl IndexingEffectExecutor {
                 embedding_set_id: new_set_id,
                 chunk_set_id,
                 embedding_model_id: embedding_model.embedding_model_id,
-                embedding_model_snapshot:
-                    crate::server::domain::configuration::embedding_model::EmbeddingModel {
-                        embedding_model_id: embedding_model.embedding_model_id,
-                        kind: embedding_model.kind,
-                        model: embedding_model.model.clone(),
-                        dimensions: embedding_model.dimensions,
-                    },
+                embedding_model_snapshot: EmbeddingModel {
+                    embedding_model_id: embedding_model.embedding_model_id,
+                    kind: embedding_model.kind,
+                    model: embedding_model.model.clone(),
+                    dimensions: embedding_model.dimensions,
+                },
                 dimensions: embedding_model.dimensions,
                 created_at: occurred_at.to_string(),
             };
@@ -406,7 +379,7 @@ impl IndexingEffectExecutor {
         Ok(())
     }
 
-    async fn run_indexing(&self, indexing_id: Uuid, job: &Arc<Job>) -> Result<(), AppError> {
+    async fn run_indexing(&self, indexing_id: Uuid, job: Arc<Job>) -> Result<(), AppError> {
         let indexing = self.load_indexing(indexing_id).await?;
         let embedding_set_id = indexing.embedding_set_id.ok_or_else(|| {
             AppError::Validation(
@@ -562,11 +535,12 @@ fn is_requeue_safe(_indexing: &IndexingReadModel) -> bool {
 
 #[async_trait]
 impl EffectExecutor<IndexingEffect> for IndexingEffectExecutor {
-    async fn execute(&self, effect: &IndexingEffect) -> Result<(), AppError> {
-        match effect {
+    async fn execute(&self, effect: &IndexingEffect) -> Result<(), EffectError> {
+        let result = match effect {
             IndexingEffect::ExecuteChunking(e) => self.execute_chunking(e).await,
             IndexingEffect::ExecuteEmbedding(e) => self.execute_embedding(e).await,
             IndexingEffect::ExecuteIndexing(e) => self.execute_indexing(e).await,
-        }
+        };
+        result.map_err(|e| Box::new(e) as EffectError)
     }
 }

@@ -2,11 +2,10 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::server::application::AppError;
-use crate::server::event_sourcing::process_manager::EffectExecutor;
+use crate::server::event_sourcing::process_manager::{EffectError, EffectExecutor};
 
 use super::optimize_executor::OptimizeRunEffectExecutor;
-use super::run::EvaluationRunEffect;
+use crate::server::domain::evaluation::run::effects::EvaluationRunEffect;
 use super::run_executor::EvaluationRunEffectExecutor;
 
 pub struct EvaluationRunEffectDispatcher {
@@ -25,10 +24,11 @@ impl EvaluationRunEffectDispatcher {
 
 #[async_trait]
 impl EffectExecutor<EvaluationRunEffect> for EvaluationRunEffectDispatcher {
-    async fn execute(&self, effect: &EvaluationRunEffect) -> Result<(), AppError> {
-        match effect {
+    async fn execute(&self, effect: &EvaluationRunEffect) -> Result<(), EffectError> {
+        let result = match effect {
             EvaluationRunEffect::ExecuteRun(e) => self.execute.run(e).await,
             EvaluationRunEffect::OptimizeRun(e) => self.optimize.run(e).await,
-        }
+        };
+        result.map_err(|e| Box::new(e) as EffectError)
     }
 }

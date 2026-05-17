@@ -30,11 +30,13 @@ use crate::server::domain::evaluation::question::{
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::server::event_sourcing::aggregate_repository::AggregateRepository;
 use crate::server::event_sourcing::command_processor::CommandProcessor;
-use crate::server::event_sourcing::process_manager::EffectExecutor;
+use crate::server::event_sourcing::process_manager::{EffectError, EffectExecutor};
 
 use crate::server::application::ports::Clock;
 
-use super::dataset::{EvaluationDatasetEffect, GenerateParaphraseEffect, GenerateQuestionEffect};
+use crate::server::domain::evaluation::dataset::effects::{
+    EvaluationDatasetEffect, GenerateParaphraseEffect, GenerateQuestionEffect,
+};
 
 const PREVIOUS_QUESTION_PROMPT_LIMIT: usize = 12;
 
@@ -445,11 +447,12 @@ impl EvaluationDatasetEffectExecutor {
 
 #[async_trait]
 impl EffectExecutor<EvaluationDatasetEffect> for EvaluationDatasetEffectExecutor {
-    async fn execute(&self, effect: &EvaluationDatasetEffect) -> Result<(), AppError> {
-        match effect {
+    async fn execute(&self, effect: &EvaluationDatasetEffect) -> Result<(), EffectError> {
+        let result = match effect {
             EvaluationDatasetEffect::AttemptQuestionGeneration(e) => self.execute_attempt(e).await,
             EvaluationDatasetEffect::GenerateParaphrase(e) => self.execute_paraphrase(e).await,
-        }
+        };
+        result.map_err(|e| Box::new(e) as EffectError)
     }
 }
 

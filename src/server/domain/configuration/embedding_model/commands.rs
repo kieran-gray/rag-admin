@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::catalog::AiProviderKind;
-use crate::contracts::EmbeddingModelCommandDto;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AddEmbeddingModel {
@@ -30,31 +29,4 @@ pub enum EmbeddingModelCatalogCommand {
     AddEmbeddingModel(AddEmbeddingModel),
     UpdateEmbeddingModel(UpdateEmbeddingModel),
     RemoveEmbeddingModel(RemoveEmbeddingModel),
-}
-
-impl EmbeddingModelCatalogCommand {
-    pub fn from_dto(dto: EmbeddingModelCommandDto) -> Self {
-        match dto {
-            EmbeddingModelCommandDto::AddEmbeddingModel(d) => {
-                Self::AddEmbeddingModel(AddEmbeddingModel {
-                    kind: d.kind,
-                    model: d.model,
-                    dimensions: d.dimensions,
-                })
-            }
-            EmbeddingModelCommandDto::UpdateEmbeddingModel(d) => {
-                Self::UpdateEmbeddingModel(UpdateEmbeddingModel {
-                    model_id: d.model_id,
-                    kind: d.kind,
-                    model: d.model,
-                    dimensions: d.dimensions,
-                })
-            }
-            EmbeddingModelCommandDto::RemoveEmbeddingModel(d) => {
-                Self::RemoveEmbeddingModel(RemoveEmbeddingModel {
-                    model_id: d.model_id,
-                })
-            }
-        }
-    }
 }

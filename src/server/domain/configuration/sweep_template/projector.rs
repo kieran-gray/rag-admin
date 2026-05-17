@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::server::application::AppError;
 use crate::server::event_sourcing::envelope::EventEnvelope;
+use crate::server::event_sourcing::error::ProjectionError;
 use crate::server::event_sourcing::projector::Projector;
 
 use super::events::SweepTemplateEvent;
@@ -28,7 +28,10 @@ impl Projector<SweepTemplateEvent> for SweepTemplateProjector {
         Self::NAME
     }
 
-    async fn project(&self, events: &[EventEnvelope<SweepTemplateEvent>]) -> Result<(), AppError> {
+    async fn project(
+        &self,
+        events: &[EventEnvelope<SweepTemplateEvent>],
+    ) -> Result<(), ProjectionError> {
         for envelope in events {
             match &envelope.event {
                 SweepTemplateEvent::SweepTemplateCreated(e) => {

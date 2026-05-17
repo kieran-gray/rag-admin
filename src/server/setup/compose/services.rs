@@ -7,7 +7,8 @@ use crate::server::application::chunking::chunkers::{
 };
 use crate::server::application::chunking::ChunkerRegistry;
 use crate::server::application::configuration::{
-    ChunkingConfigurationQueryService, ChunkingConfigurationService, ConfigurationQueryService,
+    ChunkingConfigurationQueryService, ChunkingConfigurationService,
+    ConfigurationDefaultsCommandHandler, ConfigurationQueryService,
     EmbeddingModelCatalogCommandHandler, GenerationModelCatalogCommandHandler,
     PipelineConfigurationQueryService, PipelineConfigurationService, PipelineResolver,
     SweepTemplateCommandHandler, SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
@@ -16,6 +17,9 @@ use crate::server::application::embedding::ports::Embedder;
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::evaluation::ports::{EvaluationGenerator, Retriever};
 use crate::server::application::evaluation::query_service::EvaluationQueryService;
+use crate::server::application::evaluation::{
+    EvaluationDatasetCommandHandler, EvaluationRunCommandHandler,
+};
 use crate::server::application::indexing::IndexingCommandHandler;
 use crate::server::application::indexing::VectorIndexResolver;
 use crate::server::application::llm::GenerationService;
@@ -48,9 +52,12 @@ pub struct Services {
     pub embedding_model_command_handler: Arc<EmbeddingModelCatalogCommandHandler>,
     pub generation_model_command_handler: Arc<GenerationModelCatalogCommandHandler>,
     pub vector_index_command_handler: Arc<VectorIndexCatalogCommandHandler>,
+    pub configuration_defaults_command_handler: Arc<ConfigurationDefaultsCommandHandler>,
     pub sweep_template_command_handler: Arc<SweepTemplateCommandHandler>,
     pub source_document_command_handler: Arc<SourceDocumentCommandHandler>,
     pub indexing_command_handler: Arc<IndexingCommandHandler>,
+    pub evaluation_dataset_command_handler: Arc<EvaluationDatasetCommandHandler>,
+    pub evaluation_run_command_handler: Arc<EvaluationRunCommandHandler>,
 
     pub pipeline_configuration_service: Arc<PipelineConfigurationService>,
     pub chunking_configuration_service: Arc<ChunkingConfigurationService>,
@@ -93,7 +100,7 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
     let ServicesDeps {
         config,
         pool,
-        clock: _,
+        clock,
         id_generator,
         http,
         cf_api,
@@ -180,8 +187,11 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
     ));
     let vector_index_command_handler =
         VectorIndexCatalogCommandHandler::new(Arc::clone(&wirings.vector_index.command_processor));
+    let configuration_defaults_command_handler =
+        ConfigurationDefaultsCommandHandler::new(Arc::clone(&wirings.defaults.command_processor));
     let sweep_template_command_handler = SweepTemplateCommandHandler::new(
         Arc::clone(&wirings.sweep_template.command_processor),
+        Arc::clone(&configuration_defaults_command_handler),
         Arc::clone(&id_generator),
     );
     let source_document_command_handler =
@@ -193,9 +203,12 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         Arc::clone(&repos.pipeline_configuration),
         Arc::clone(&repos.embedding_model),
         Arc::clone(&repos.vector_index),
+        Arc::clone(&configuration_defaults_command_handler),
     );
-    let chunking_configuration_service =
-        ChunkingConfigurationService::new(Arc::clone(&repos.chunking_configuration));
+    let chunking_configuration_service = ChunkingConfigurationService::new(
+        Arc::clone(&repos.chunking_configuration),
+        Arc::clone(&configuration_defaults_command_handler),
+    );
 
     let configuration_query_service = ConfigurationQueryService::new(
         Arc::clone(&repos.embedding_model),
@@ -231,13 +244,30 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         Arc::clone(&repos.source_document),
     );
 
+    let evaluation_dataset_command_handler = EvaluationDatasetCommandHandler::new(
+        Arc::clone(&wirings.dataset.command_processor),
+        Arc::clone(&pipeline_resolver),
+        Arc::clone(&source_document_query_service),
+        Arc::clone(&clock),
+        Arc::clone(&id_generator),
+    );
+    let evaluation_run_command_handler = EvaluationRunCommandHandler::new(
+        Arc::clone(&wirings.run.command_processor),
+        Arc::clone(&evaluation_query_service),
+        Arc::clone(&clock),
+        Arc::clone(&id_generator),
+    );
+
     Ok(Services {
         embedding_model_command_handler,
         generation_model_command_handler,
         vector_index_command_handler,
+        configuration_defaults_command_handler,
         sweep_template_command_handler,
         source_document_command_handler,
         indexing_command_handler,
+        evaluation_dataset_command_handler,
+        evaluation_run_command_handler,
         pipeline_configuration_service,
         chunking_configuration_service,
         configuration_query_service,

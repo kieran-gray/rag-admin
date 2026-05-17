@@ -3,9 +3,11 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::catalog::AiProviderKind;
+use crate::server::domain::configuration::catalog::CatalogRepository;
 use crate::server::domain::configuration::generation_model::{
     GenerationModel, GenerationModelRepository, GenerationModelRepositoryError,
 };
+use crate::server::event_sourcing::error::ProjectionError;
 
 pub struct PostgresGenerationModelRepository {
     pool: PgPool,
@@ -14,6 +16,38 @@ pub struct PostgresGenerationModelRepository {
 impl PostgresGenerationModelRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
+    }
+}
+
+#[async_trait]
+impl CatalogRepository<GenerationModel> for PostgresGenerationModelRepository {
+    async fn upsert(&self, model: GenerationModel) -> Result<(), ProjectionError> {
+        sqlx::query(
+            r#"
+            INSERT INTO generation_models (id, kind, model)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (id) DO UPDATE SET
+                kind       = $2,
+                model      = $3,
+                updated_at = NOW()
+            "#,
+        )
+        .bind(model.generation_model_id)
+        .bind(model.kind.as_str())
+        .bind(&model.model)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| ProjectionError::Storage(format!("save: {e}")))?;
+        Ok(())
+    }
+
+    async fn delete(&self, model_id: Uuid) -> Result<(), ProjectionError> {
+        sqlx::query("DELETE FROM generation_models WHERE id = $1")
+            .bind(model_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| ProjectionError::Storage(format!("delete: {e}")))?;
+        Ok(())
     }
 }
 
@@ -46,35 +80,6 @@ impl GenerationModelRepository for PostgresGenerationModelRepository {
                     GenerationModelRepositoryError::Internal(format!("find_by_id: {e}"))
                 })?;
         Ok(row.map(Into::into))
-    }
-
-    async fn save(&self, model: GenerationModel) -> Result<(), GenerationModelRepositoryError> {
-        sqlx::query(
-            r#"
-            INSERT INTO generation_models (id, kind, model)
-            VALUES ($1, $2, $3)
-            ON CONFLICT (id) DO UPDATE SET
-                kind       = $2,
-                model      = $3,
-                updated_at = NOW()
-            "#,
-        )
-        .bind(model.generation_model_id)
-        .bind(model.kind.as_str())
-        .bind(&model.model)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| GenerationModelRepositoryError::Internal(format!("save: {e}")))?;
-        Ok(())
-    }
-
-    async fn delete(&self, model_id: Uuid) -> Result<(), GenerationModelRepositoryError> {
-        sqlx::query("DELETE FROM generation_models WHERE id = $1")
-            .bind(model_id)
-            .execute(&self.pool)
-            .await
-            .map_err(|e| GenerationModelRepositoryError::Internal(format!("delete: {e}")))?;
-        Ok(())
     }
 }
 

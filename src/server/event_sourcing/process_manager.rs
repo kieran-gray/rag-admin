@@ -9,23 +9,24 @@ use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::server::application::AppError;
-
 use super::aggregate::Aggregate;
 use super::aggregate_repository::AggregateRepository;
 use super::envelope::EventEnvelope;
+use super::error::EsError;
 use super::job_queue::{JobQueue, NewJob};
 use super::policy::PolicyContext;
 
 pub(crate) const LEASE: Duration = Duration::from_secs(30);
 pub(crate) const HEARTBEAT: Duration = Duration::from_secs(10);
 
+pub type EffectError = Box<dyn std::error::Error + Send + Sync + 'static>;
+
 #[async_trait]
 pub trait EffectExecutor<R>: Send + Sync
 where
     R: Send + Sync,
 {
-    async fn execute(&self, effect: &R) -> Result<(), AppError>;
+    async fn execute(&self, effect: &R) -> Result<(), EffectError>;
 }
 
 pub struct ProcessManager<A, R>
@@ -48,7 +49,6 @@ impl<A, R> ProcessManager<A, R>
 where
     A: Aggregate,
     R: Serialize + DeserializeOwned + Clone + Send + Sync + 'static,
-    AppError: From<A::Error>,
 {
     pub fn new(
         repository: Arc<AggregateRepository<A>>,
@@ -69,7 +69,7 @@ where
     pub async fn enqueue_effects_for(
         &self,
         envelopes: &[EventEnvelope<A::Event>],
-    ) -> Result<(), AppError> {
+    ) -> Result<(), EsError> {
         if envelopes.is_empty() {
             return Ok(());
         }
@@ -109,7 +109,7 @@ where
         Ok(())
     }
 
-    pub async fn claim_and_dispatch_one(&self) -> Result<bool, AppError> {
+    pub async fn claim_and_dispatch_one(&self) -> Result<bool, EsError> {
         let Some(job) = self
             .queue
             .claim(A::aggregate_type(), &self.worker_id, LEASE)

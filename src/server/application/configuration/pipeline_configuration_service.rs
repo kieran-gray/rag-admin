@@ -6,6 +6,7 @@ use crate::contracts::{
     CreatePipelineConfigurationDto, DeletePipelineConfigurationDto,
     PipelineConfigurationCommandDto, UpdatePipelineConfigurationDto,
 };
+use crate::server::application::configuration::ConfigurationDefaultsCommandHandler;
 use crate::server::application::AppError;
 use crate::server::domain::configuration::embedding_model::EmbeddingModelRepository;
 use crate::server::domain::configuration::pipeline_configuration::{
@@ -17,6 +18,7 @@ pub struct PipelineConfigurationService {
     repository: Arc<dyn PipelineConfigurationRepository>,
     embedding_models: Arc<dyn EmbeddingModelRepository>,
     vector_indexes: Arc<dyn VectorIndexRepository>,
+    defaults: Arc<ConfigurationDefaultsCommandHandler>,
 }
 
 impl PipelineConfigurationService {
@@ -24,11 +26,13 @@ impl PipelineConfigurationService {
         repository: Arc<dyn PipelineConfigurationRepository>,
         embedding_models: Arc<dyn EmbeddingModelRepository>,
         vector_indexes: Arc<dyn VectorIndexRepository>,
+        defaults: Arc<ConfigurationDefaultsCommandHandler>,
     ) -> Arc<Self> {
         Arc::new(Self {
             repository,
             embedding_models,
             vector_indexes,
+            defaults,
         })
     }
 
@@ -58,7 +62,7 @@ impl PipelineConfigurationService {
             })
             .await?;
         if dto.is_default {
-            self.repository.set_default(id).await?;
+            self.defaults.set_default_pipeline_configuration(id).await?;
         }
         Ok(())
     }
@@ -77,8 +81,8 @@ impl PipelineConfigurationService {
             })
             .await?;
         if dto.is_default {
-            self.repository
-                .set_default(dto.pipeline_configuration_id)
+            self.defaults
+                .set_default_pipeline_configuration(dto.pipeline_configuration_id)
                 .await?;
         }
         Ok(())

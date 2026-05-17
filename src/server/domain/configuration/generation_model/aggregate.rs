@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::catalog::AiProviderKind;
+use crate::server::domain::configuration::catalog::{CatalogEntry, CatalogError, CatalogState};
 use crate::server::event_sourcing::Aggregate;
 
 use super::commands::GenerationModelCatalogCommand;
@@ -10,14 +10,12 @@ use super::events::{
     GenerationModelAdded, GenerationModelCatalogCreated, GenerationModelCatalogEvent,
     GenerationModelRemoved, GenerationModelUpdated,
 };
-use super::exceptions::GenerationModelCatalogError;
 
 const GENERATION_MODEL_CATALOG_ID: Uuid = uuid::uuid!("8a17e2f1-3a9d-4e58-a9c9-0a0f61d4a002");
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GenerationModelCatalog {
-    pub catalog_id: Uuid,
-    pub models: Vec<GenerationModel>,
+    state: CatalogState<GenerationModel>,
 }
 
 impl GenerationModelCatalog {
@@ -25,44 +23,21 @@ impl GenerationModelCatalog {
         GENERATION_MODEL_CATALOG_ID
     }
 
+    pub fn models(&self) -> &[GenerationModel] {
+        &self.state.entries
+    }
+
     fn empty(catalog_id: Uuid) -> Self {
         Self {
-            catalog_id,
-            models: Vec::new(),
+            state: CatalogState::empty(catalog_id),
         }
-    }
-
-    fn find(&self, model_id: Uuid) -> Result<&GenerationModel, GenerationModelCatalogError> {
-        self.models
-            .iter()
-            .find(|m| m.generation_model_id == model_id)
-            .ok_or(GenerationModelCatalogError::NotFound)
-    }
-
-    fn ensure_unique(
-        &self,
-        kind: AiProviderKind,
-        model: &str,
-        excluding: Option<Uuid>,
-    ) -> Result<(), GenerationModelCatalogError> {
-        if self
-            .models
-            .iter()
-            .any(|m| m.kind == kind && m.model == model && Some(m.generation_model_id) != excluding)
-        {
-            return Err(GenerationModelCatalogError::ValidationError(format!(
-                "Generation model {model} already exists for {}",
-                kind.as_str()
-            )));
-        }
-        Ok(())
     }
 }
 
 impl Aggregate for GenerationModelCatalog {
     type Event = GenerationModelCatalogEvent;
     type Command = GenerationModelCatalogCommand;
-    type Error = GenerationModelCatalogError;
+    type Error = CatalogError;
 
     fn aggregate_type() -> &'static str {
         "generation_model_catalog"
@@ -71,27 +46,24 @@ impl Aggregate for GenerationModelCatalog {
     fn apply(&mut self, event: &Self::Event) {
         match event {
             Self::Event::GenerationModelCatalogCreated(e) => {
-                *self = Self::empty(e.catalog_id);
+                self.state = CatalogState::empty(e.catalog_id);
             }
             Self::Event::GenerationModelAdded(e) => {
-                self.models.push(GenerationModel {
+                self.state.push(GenerationModel {
                     generation_model_id: e.model_id,
                     kind: e.kind,
                     model: e.model.clone(),
                 });
             }
             Self::Event::GenerationModelUpdated(e) => {
-                if let Some(m) = self
-                    .models
-                    .iter_mut()
-                    .find(|m| m.generation_model_id == e.model_id)
-                {
-                    m.kind = e.kind;
-                    m.model = e.model.clone();
-                }
+                self.state.update(GenerationModel {
+                    generation_model_id: e.model_id,
+                    kind: e.kind,
+                    model: e.model.clone(),
+                });
             }
             Self::Event::GenerationModelRemoved(e) => {
-                self.models.retain(|m| m.generation_model_id != e.model_id);
+                self.state.remove(e.model_id);
             }
         }
     }
@@ -112,34 +84,45 @@ impl Aggregate for GenerationModelCatalog {
                 Self::empty(Self::singleton_id())
             }
         };
-        let state = &owned_state;
 
         let mut events = match command {
             GenerationModelCatalogCommand::AddGenerationModel(cmd) => {
-                validate_non_empty("generation model", &cmd.model)?;
-                validate_model_id_format(cmd.kind, &cmd.model)?;
-                state.ensure_unique(cmd.kind, &cmd.model, None)?;
-                vec![Self::Event::GenerationModelAdded(GenerationModelAdded {
-                    model_id: Uuid::new_v4(),
+                let candidate = GenerationModel {
+                    generation_model_id: Uuid::new_v4(),
                     kind: cmd.kind,
                     model: cmd.model,
+                };
+                candidate.validate()?;
+                owned_state
+                    .state
+                    .ensure_unique(&candidate.natural_key(), None)?;
+                vec![Self::Event::GenerationModelAdded(GenerationModelAdded {
+                    model_id: candidate.generation_model_id,
+                    kind: candidate.kind,
+                    model: candidate.model,
                 })]
             }
             GenerationModelCatalogCommand::UpdateGenerationModel(cmd) => {
-                let existing = state.find(cmd.model_id)?;
-                validate_non_empty("generation model", &cmd.model)?;
-                validate_model_id_format(cmd.kind, &cmd.model)?;
-                state.ensure_unique(cmd.kind, &cmd.model, Some(existing.generation_model_id))?;
+                let existing = owned_state.state.find(cmd.model_id)?;
+                let candidate = GenerationModel {
+                    generation_model_id: existing.generation_model_id,
+                    kind: cmd.kind,
+                    model: cmd.model,
+                };
+                candidate.validate()?;
+                owned_state
+                    .state
+                    .ensure_unique(&candidate.natural_key(), Some(existing.generation_model_id))?;
                 vec![Self::Event::GenerationModelUpdated(
                     GenerationModelUpdated {
-                        model_id: existing.generation_model_id,
-                        kind: cmd.kind,
-                        model: cmd.model,
+                        model_id: candidate.generation_model_id,
+                        kind: candidate.kind,
+                        model: candidate.model,
                     },
                 )]
             }
             GenerationModelCatalogCommand::RemoveGenerationModel(cmd) => {
-                let existing = state.find(cmd.model_id)?;
+                let existing = owned_state.state.find(cmd.model_id)?;
                 vec![Self::Event::GenerationModelRemoved(
                     GenerationModelRemoved {
                         model_id: existing.generation_model_id,
@@ -165,26 +148,4 @@ impl Aggregate for GenerationModelCatalog {
         }
         state
     }
-}
-
-fn validate_non_empty(field: &str, value: &str) -> Result<(), GenerationModelCatalogError> {
-    if value.trim().is_empty() {
-        return Err(GenerationModelCatalogError::ValidationError(format!(
-            "{field} cannot be empty"
-        )));
-    }
-    Ok(())
-}
-
-fn validate_model_id_format(
-    kind: AiProviderKind,
-    model_id: &str,
-) -> Result<(), GenerationModelCatalogError> {
-    if !kind.model_id_well_formed(model_id) {
-        return Err(GenerationModelCatalogError::ValidationError(format!(
-            "model id '{model_id}' is not well-formed for provider kind {}",
-            kind.as_str()
-        )));
-    }
-    Ok(())
 }

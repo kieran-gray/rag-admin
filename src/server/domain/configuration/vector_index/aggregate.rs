@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::server::domain::configuration::catalog::{CatalogEntry, CatalogError, CatalogState};
 use crate::server::event_sourcing::Aggregate;
 
 use super::commands::VectorIndexCatalogCommand;
@@ -9,14 +10,12 @@ use super::events::{
     VectorIndexAdded, VectorIndexCatalogCreated, VectorIndexCatalogEvent, VectorIndexRemoved,
     VectorIndexUpdated,
 };
-use super::exceptions::VectorIndexCatalogError;
 
 const VECTOR_INDEX_CATALOG_ID: Uuid = uuid::uuid!("8a17e2f1-3a9d-4e58-a9c9-0a0f61d4a003");
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VectorIndexCatalog {
-    pub catalog_id: Uuid,
-    pub indexes: Vec<VectorIndex>,
+    state: CatalogState<VectorIndex>,
 }
 
 impl VectorIndexCatalog {
@@ -24,42 +23,21 @@ impl VectorIndexCatalog {
         VECTOR_INDEX_CATALOG_ID
     }
 
+    pub fn indexes(&self) -> &[VectorIndex] {
+        &self.state.entries
+    }
+
     fn empty(catalog_id: Uuid) -> Self {
         Self {
-            catalog_id,
-            indexes: Vec::new(),
+            state: CatalogState::empty(catalog_id),
         }
-    }
-
-    fn find(&self, index_id: Uuid) -> Result<&VectorIndex, VectorIndexCatalogError> {
-        self.indexes
-            .iter()
-            .find(|i| i.index_id == index_id)
-            .ok_or(VectorIndexCatalogError::NotFound)
-    }
-
-    fn ensure_unique_name(
-        &self,
-        name: &str,
-        excluding: Option<Uuid>,
-    ) -> Result<(), VectorIndexCatalogError> {
-        if self
-            .indexes
-            .iter()
-            .any(|i| i.name == name && Some(i.index_id) != excluding)
-        {
-            return Err(VectorIndexCatalogError::ValidationError(format!(
-                "Vector index with name {name} already exists"
-            )));
-        }
-        Ok(())
     }
 }
 
 impl Aggregate for VectorIndexCatalog {
     type Event = VectorIndexCatalogEvent;
     type Command = VectorIndexCatalogCommand;
-    type Error = VectorIndexCatalogError;
+    type Error = CatalogError;
 
     fn aggregate_type() -> &'static str {
         "vector_index_catalog"
@@ -68,10 +46,10 @@ impl Aggregate for VectorIndexCatalog {
     fn apply(&mut self, event: &Self::Event) {
         match event {
             Self::Event::VectorIndexCatalogCreated(e) => {
-                *self = Self::empty(e.catalog_id);
+                self.state = CatalogState::empty(e.catalog_id);
             }
             Self::Event::VectorIndexAdded(e) => {
-                self.indexes.push(VectorIndex {
+                self.state.push(VectorIndex {
                     index_id: e.index_id,
                     kind: e.kind,
                     name: e.name.clone(),
@@ -79,14 +57,15 @@ impl Aggregate for VectorIndexCatalog {
                 });
             }
             Self::Event::VectorIndexUpdated(e) => {
-                if let Some(i) = self.indexes.iter_mut().find(|i| i.index_id == e.index_id) {
-                    i.kind = e.kind;
-                    i.name = e.name.clone();
-                    i.dimensions = e.dimensions;
-                }
+                self.state.update(VectorIndex {
+                    index_id: e.index_id,
+                    kind: e.kind,
+                    name: e.name.clone(),
+                    dimensions: e.dimensions,
+                });
             }
             Self::Event::VectorIndexRemoved(e) => {
-                self.indexes.retain(|i| i.index_id != e.index_id);
+                self.state.remove(e.index_id);
             }
         }
     }
@@ -107,34 +86,47 @@ impl Aggregate for VectorIndexCatalog {
                 Self::empty(Self::singleton_id())
             }
         };
-        let state = &owned_state;
 
         let mut events = match command {
             VectorIndexCatalogCommand::AddVectorIndex(cmd) => {
-                validate_non_empty("vector index name", &cmd.name)?;
-                validate_positive("vector index dimensions", cmd.dimensions)?;
-                state.ensure_unique_name(&cmd.name, None)?;
-                vec![Self::Event::VectorIndexAdded(VectorIndexAdded {
+                let candidate = VectorIndex {
                     index_id: Uuid::new_v4(),
                     kind: cmd.kind,
                     name: cmd.name,
                     dimensions: cmd.dimensions,
+                };
+                candidate.validate()?;
+                owned_state
+                    .state
+                    .ensure_unique(&candidate.natural_key(), None)?;
+                vec![Self::Event::VectorIndexAdded(VectorIndexAdded {
+                    index_id: candidate.index_id,
+                    kind: candidate.kind,
+                    name: candidate.name,
+                    dimensions: candidate.dimensions,
                 })]
             }
             VectorIndexCatalogCommand::UpdateVectorIndex(cmd) => {
-                let existing = state.find(cmd.index_id)?;
-                validate_non_empty("vector index name", &cmd.name)?;
-                validate_positive("vector index dimensions", cmd.dimensions)?;
-                state.ensure_unique_name(&cmd.name, Some(existing.index_id))?;
-                vec![Self::Event::VectorIndexUpdated(VectorIndexUpdated {
+                let existing = owned_state.state.find(cmd.index_id)?;
+                let candidate = VectorIndex {
                     index_id: existing.index_id,
                     kind: cmd.kind,
                     name: cmd.name,
                     dimensions: cmd.dimensions,
+                };
+                candidate.validate()?;
+                owned_state
+                    .state
+                    .ensure_unique(&candidate.natural_key(), Some(existing.index_id))?;
+                vec![Self::Event::VectorIndexUpdated(VectorIndexUpdated {
+                    index_id: candidate.index_id,
+                    kind: candidate.kind,
+                    name: candidate.name,
+                    dimensions: candidate.dimensions,
                 })]
             }
             VectorIndexCatalogCommand::RemoveVectorIndex(cmd) => {
-                let existing = state.find(cmd.index_id)?;
+                let existing = owned_state.state.find(cmd.index_id)?;
                 vec![Self::Event::VectorIndexRemoved(VectorIndexRemoved {
                     index_id: existing.index_id,
                 })]
@@ -158,22 +150,4 @@ impl Aggregate for VectorIndexCatalog {
         }
         state
     }
-}
-
-fn validate_non_empty(field: &str, value: &str) -> Result<(), VectorIndexCatalogError> {
-    if value.trim().is_empty() {
-        return Err(VectorIndexCatalogError::ValidationError(format!(
-            "{field} cannot be empty"
-        )));
-    }
-    Ok(())
-}
-
-fn validate_positive(field: &str, value: u32) -> Result<(), VectorIndexCatalogError> {
-    if value == 0 {
-        return Err(VectorIndexCatalogError::ValidationError(format!(
-            "{field} must be greater than zero"
-        )));
-    }
-    Ok(())
 }

@@ -1,4 +1,6 @@
+pub mod catalog;
 pub mod chunking_configuration;
+pub mod defaults;
 pub mod embedding_model;
 pub mod generation_model;
 pub mod pipeline_configuration;

@@ -3,6 +3,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use super::read_model::{EvaluationRunReadModel, EvaluationVariantResultDto, NewRunSummary};
+use crate::server::event_sourcing::error::ProjectionError;
 
 #[derive(Debug, Error)]
 pub enum EvaluationRunRepositoryError {
@@ -59,4 +60,10 @@ pub trait EvaluationRunRepository: Send + Sync {
         run_id: Uuid,
         reason: String,
     ) -> Result<(), EvaluationRunRepositoryError>;
+}
+
+impl From<EvaluationRunRepositoryError> for ProjectionError {
+    fn from(value: EvaluationRunRepositoryError) -> Self {
+        Self::Storage(value.to_string())
+    }
 }

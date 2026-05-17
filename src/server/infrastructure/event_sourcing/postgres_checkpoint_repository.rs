@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 use sqlx::PgPool;
 
-use crate::server::application::AppError;
 use crate::server::event_sourcing::checkpoint::{
     CheckpointRepository, CheckpointStatus, ProjectionCheckpoint,
 };
+use crate::server::event_sourcing::error::EsError;
 
 pub struct PostgresCheckpointRepository {
     pool: PgPool,
@@ -18,7 +18,7 @@ impl PostgresCheckpointRepository {
 
 #[async_trait]
 impl CheckpointRepository for PostgresCheckpointRepository {
-    async fn load(&self, projector_name: &str) -> Result<Option<ProjectionCheckpoint>, AppError> {
+    async fn load(&self, projector_name: &str) -> Result<Option<ProjectionCheckpoint>, EsError> {
         let row: Option<CheckpointRow> = sqlx::query_as(
             "SELECT projector_name, last_processed_log_position, status, error_message, error_count, updated_at \
              FROM projection_checkpoints WHERE projector_name = $1",
@@ -26,12 +26,12 @@ impl CheckpointRepository for PostgresCheckpointRepository {
         .bind(projector_name)
         .fetch_optional(&self.pool)
         .await
-        .map_err(|e| AppError::Internal(format!("load checkpoint: {e}")))?;
+        .map_err(|e| EsError::Storage(format!("load checkpoint: {e}")))?;
 
         Ok(row.map(Into::into))
     }
 
-    async fn upsert(&self, checkpoint: &ProjectionCheckpoint) -> Result<(), AppError> {
+    async fn upsert(&self, checkpoint: &ProjectionCheckpoint) -> Result<(), EsError> {
         sqlx::query(
             "INSERT INTO projection_checkpoints \
                  (projector_name, last_processed_log_position, status, error_message, error_count, updated_at) \
@@ -51,7 +51,7 @@ impl CheckpointRepository for PostgresCheckpointRepository {
         .bind(checkpoint.updated_at)
         .execute(&self.pool)
         .await
-        .map_err(|e| AppError::Internal(format!("upsert checkpoint: {e}")))?;
+        .map_err(|e| EsError::Storage(format!("upsert checkpoint: {e}")))?;
 
         Ok(())
     }

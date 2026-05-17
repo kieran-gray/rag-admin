@@ -6,8 +6,6 @@ use tokio::sync::Notify;
 use tokio::time::timeout;
 use tracing::{debug, error, info};
 
-use crate::server::application::AppError;
-
 use super::aggregate::Aggregate;
 use super::process_manager::ProcessManager;
 
@@ -26,7 +24,6 @@ impl<A, R> EffectDispatcher<A, R>
 where
     A: Aggregate + 'static,
     R: Serialize + DeserializeOwned + Clone + Send + Sync + 'static,
-    AppError: From<A::Error>,
 {
     pub fn new(process_manager: Arc<ProcessManager<A, R>>, wakeup: Arc<Notify>) -> Self {
         Self {

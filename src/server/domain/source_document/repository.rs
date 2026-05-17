@@ -3,6 +3,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use super::{read_model::SourceDocumentReadModel, source_ref::SourceRef};
+use crate::server::event_sourcing::error::ProjectionError;
 
 #[derive(Debug, Error)]
 pub enum SourceDocumentRepositoryError {
@@ -28,4 +29,10 @@ pub trait SourceDocumentRepository: Send + Sync {
         &self,
         source_ref: &SourceRef,
     ) -> Result<Option<SourceDocumentReadModel>, SourceDocumentRepositoryError>;
+}
+
+impl From<SourceDocumentRepositoryError> for ProjectionError {
+    fn from(value: SourceDocumentRepositoryError) -> Self {
+        Self::Storage(value.to_string())
+    }
 }

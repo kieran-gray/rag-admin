@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
-use crate::server::application::AppError;
+use super::error::EsError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CheckpointStatus {
@@ -44,7 +44,7 @@ impl ProjectionCheckpoint {
 
 #[async_trait]
 pub trait CheckpointRepository: Send + Sync {
-    async fn load(&self, projector_name: &str) -> Result<Option<ProjectionCheckpoint>, AppError>;
+    async fn load(&self, projector_name: &str) -> Result<Option<ProjectionCheckpoint>, EsError>;
 
-    async fn upsert(&self, checkpoint: &ProjectionCheckpoint) -> Result<(), AppError>;
+    async fn upsert(&self, checkpoint: &ProjectionCheckpoint) -> Result<(), EsError>;
 }

@@ -9,34 +9,15 @@ use crate::contracts::{
 };
 
 #[cfg(feature = "ssr")]
-use crate::server::application::configuration::PipelineResolver;
-#[cfg(feature = "ssr")]
 use crate::server::application::evaluation::query_service::EvaluationQueryService;
 #[cfg(feature = "ssr")]
-use crate::server::application::ports::{Clock, IdGenerator};
+use crate::server::application::evaluation::{
+    EvaluationDatasetCommandHandler, EvaluationRunCommandHandler, StartDatasetGenerationRequest,
+};
 #[cfg(feature = "ssr")]
 use crate::server::application::source_document::SourceDocumentQueryService;
 #[cfg(feature = "ssr")]
-use crate::server::domain::evaluation::dataset::{
-    aggregate::EvaluationDataset,
-    commands::{
-        CancelDatasetGeneration as CancelDatasetGenerationCommand,
-        DeleteDataset as DeleteDatasetCommand, EvaluationDatasetCommand,
-        RenameDataset as RenameDatasetCommand, RequestDatasetGeneration,
-    },
-};
-#[cfg(feature = "ssr")]
-use crate::server::domain::evaluation::run::{
-    aggregate::EvaluationRun,
-    commands::{EvaluationRunCommand, RequestRun},
-    scoring_policy::ScoringPolicy,
-};
-#[cfg(feature = "ssr")]
-use crate::server::event_sourcing::command_processor::CommandProcessor;
-#[cfg(feature = "ssr")]
-use crate::server::infrastructure::{id::UuidGenerator, time::SystemClock};
-#[cfg(feature = "ssr")]
-use crate::server_functions::error::ctx;
+use crate::server_functions::error::{ctx, map_app_error};
 #[cfg(feature = "ssr")]
 use std::collections::HashMap;
 #[cfg(feature = "ssr")]
@@ -53,7 +34,7 @@ pub async fn get_datasets_for_document(
     let datasets = ctx::<Arc<EvaluationQueryService>>()?
         .list_datasets_for_document(document_id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(map_app_error)?;
 
     Ok(datasets
         .into_iter()
@@ -71,16 +52,13 @@ pub async fn get_datasets_for_document(
 pub async fn get_dataset(dataset_id: Uuid) -> Result<Option<EvaluationDatasetDto>, ServerFnError> {
     let query = ctx::<Arc<EvaluationQueryService>>()?;
 
-    let dataset = query
-        .get_dataset(dataset_id)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let dataset = query.get_dataset(dataset_id).await.map_err(map_app_error)?;
 
     if let Some(d) = dataset {
         let questions = query
             .load_questions(dataset_id)
             .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+            .map_err(map_app_error)?;
 
         Ok(Some(EvaluationDatasetDto {
             dataset_id: d.dataset_id,
@@ -117,102 +95,41 @@ pub async fn start_generate_synthetic_dataset(
     excerpt_similarity_threshold_milli: u32,
     duplicate_similarity_threshold_milli: u32,
 ) -> Result<EvaluationJobInfo, ServerFnError> {
-    let pipelines = ctx::<Arc<PipelineResolver>>()?;
-    let documents = ctx::<Arc<SourceDocumentQueryService>>()?;
-    let dataset_processor = ctx::<Arc<CommandProcessor<EvaluationDataset>>>()?;
-
-    let pipeline = pipelines
-        .resolve(pipeline_configuration_id)
+    ctx::<Arc<EvaluationDatasetCommandHandler>>()?
+        .start_generation(StartDatasetGenerationRequest {
+            document_id,
+            pipeline_configuration_id,
+            label,
+            question_count,
+            excerpt_similarity_threshold_milli,
+            duplicate_similarity_threshold_milli,
+        })
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
-
-    let document = documents
-        .get_detail(document_id)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
-        .ok_or_else(|| ServerFnError::new(format!("document {document_id} not found")))?
-        .document;
-
-    let dataset_id = UuidGenerator.new_uuid();
-    let occurred_at = SystemClock.now();
-
-    let target = question_count.max(1);
-    let max_attempts = target.saturating_mul(12).max(target.saturating_add(12));
-
-    dataset_processor
-        .handle(
-            dataset_id,
-            EvaluationDatasetCommand::RequestDatasetGeneration(RequestDatasetGeneration {
-                dataset_id,
-                document_id,
-                document_version: document.latest_version,
-                content_hash: document.latest_content_hash.clone(),
-                label,
-                target_question_count: target,
-                generation_model_id: pipeline.generation_model.generation_model_id,
-                generation_model: pipeline.generation_model.model.clone(),
-                excerpt_similarity_threshold_milli: excerpt_similarity_threshold_milli.min(1000),
-                duplicate_similarity_threshold_milli: duplicate_similarity_threshold_milli
-                    .min(1000),
-                embedding_model_id: pipeline.embedding_model.embedding_model_id,
-                max_attempts,
-                grammar_variants_enabled: true,
-                occurred_at,
-            }),
-        )
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
-
-    Ok(EvaluationJobInfo {
-        job_id: dataset_id.to_string(),
-        stream_url: format!("/api/events/ws?stream_id={dataset_id}"),
-    })
+        .map_err(map_app_error)
 }
 
 #[server(name = RenameDataset, prefix = "/api", endpoint = "rename_dataset")]
 pub async fn rename_dataset(dataset_id: Uuid, label: String) -> Result<(), ServerFnError> {
-    ctx::<Arc<CommandProcessor<EvaluationDataset>>>()?
-        .handle(
-            dataset_id,
-            EvaluationDatasetCommand::RenameDataset(RenameDatasetCommand {
-                dataset_id,
-                label,
-                occurred_at: SystemClock.now(),
-            }),
-        )
+    ctx::<Arc<EvaluationDatasetCommandHandler>>()?
+        .rename(dataset_id, label)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
-    Ok(())
+        .map_err(map_app_error)
 }
 
 #[server(name = DeleteDataset, prefix = "/api", endpoint = "delete_dataset")]
 pub async fn delete_dataset(dataset_id: Uuid) -> Result<(), ServerFnError> {
-    ctx::<Arc<CommandProcessor<EvaluationDataset>>>()?
-        .handle(
-            dataset_id,
-            EvaluationDatasetCommand::DeleteDataset(DeleteDatasetCommand {
-                dataset_id,
-                occurred_at: SystemClock.now(),
-            }),
-        )
+    ctx::<Arc<EvaluationDatasetCommandHandler>>()?
+        .delete(dataset_id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
-    Ok(())
+        .map_err(map_app_error)
 }
 
 #[server(name = CancelDatasetGeneration, prefix = "/api", endpoint = "cancel_dataset_generation")]
 pub async fn cancel_dataset_generation(dataset_id: Uuid) -> Result<(), ServerFnError> {
-    ctx::<Arc<CommandProcessor<EvaluationDataset>>>()?
-        .handle(
-            dataset_id,
-            EvaluationDatasetCommand::CancelDatasetGeneration(CancelDatasetGenerationCommand {
-                dataset_id,
-                occurred_at: SystemClock.now(),
-            }),
-        )
+    ctx::<Arc<EvaluationDatasetCommandHandler>>()?
+        .cancel_generation(dataset_id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
-    Ok(())
+        .map_err(map_app_error)
 }
 
 #[server(
@@ -223,48 +140,10 @@ pub async fn cancel_dataset_generation(dataset_id: Uuid) -> Result<(), ServerFnE
 pub async fn start_run_optimization(
     request: crate::contracts::RunOptimizationRequestDto,
 ) -> Result<EvaluationJobInfo, ServerFnError> {
-    let datasets = ctx::<Arc<EvaluationQueryService>>()?;
-    let run_processor = ctx::<Arc<CommandProcessor<EvaluationRun>>>()?;
-
-    let dataset = datasets
-        .get_dataset(request.dataset_id)
+    ctx::<Arc<EvaluationRunCommandHandler>>()?
+        .start_optimization(request)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
-        .ok_or_else(|| {
-            ServerFnError::new(format!(
-                "evaluation dataset {} not found",
-                request.dataset_id
-            ))
-        })?;
-
-    let scoring_policy = ScoringPolicy::default();
-    let run_id = UuidGenerator.new_uuid();
-    let occurred_at = SystemClock.now();
-
-    run_processor
-        .handle(
-            run_id,
-            EvaluationRunCommand::RequestRun(RequestRun {
-                run_id,
-                dataset_id: request.dataset_id,
-                pipeline_configuration_id: request.pipeline_configuration_id,
-                document_id: dataset.document_id,
-                document_version: dataset.document_version,
-                variants: Vec::new(),
-                options: Vec::new(),
-                autotune_request: None,
-                optimization: Some(request.optimization),
-                scoring_policy,
-                occurred_at,
-            }),
-        )
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
-
-    Ok(EvaluationJobInfo {
-        job_id: run_id.to_string(),
-        stream_url: format!("/api/events/ws?stream_id={run_id}"),
-    })
+        .map_err(map_app_error)
 }
 
 #[server(
@@ -275,48 +154,10 @@ pub async fn start_run_optimization(
 pub async fn start_run_evaluation(
     request: RunEvaluationRequestDto,
 ) -> Result<EvaluationJobInfo, ServerFnError> {
-    let datasets = ctx::<Arc<EvaluationQueryService>>()?;
-    let run_processor = ctx::<Arc<CommandProcessor<EvaluationRun>>>()?;
-
-    let dataset = datasets
-        .get_dataset(request.dataset_id)
+    ctx::<Arc<EvaluationRunCommandHandler>>()?
+        .start_run(request)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
-        .ok_or_else(|| {
-            ServerFnError::new(format!(
-                "evaluation dataset {} not found",
-                request.dataset_id
-            ))
-        })?;
-
-    let scoring_policy = ScoringPolicy::default();
-    let run_id = UuidGenerator.new_uuid();
-    let occurred_at = SystemClock.now();
-
-    run_processor
-        .handle(
-            run_id,
-            EvaluationRunCommand::RequestRun(RequestRun {
-                run_id,
-                dataset_id: request.dataset_id,
-                pipeline_configuration_id: request.pipeline_configuration_id,
-                document_id: dataset.document_id,
-                document_version: dataset.document_version,
-                variants: request.variants,
-                options: request.options,
-                autotune_request: request.autotune,
-                optimization: None,
-                scoring_policy,
-                occurred_at,
-            }),
-        )
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
-
-    Ok(EvaluationJobInfo {
-        job_id: run_id.to_string(),
-        stream_url: format!("/api/events/ws?stream_id={run_id}"),
-    })
+        .map_err(map_app_error)
 }
 
 #[server(
@@ -330,7 +171,7 @@ pub async fn get_runs_for_document(
     let runs = ctx::<Arc<EvaluationQueryService>>()?
         .list_runs_for_document(document_id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(map_app_error)?;
 
     Ok(runs
         .into_iter()
@@ -350,53 +191,10 @@ pub async fn get_runs_for_document(
     endpoint = "replicate_optimization_run"
 )]
 pub async fn replicate_optimization_run(run_id: Uuid) -> Result<Uuid, ServerFnError> {
-    use crate::core::EvaluationRunOptions;
-
-    let query = ctx::<Arc<EvaluationQueryService>>()?;
-    let run_processor = ctx::<Arc<CommandProcessor<EvaluationRun>>>()?;
-
-    let run = query
-        .get_run(run_id)
+    ctx::<Arc<EvaluationRunCommandHandler>>()?
+        .replicate_optimization(run_id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
-        .ok_or_else(|| ServerFnError::new(format!("run {run_id} not found")))?;
-
-    let original = run
-        .optimization
-        .clone()
-        .ok_or_else(|| ServerFnError::new("run was not an optimization run".to_string()))?;
-    let optimization = crate::core::OptimizationConfig {
-        budget: original.budget,
-        scope: original.scope,
-        judges_enabled: original.judges_enabled,
-        seed: None,
-    };
-
-    let new_run_id = UuidGenerator.new_uuid();
-    let scoring_policy = ScoringPolicy::default();
-    let occurred_at = SystemClock.now();
-
-    run_processor
-        .handle(
-            new_run_id,
-            EvaluationRunCommand::RequestRun(RequestRun {
-                run_id: new_run_id,
-                dataset_id: run.dataset_id,
-                pipeline_configuration_id: run.pipeline_configuration_id,
-                document_id: run.document_id,
-                document_version: run.document_version,
-                variants: Vec::<crate::core::ChunkingVariant>::new(),
-                options: Vec::<EvaluationRunOptions>::new(),
-                autotune_request: None,
-                optimization: Some(optimization),
-                scoring_policy,
-                occurred_at,
-            }),
-        )
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
-
-    Ok(new_run_id)
+        .map_err(map_app_error)
 }
 
 #[server(
@@ -423,7 +221,7 @@ pub async fn promote_variant_to_chunking_config(
     let run = query
         .get_run(run_id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(map_app_error)?
         .ok_or_else(|| ServerFnError::new(format!("run {run_id} not found")))?;
 
     let chosen = run
@@ -453,7 +251,7 @@ pub async fn promote_variant_to_chunking_config(
     chunking_service
         .handle_dto(cmd)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(map_app_error)?;
 
     Ok(run_id)
 }
@@ -463,7 +261,7 @@ pub async fn get_run(run_id: Uuid) -> Result<Option<EvaluationRunDto>, ServerFnE
     let run = ctx::<Arc<EvaluationQueryService>>()?
         .get_run(run_id)
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .map_err(map_app_error)?;
 
     Ok(run.map(|r| EvaluationRunDto {
         run_id: r.run_id,
@@ -480,15 +278,12 @@ pub async fn get_recent_runs(limit: u32) -> Result<Vec<RecentEvaluationRunDto>, 
     let query = ctx::<Arc<EvaluationQueryService>>()?;
     let documents = ctx::<Arc<SourceDocumentQueryService>>()?;
 
-    let runs = query
-        .list_recent_runs(limit)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let runs = query.list_recent_runs(limit).await.map_err(map_app_error)?;
 
     let doc_index: HashMap<Uuid, String> = documents
         .list()
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .map_err(map_app_error)?
         .into_iter()
         .map(|d| (d.document_id, d.title))
         .collect();

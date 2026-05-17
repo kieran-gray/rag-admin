@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::server::application::AppError;
+use super::error::EsError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct IdempotencyKey(pub String);
@@ -43,23 +43,23 @@ pub trait JobQueue<R>: Send + Sync
 where
     R: Serialize + for<'de> Deserialize<'de> + Send + Sync,
 {
-    async fn enqueue(&self, queue: &str, jobs: &[NewJob<R>]) -> Result<(), AppError>;
+    async fn enqueue(&self, queue: &str, jobs: &[NewJob<R>]) -> Result<(), EsError>;
 
     async fn claim(
         &self,
         queue: &str,
         worker_id: &str,
         lease: Duration,
-    ) -> Result<Option<ClaimedJob<R>>, AppError>;
+    ) -> Result<Option<ClaimedJob<R>>, EsError>;
 
     async fn heartbeat(
         &self,
         job_id: Uuid,
         worker_id: &str,
         lease: Duration,
-    ) -> Result<bool, AppError>;
+    ) -> Result<bool, EsError>;
 
-    async fn ack(&self, job_id: Uuid, worker_id: &str) -> Result<(), AppError>;
+    async fn ack(&self, job_id: Uuid, worker_id: &str) -> Result<(), EsError>;
 
     async fn nack(
         &self,
@@ -67,9 +67,9 @@ where
         worker_id: &str,
         error: &str,
         backoff: Duration,
-    ) -> Result<(), AppError>;
+    ) -> Result<(), EsError>;
 
-    async fn dead_letter(&self, job_id: Uuid, error: &str) -> Result<(), AppError>;
+    async fn dead_letter(&self, job_id: Uuid, error: &str) -> Result<(), EsError>;
 
-    async fn cancel_partition(&self, queue: &str, partition_key: Uuid) -> Result<u64, AppError>;
+    async fn cancel_partition(&self, queue: &str, partition_key: Uuid) -> Result<u64, EsError>;
 }

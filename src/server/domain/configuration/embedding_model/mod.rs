@@ -2,7 +2,6 @@ pub mod aggregate;
 pub mod commands;
 pub mod entity;
 pub mod events;
-pub mod exceptions;
 pub mod projector;
 pub mod read_model;
 pub mod repository;
@@ -16,7 +15,6 @@ pub use events::{
     EmbeddingModelAdded, EmbeddingModelCatalogCreated, EmbeddingModelCatalogEvent,
     EmbeddingModelRemoved, EmbeddingModelUpdated,
 };
-pub use exceptions::EmbeddingModelCatalogError;
-pub use projector::EmbeddingModelProjector;
+pub use projector::make_embedding_model_projector;
 pub use read_model::EmbeddingModelReadModel;
 pub use repository::{EmbeddingModelRepository, EmbeddingModelRepositoryError};

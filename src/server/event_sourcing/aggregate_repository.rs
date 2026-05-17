@@ -4,9 +4,8 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::server::application::AppError;
-
 use super::aggregate::Aggregate;
+use super::error::EsError;
 use super::event_store::EventStore;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,9 +20,9 @@ pub trait SnapshotStore<A>: Send + Sync
 where
     A: Aggregate,
 {
-    async fn load(&self, stream_id: Uuid) -> Result<Option<AggregateSnapshot<A>>, AppError>;
+    async fn load(&self, stream_id: Uuid) -> Result<Option<AggregateSnapshot<A>>, EsError>;
 
-    async fn save(&self, snapshot: &AggregateSnapshot<A>) -> Result<(), AppError>;
+    async fn save(&self, snapshot: &AggregateSnapshot<A>) -> Result<(), EsError>;
 }
 
 pub struct AggregateRepository<A>
@@ -48,7 +47,7 @@ where
         }
     }
 
-    pub async fn load(&self, stream_id: Uuid) -> Result<Option<LoadedAggregate<A>>, AppError> {
+    pub async fn load(&self, stream_id: Uuid) -> Result<Option<LoadedAggregate<A>>, EsError> {
         let snapshot = self.snapshot_store.load(stream_id).await?;
         let from_sequence = snapshot.as_ref().map(|s| s.version).unwrap_or(0);
         let envelopes = self
@@ -93,7 +92,7 @@ where
         stream_id: Uuid,
         version: i64,
         aggregate: &A,
-    ) -> Result<(), AppError> {
+    ) -> Result<(), EsError> {
         self.snapshot_store
             .save(&AggregateSnapshot {
                 stream_id,

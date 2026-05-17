@@ -2,12 +2,12 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::server::application::AppError;
 use crate::server::domain::evaluation::dataset::events::EvaluationDatasetEvent;
 use crate::server::domain::evaluation::dataset::read_model::NewDatasetSummary;
 use crate::server::domain::evaluation::dataset::repository::EvaluationDatasetRepository;
 use crate::server::domain::evaluation::question::EvaluationQuestion;
 use crate::server::event_sourcing::envelope::EventEnvelope;
+use crate::server::event_sourcing::error::ProjectionError;
 use crate::server::event_sourcing::projector::Projector;
 
 pub struct EvaluationDatasetProjector {
@@ -31,7 +31,7 @@ impl Projector<EvaluationDatasetEvent> for EvaluationDatasetProjector {
     async fn project(
         &self,
         events: &[EventEnvelope<EvaluationDatasetEvent>],
-    ) -> Result<(), AppError> {
+    ) -> Result<(), ProjectionError> {
         for envelope in events {
             match &envelope.event {
                 EvaluationDatasetEvent::DatasetGenerationRequested(e) => {

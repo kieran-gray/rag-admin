@@ -3,7 +3,8 @@ use std::sync::Arc;
 use crate::contracts::VectorIndexCommandDto;
 use crate::server::application::AppError;
 use crate::server::domain::configuration::vector_index::{
-    VectorIndexCatalog, VectorIndexCatalogCommand,
+    AddVectorIndex, RemoveVectorIndex, UpdateVectorIndex, VectorIndexCatalog,
+    VectorIndexCatalogCommand,
 };
 use crate::server::event_sourcing::CommandProcessor;
 
@@ -24,7 +25,31 @@ impl VectorIndexCatalogCommandHandler {
     }
 
     pub async fn handle_dto(&self, command: VectorIndexCommandDto) -> Result<(), AppError> {
-        self.handle(VectorIndexCatalogCommand::from_dto(command))
-            .await
+        self.handle(from_dto(command)).await
+    }
+}
+
+fn from_dto(dto: VectorIndexCommandDto) -> VectorIndexCatalogCommand {
+    match dto {
+        VectorIndexCommandDto::AddVectorIndex(d) => {
+            VectorIndexCatalogCommand::AddVectorIndex(AddVectorIndex {
+                kind: d.kind,
+                name: d.name,
+                dimensions: d.dimensions,
+            })
+        }
+        VectorIndexCommandDto::UpdateVectorIndex(d) => {
+            VectorIndexCatalogCommand::UpdateVectorIndex(UpdateVectorIndex {
+                index_id: d.index_id,
+                kind: d.kind,
+                name: d.name,
+                dimensions: d.dimensions,
+            })
+        }
+        VectorIndexCommandDto::RemoveVectorIndex(d) => {
+            VectorIndexCatalogCommand::RemoveVectorIndex(RemoveVectorIndex {
+                index_id: d.index_id,
+            })
+        }
     }
 }

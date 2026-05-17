@@ -7,11 +7,10 @@ use tokio::sync::Notify;
 use tokio::time::timeout;
 use tracing::{debug, error, info, warn};
 
-use crate::server::application::AppError;
-
 use super::aggregate::Aggregate;
 use super::checkpoint::{CheckpointRepository, CheckpointStatus, ProjectionCheckpoint};
 use super::envelope::EventEnvelope;
+use super::error::EsError;
 use super::event_bus::EventBus;
 use super::event_store::EventStore;
 use super::process_manager::ProcessManager;
@@ -39,7 +38,6 @@ impl<A, R> ProjectionDriver<A, R>
 where
     A: Aggregate + 'static,
     R: Serialize + DeserializeOwned + Clone + Send + Sync + 'static,
-    AppError: From<A::Error>,
 {
     pub fn new(
         event_store: Arc<dyn EventStore<A::Event>>,
@@ -61,7 +59,7 @@ where
         }
     }
 
-    pub async fn tick(&self) -> Result<bool, AppError> {
+    pub async fn tick(&self) -> Result<bool, EsError> {
         let mut any_work = false;
 
         for projector in &self.projectors {

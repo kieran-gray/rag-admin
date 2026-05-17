@@ -7,6 +7,7 @@ use sqlx::PgPool;
 use tokio::sync::Notify;
 
 use crate::server::application::AppError;
+use crate::server::domain::configuration::defaults::ConfigurationDefaults;
 use crate::server::domain::configuration::embedding_model::EmbeddingModelCatalog;
 use crate::server::domain::configuration::generation_model::GenerationModelCatalog;
 use crate::server::domain::configuration::sweep_template::SweepTemplate;
@@ -40,6 +41,7 @@ pub struct AggregateWirings {
     pub generation_model: AggregateWiring<GenerationModelCatalog>,
     pub vector_index: AggregateWiring<VectorIndexCatalog>,
     pub sweep_template: AggregateWiring<SweepTemplate>,
+    pub defaults: AggregateWiring<ConfigurationDefaults>,
     pub source_document: AggregateWiring<SourceDocument>,
     pub indexing: AggregateWiring<Indexing>,
     pub dataset: AggregateWiring<EvaluationDataset>,
@@ -52,6 +54,7 @@ pub fn build_aggregate_wirings(pool: &PgPool) -> AggregateWirings {
         generation_model: build_aggregate_wiring::<GenerationModelCatalog>(pool),
         vector_index: build_aggregate_wiring::<VectorIndexCatalog>(pool),
         sweep_template: build_aggregate_wiring::<SweepTemplate>(pool),
+        defaults: build_aggregate_wiring::<ConfigurationDefaults>(pool),
         source_document: build_aggregate_wiring::<SourceDocument>(pool),
         indexing: build_aggregate_wiring::<Indexing>(pool),
         dataset: build_aggregate_wiring::<EvaluationDataset>(pool),

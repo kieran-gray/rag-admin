@@ -13,7 +13,9 @@ use crate::server::application::evaluation::scoring::{
     PreparedVariant, QuestionSubset, RunContext, TrialScorer,
 };
 use crate::server::application::ports::Clock;
-use crate::server::application::{ActivityRegistry, AppError, InternalLogEvent, Job, JobRegistry};
+use crate::server::application::{
+    ActivityRegistry, AppError, InternalLogEvent, Job, JobIdStrategy, JobRegistry, JobSession,
+};
 use crate::server::domain::evaluation::optimizer::search_space::{
     Fitness, Observation, Parameter, SearchSpace, Trial, Value,
 };
@@ -21,7 +23,7 @@ use crate::server::domain::evaluation::optimizer::tpe::WARMUP_TRIALS;
 use crate::server::domain::evaluation::optimizer::{encoding, halving, SearchBudget, Tpe};
 use crate::server::domain::evaluation::run::aggregate::EvaluationRun;
 use crate::server::domain::evaluation::run::commands::{
-    AdvanceRung, CompleteRun, EvaluationRunCommand, MarkVariantPrepared, ProposeTrial,
+    AdvanceRung, CompleteRun, EvaluationRunCommand, FailRun, MarkVariantPrepared, ProposeTrial,
     ScoreVariant, SelectChampion,
 };
 use crate::server::domain::evaluation::run::events::EvaluationRunEvent;
@@ -29,14 +31,13 @@ use crate::server::domain::evaluation::split::{three_way, ThreeWayRatios};
 use crate::server::event_sourcing::command_processor::CommandProcessor;
 use crate::server::event_sourcing::event_store::EventStore;
 
-use super::run::OptimizeRunEffect;
-use super::run_session::RunSession;
+use crate::server::domain::evaluation::run::effects::OptimizeRunEffect;
 
 pub struct OptimizeRunEffectExecutor {
     trial_scorer: Arc<TrialScorer>,
     command_processor: Arc<CommandProcessor<EvaluationRun>>,
     event_store: Arc<dyn EventStore<EvaluationRunEvent>>,
-    session: RunSession,
+    session: JobSession<EvaluationRun>,
     clock: Arc<dyn Clock>,
     judge: Option<Arc<dyn LlmJudge>>,
 }
@@ -69,7 +70,7 @@ impl OptimizeRunEffectExecutor {
         clock: Arc<dyn Clock>,
         judge: Option<Arc<dyn LlmJudge>>,
     ) -> Arc<Self> {
-        let session = RunSession::new(
+        let session = JobSession::new(
             job_registry,
             activity_registry,
             Arc::clone(&command_processor),
@@ -86,10 +87,22 @@ impl OptimizeRunEffectExecutor {
     }
 
     pub(crate) async fn run(&self, effect: &OptimizeRunEffect) -> Result<(), AppError> {
+        let run_id = effect.run_id;
+        let clock_for_fail = Arc::clone(&self.clock);
         self.session
-            .run(effect.run_id, "Optimization failed", |job| async move {
-                self.run_inner(effect, &job).await
-            })
+            .run(
+                run_id,
+                JobIdStrategy::Fresh,
+                "Optimization failed",
+                move |reason| {
+                    EvaluationRunCommand::FailRun(FailRun {
+                        run_id,
+                        reason,
+                        occurred_at: clock_for_fail.now(),
+                    })
+                },
+                |job| async move { self.run_inner(effect, &job).await },
+            )
             .await
     }
 

@@ -1,14 +1,18 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::server::event_sourcing::error::{CommandError, EsError, ProjectionError};
+
 use crate::server::domain::chunk_set::repository::ChunkSetRepositoryError;
+use crate::server::domain::configuration::catalog::CatalogError;
+use crate::server::domain::configuration::defaults::ConfigurationDefaultsError;
 use crate::server::domain::configuration::{
     chunking_configuration::ChunkingConfigurationRepositoryError,
-    embedding_model::{EmbeddingModelCatalogError, EmbeddingModelRepositoryError},
-    generation_model::{GenerationModelCatalogError, GenerationModelRepositoryError},
+    embedding_model::EmbeddingModelRepositoryError,
+    generation_model::GenerationModelRepositoryError,
     pipeline_configuration::PipelineConfigurationRepositoryError,
     sweep_template::{SweepTemplateError, SweepTemplateRepositoryError},
-    vector_index::{VectorIndexCatalogError, VectorIndexRepositoryError},
+    vector_index::VectorIndexRepositoryError,
 };
 use crate::server::domain::embedding_set::repository::EmbeddingSetRepositoryError;
 use crate::server::domain::evaluation::{
@@ -36,36 +40,23 @@ pub enum AppError {
     Internal(String),
 }
 
-impl From<EmbeddingModelCatalogError> for AppError {
-    fn from(value: EmbeddingModelCatalogError) -> Self {
+impl From<CatalogError> for AppError {
+    fn from(value: CatalogError) -> Self {
         match value {
-            EmbeddingModelCatalogError::NotFound => AppError::NotFound(value.to_string()),
-            EmbeddingModelCatalogError::ValidationError(_)
-            | EmbeddingModelCatalogError::InvalidCommand(_) => {
+            CatalogError::NotFound => AppError::NotFound(value.to_string()),
+            CatalogError::ValidationError(_) | CatalogError::InvalidCommand(_) => {
                 AppError::Validation(value.to_string())
             }
         }
     }
 }
 
-impl From<GenerationModelCatalogError> for AppError {
-    fn from(value: GenerationModelCatalogError) -> Self {
+impl From<ConfigurationDefaultsError> for AppError {
+    fn from(value: ConfigurationDefaultsError) -> Self {
         match value {
-            GenerationModelCatalogError::NotFound => AppError::NotFound(value.to_string()),
-            GenerationModelCatalogError::ValidationError(_)
-            | GenerationModelCatalogError::InvalidCommand(_) => {
+            ConfigurationDefaultsError::ValidationError(_) => {
                 AppError::Validation(value.to_string())
             }
-        }
-    }
-}
-
-impl From<VectorIndexCatalogError> for AppError {
-    fn from(value: VectorIndexCatalogError) -> Self {
-        match value {
-            VectorIndexCatalogError::NotFound => AppError::NotFound(value.to_string()),
-            VectorIndexCatalogError::ValidationError(_)
-            | VectorIndexCatalogError::InvalidCommand(_) => AppError::Validation(value.to_string()),
         }
     }
 }
@@ -227,5 +218,37 @@ impl From<EvaluationRunError> for AppError {
 impl From<EvaluationRunRepositoryError> for AppError {
     fn from(value: EvaluationRunRepositoryError) -> Self {
         AppError::Internal(value.to_string())
+    }
+}
+
+impl From<EsError> for AppError {
+    fn from(value: EsError) -> Self {
+        match value {
+            EsError::ConcurrencyConflict { .. } => AppError::Validation(value.to_string()),
+            EsError::Storage(_) => AppError::Internal(value.to_string()),
+            EsError::Serialization(_) => AppError::Internal(value.to_string()),
+        }
+    }
+}
+
+impl From<ProjectionError> for AppError {
+    fn from(value: ProjectionError) -> Self {
+        match value {
+            ProjectionError::Storage(_) => AppError::Internal(value.to_string()),
+            ProjectionError::InvalidState(_) => AppError::Internal(value.to_string()),
+        }
+    }
+}
+
+impl<E> From<CommandError<E>> for AppError
+where
+    E: std::error::Error + 'static,
+    AppError: From<E>,
+{
+    fn from(value: CommandError<E>) -> Self {
+        match value {
+            CommandError::Aggregate(e) => AppError::from(e),
+            CommandError::EventStore(e) => <AppError as From<EsError>>::from(e),
+        }
     }
 }

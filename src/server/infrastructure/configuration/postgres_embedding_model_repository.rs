@@ -3,9 +3,11 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::catalog::AiProviderKind;
+use crate::server::domain::configuration::catalog::CatalogRepository;
 use crate::server::domain::configuration::embedding_model::{
     EmbeddingModel, EmbeddingModelRepository, EmbeddingModelRepositoryError,
 };
+use crate::server::event_sourcing::error::ProjectionError;
 
 pub struct PostgresEmbeddingModelRepository {
     pool: PgPool,
@@ -14,6 +16,40 @@ pub struct PostgresEmbeddingModelRepository {
 impl PostgresEmbeddingModelRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
+    }
+}
+
+#[async_trait]
+impl CatalogRepository<EmbeddingModel> for PostgresEmbeddingModelRepository {
+    async fn upsert(&self, model: EmbeddingModel) -> Result<(), ProjectionError> {
+        sqlx::query(
+            r#"
+            INSERT INTO embedding_models (id, kind, model, dimensions)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (id) DO UPDATE SET
+                kind       = $2,
+                model      = $3,
+                dimensions = $4,
+                updated_at = NOW()
+            "#,
+        )
+        .bind(model.embedding_model_id)
+        .bind(model.kind.as_str())
+        .bind(&model.model)
+        .bind(model.dimensions as i32)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| ProjectionError::Storage(format!("save: {e}")))?;
+        Ok(())
+    }
+
+    async fn delete(&self, model_id: Uuid) -> Result<(), ProjectionError> {
+        sqlx::query("DELETE FROM embedding_models WHERE id = $1")
+            .bind(model_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| ProjectionError::Storage(format!("delete: {e}")))?;
+        Ok(())
     }
 }
 
@@ -45,37 +81,6 @@ impl EmbeddingModelRepository for PostgresEmbeddingModelRepository {
         .await
         .map_err(|e| EmbeddingModelRepositoryError::Internal(format!("find_by_id: {e}")))?;
         Ok(row.map(Into::into))
-    }
-
-    async fn save(&self, model: EmbeddingModel) -> Result<(), EmbeddingModelRepositoryError> {
-        sqlx::query(
-            r#"
-            INSERT INTO embedding_models (id, kind, model, dimensions)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (id) DO UPDATE SET
-                kind       = $2,
-                model      = $3,
-                dimensions = $4,
-                updated_at = NOW()
-            "#,
-        )
-        .bind(model.embedding_model_id)
-        .bind(model.kind.as_str())
-        .bind(&model.model)
-        .bind(model.dimensions as i32)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| EmbeddingModelRepositoryError::Internal(format!("save: {e}")))?;
-        Ok(())
-    }
-
-    async fn delete(&self, model_id: Uuid) -> Result<(), EmbeddingModelRepositoryError> {
-        sqlx::query("DELETE FROM embedding_models WHERE id = $1")
-            .bind(model_id)
-            .execute(&self.pool)
-            .await
-            .map_err(|e| EmbeddingModelRepositoryError::Internal(format!("delete: {e}")))?;
-        Ok(())
     }
 }
 
