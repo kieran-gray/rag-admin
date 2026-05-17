@@ -37,6 +37,11 @@ const PLAYGROUND_ITEMS: &[NavMenuItem] = &[
         label: "Retrieve",
         hint: "top-K search",
     },
+    NavMenuItem {
+        href: "/playground/chat",
+        label: "Chat",
+        hint: "grounded answer",
+    },
 ];
 
 #[component]

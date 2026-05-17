@@ -1,4 +1,5 @@
 pub mod activity;
+pub mod chat;
 pub mod configuration;
 pub mod configuration_commands;
 pub mod evaluation;
@@ -11,6 +12,7 @@ pub use activity::{
     classify, classify_event, ActivityDelta, ActivityJobDto, ActivityKind, ActivityStart,
     ActivityStatus,
 };
+pub use chat::{ChatRequest, ChatResponse};
 pub use configuration::{
     ChunkingConfigurationDto, ConfigurationDto, EmbeddingModelDto, GenerationModelDto,
     PipelineConfigurationDto, SweepTemplateDto, VectorIndexDto,

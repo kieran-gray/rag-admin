@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::catalog::{AiProviderKind, VectorStoreKind};
+use crate::server::application::chat::ChatService;
 use crate::server::application::chunking::chunkers::{
     register_builtin_chunkers, BuiltinChunkerDeps,
 };
@@ -70,6 +71,7 @@ pub struct Services {
     pub evaluation_query_service: Arc<EvaluationQueryService>,
     pub source_document_query_service: Arc<SourceDocumentQueryService>,
     pub query_service: Arc<QueryService>,
+    pub chat_service: Arc<ChatService>,
 
     pub embedding_service: Arc<EmbeddingService>,
     pub generation_service: Arc<GenerationService>,
@@ -244,6 +246,13 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         Arc::clone(&vector_index_resolver),
         Arc::clone(&repos.source_document),
     );
+    let chat_service = ChatService::new(
+        Arc::clone(&pipeline_resolver),
+        Arc::clone(&embedding_service),
+        Arc::clone(&vector_index_resolver),
+        Arc::clone(&generation_service),
+        Arc::clone(&repos.source_document),
+    );
 
     let evaluation_dataset_command_handler = EvaluationDatasetCommandHandler::new(
         Arc::clone(&wirings.dataset.command_processor),
@@ -278,6 +287,7 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         evaluation_query_service,
         source_document_query_service,
         query_service,
+        chat_service,
         embedding_service,
         generation_service,
         vector_index_resolver,

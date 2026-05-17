@@ -12,6 +12,7 @@ use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 
 use crate::event_sourcing::event_bus::EventBus;
+use crate::server::application::chat::ChatService;
 use crate::server::application::configuration::{
     ChunkingConfigurationQueryService, ChunkingConfigurationService, ConfigurationQueryService,
     EmbeddingModelCatalogCommandHandler, GenerationModelCatalogCommandHandler,
@@ -68,6 +69,7 @@ pub struct App {
     pub source_document_ingest_service: Arc<SourceDocumentIngestService>,
     pub source_document_query_service: Arc<SourceDocumentQueryService>,
     pub query_service: Arc<QueryService>,
+    pub chat_service: Arc<ChatService>,
     pub source_adapter_registry: Arc<SourceAdapterRegistry>,
     pub event_bus: Arc<EventBus>,
 }
@@ -143,6 +145,7 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         source_document_ingest_service: workflows.source_document_ingest_service,
         source_document_query_service: services.source_document_query_service,
         query_service: services.query_service,
+        chat_service: services.chat_service,
         source_adapter_registry: workflows.source_adapter_registry,
         event_bus,
     };
@@ -175,6 +178,7 @@ impl App {
         provide_context(Arc::clone(&self.source_document_ingest_service));
         provide_context(Arc::clone(&self.source_document_query_service));
         provide_context(Arc::clone(&self.query_service));
+        provide_context(Arc::clone(&self.chat_service));
         provide_context(Arc::clone(&self.source_adapter_registry));
     }
 

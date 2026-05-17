@@ -18,7 +18,7 @@ use crate::ui::pages::{
         RunDetailPage,
     },
     pipelines::PipelinesPage,
-    playground::{embed::EmbedPage, retrieve::RetrievePage},
+    playground::{chat::ChatPage, embed::EmbedPage, retrieve::RetrievePage},
 };
 
 #[component]
@@ -131,6 +131,10 @@ pub fn App() -> impl IntoView {
                     <Route
                         path=(StaticSegment("playground"), StaticSegment("retrieve"))
                         view=RetrievePage
+                    />
+                    <Route
+                        path=(StaticSegment("playground"), StaticSegment("chat"))
+                        view=ChatPage
                     />
                     <Route
                         path=StaticSegment("playground")

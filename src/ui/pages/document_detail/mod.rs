@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use leptos_router::hooks::use_params_map;
+use leptos_router::hooks::{use_params_map, use_query_map};
 
 mod redirect_by_id;
 mod search_section;
@@ -32,6 +32,10 @@ pub fn DocumentDetailPage() -> impl IntoView {
     let params = use_params_map();
     let source_ref =
         Memo::new(move |_| params.with(|p| p.get("source_ref").unwrap_or_default().to_string()));
+
+    let query = use_query_map();
+    let initial_tab =
+        Memo::new(move |_| query.with(|q| q.get("tab").and_then(|t| step_from_tab(&t))));
 
     let doc_invalidator = use_invalidator(|e| {
         e.from_any(&[aggregate_type::SOURCE_DOCUMENT, aggregate_type::INDEXING])
@@ -94,6 +98,7 @@ pub fn DocumentDetailPage() -> impl IntoView {
                                 chunking_configurations=chunking_configurations
                                 sweep_templates=sweep_templates
                                 source_ref=source_ref.get()
+                                initial_tab=initial_tab.get()
                             />
                         }.into_any(),
                     })
@@ -143,6 +148,7 @@ fn DocumentWorkspace(
     chunking_configurations: Vec<ChunkingConfigurationDto>,
     sweep_templates: Vec<SweepTemplateDto>,
     source_ref: String,
+    initial_tab: Option<WorkflowStep>,
 ) -> impl IntoView {
     let document_id = detail.document.document_id;
 
@@ -151,7 +157,8 @@ fn DocumentWorkspace(
     let (status_kind, status_label) = header_status;
 
     let selection = ConfigSelection::new(&pipelines, &chunking_configurations, &detail.indexings);
-    let (active_step, set_active_step) = signal(initial_step(&detail.indexings));
+    let (active_step, set_active_step) =
+        signal(initial_tab.unwrap_or_else(|| initial_step(&detail.indexings)));
 
     let pipelines_stored = StoredValue::new(pipelines.clone());
     let chunking_stored = StoredValue::new(chunking_configurations.clone());
@@ -299,6 +306,15 @@ fn Stepper(
                 }
             }).collect_view()}
         </div>
+    }
+}
+
+fn step_from_tab(tab: &str) -> Option<WorkflowStep> {
+    match tab {
+        "source" | "document" => Some(WorkflowStep::Document),
+        "chunk" | "chunks" | "chunking" => Some(WorkflowStep::Chunk),
+        "embed" | "embed-index" | "index" => Some(WorkflowStep::EmbedIndex),
+        _ => None,
     }
 }
 
