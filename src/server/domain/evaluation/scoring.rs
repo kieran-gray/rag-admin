@@ -125,8 +125,8 @@ pub fn bootstrap_ci(per_question: &[f32], seed: u64, samples: usize, alpha: f32)
     if n == 0 {
         return (0.0, 0.0);
     }
-    if n == 1 {
-        return (per_question[0], per_question[0]);
+    if let [single] = per_question {
+        return (*single, *single);
     }
     let samples = samples.max(1);
     let alpha = alpha.clamp(0.0, 1.0);
@@ -144,7 +144,7 @@ pub fn bootstrap_ci(per_question: &[f32], seed: u64, samples: usize, alpha: f32)
             state ^= state >> 7;
             state ^= state << 17;
             let idx = (state % n as u64) as usize;
-            sum += per_question[idx] as f64;
+            sum += per_question.get(idx).copied().unwrap_or(0.0) as f64;
         }
         means.push((sum / n as f64) as f32);
     }
@@ -163,11 +163,13 @@ fn percentile(sorted: &[f32], q: f32) -> f32 {
     let pos = q.clamp(0.0, 1.0) * (n - 1) as f32;
     let low = pos.floor() as usize;
     let high = pos.ceil() as usize;
+    let low_v = sorted.get(low).copied().unwrap_or(0.0);
     if low == high {
-        sorted[low]
+        low_v
     } else {
         let frac = pos - low as f32;
-        sorted[low] + (sorted[high] - sorted[low]) * frac
+        let high_v = sorted.get(high).copied().unwrap_or(low_v);
+        low_v + (high_v - low_v) * frac
     }
 }
 

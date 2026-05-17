@@ -78,7 +78,7 @@ fn RunView(run: EvaluationRunDto) -> impl IntoView {
         "running" => (Status::Pending, "Running"),
         _ => (Status::Neutral, "Unknown"),
     };
-    let short = run.run_id.to_string()[..8].to_string();
+    let short = run.run_id.to_string().chars().take(8).collect::<String>();
 
     let mut variants = run.variants;
     variants.sort_by(|a, b| {

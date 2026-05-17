@@ -731,8 +731,11 @@ impl OptimizeRunEffectExecutor {
             let mut accum = 0.0f32;
             let mut counted = 0usize;
             for &q_idx in &sample {
-                let question = &ctx.questions[q_idx];
-                let q_emb = &ctx.question_embeddings[q_idx];
+                let (Some(question), Some(q_emb)) =
+                    (ctx.questions.get(q_idx), ctx.question_embeddings.get(q_idx))
+                else {
+                    continue;
+                };
                 let retrieved = match self
                     .trial_scorer
                     .retrieve_passage(&prepared, q_emb, &options)
@@ -929,7 +932,7 @@ fn build_rung_subset<'a>(
     let take = rung
         .question_count(tuning_order.len())
         .min(tuning_order.len());
-    let picked: &[usize] = &tuning_order[..take];
+    let picked: &[usize] = tuning_order.get(..take).unwrap_or_default();
     QuestionSubset::from_indices(&ctx.questions, &ctx.question_embeddings, picked)
 }
 
@@ -1006,11 +1009,12 @@ pub fn build_default_search_space(scope: OptimizationScope) -> SearchSpace {
 
 fn uuid_to_seed(run_id: Uuid) -> u64 {
     let bytes = run_id.as_bytes();
+    let (hi_bytes, lo_bytes) = bytes.split_at(8);
     let mut hi = 0u64;
     let mut lo = 0u64;
-    for i in 0..8 {
-        hi = (hi << 8) | bytes[i] as u64;
-        lo = (lo << 8) | bytes[8 + i] as u64;
+    for (b_hi, b_lo) in hi_bytes.iter().zip(lo_bytes.iter()) {
+        hi = (hi << 8) | u64::from(*b_hi);
+        lo = (lo << 8) | u64::from(*b_lo);
     }
     hi ^ lo
 }

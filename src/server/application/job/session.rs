@@ -1,5 +1,6 @@
 use std::future::Future;
 use std::sync::Arc;
+use tracing::error;
 
 use uuid::Uuid;
 
@@ -68,10 +69,13 @@ where
         let result = body(Arc::clone(&job)).await;
         if let Err(e) = &result {
             job.error(&format!("{failure_label}: {e}")).await;
-            let _ = self
+            if let Err(fail_command_error) = self
                 .command_processor
                 .handle(stream_id, fail_command(e.to_string()))
-                .await;
+                .await
+            {
+                error!("Failed to handle failure command: {fail_command_error}");
+            }
         }
         job.finish().await;
         result

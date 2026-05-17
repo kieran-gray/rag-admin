@@ -40,7 +40,9 @@ fn flush_segment(out: &mut Vec<SegmentBlock>, current: &[&Block], heading_path: 
     let Some(first) = current.first() else {
         return;
     };
-    let last = current.last().unwrap();
+    let Some(last) = current.last() else {
+        return;
+    };
     out.push(SegmentBlock {
         text: heading_path::collect_block_text(current),
         char_start: first.span.char_start,

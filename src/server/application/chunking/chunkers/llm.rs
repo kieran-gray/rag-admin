@@ -65,7 +65,9 @@ impl DocumentChunker for LlmChunker {
         tokenizer: &dyn Tokenizer,
     ) -> Result<Vec<ChunkOutput>, AppError> {
         let ChunkingConfig::Llm(config) = config else {
-            unreachable!()
+            return Err(AppError::Validation(
+                "LLM chunker called with invalid chunking config".to_string(),
+            ));
         };
 
         let target_tokens = config.target_tokens.max(1) as usize;
@@ -164,7 +166,7 @@ fn push_unit_from_chars(
     base_char_start: usize,
     atomic: bool,
 ) {
-    let text: String = chars[start..end].iter().collect();
+    let text: String = chars.get(start..end).unwrap_or_default().iter().collect();
     push_unit(
         units,
         text,
@@ -265,10 +267,13 @@ fn split_oversized_unit(
     let mut start = 0usize;
 
     while start < chars.len() {
-        let prefix_len = budget.max_prefix_chars(&chars[start..], target_tokens)?;
+        let suffix = chars.get(start..).unwrap_or_default();
+        let prefix_len = budget.max_prefix_chars(suffix, target_tokens)?;
         let hard_end = (start + prefix_len).min(chars.len());
         let end = if hard_end < chars.len() {
-            last_whitespace_after_half(&chars[start..hard_end])
+            chars
+                .get(start..hard_end)
+                .and_then(last_whitespace_after_half)
                 .map(|offset| start + offset + 1)
                 .unwrap_or(hard_end)
         } else {
@@ -352,7 +357,10 @@ async fn find_split_points(
             }
         }
 
-        current = *numbers.last().unwrap();
+        current = match numbers.last() {
+            Some(num) => *num,
+            None => current + 1,
+        }
     }
 
     // Ensure the last chunk is always included
@@ -378,7 +386,7 @@ fn parse_split_response(response: &str, min_id: usize) -> Vec<usize> {
         .collect();
 
     // Verify ascending order
-    let is_ascending = numbers.windows(2).all(|w| w[0] < w[1]);
+    let is_ascending = numbers.windows(2).all(|w| matches!(w, [a, b] if a < b));
     if !is_ascending {
         return Vec::new();
     }
@@ -419,8 +427,8 @@ fn merge_micro_chunks(
                 char_end: last_end,
             });
             current_text.clear();
-            if i + 1 < micro_chunks.len() {
-                current_start = micro_chunks[i + 1].char_start;
+            if let Some(next) = micro_chunks.get(i + 1) {
+                current_start = next.char_start;
             }
         }
     }
@@ -448,13 +456,13 @@ fn extract_heading(text: &str) -> String {
 fn parse_atx_heading(line: &str) -> Option<(usize, String)> {
     let bytes = line.as_bytes();
     let mut depth = 0usize;
-    while depth < bytes.len() && bytes[depth] == b'#' {
+    while bytes.get(depth).copied() == Some(b'#') {
         depth += 1;
     }
     if depth == 0 || depth > 6 {
         return None;
     }
-    let after = &line[depth..];
+    let after = line.get(depth..)?;
     let first = after.chars().next()?;
     if !first.is_whitespace() {
         return None;

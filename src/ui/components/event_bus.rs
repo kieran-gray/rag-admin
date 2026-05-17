@@ -44,6 +44,10 @@ pub fn provide_event_bus() {
     provide_context(bus);
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "EventBus is provided unconditionally by App at startup"
+)]
 pub fn use_event_bus() -> EventBus {
     use_context::<EventBus>().expect("EventBus context must be provided in App")
 }
@@ -185,7 +189,7 @@ mod hydrate {
         let cb = Closure::<dyn FnMut()>::new(move || {
             open_socket(set_last_event, set_epoch, set_connection, attempt);
         });
-        let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
+        _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
             cb.as_ref().unchecked_ref(),
             delay_ms,
         );

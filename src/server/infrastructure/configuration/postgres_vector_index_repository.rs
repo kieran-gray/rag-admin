@@ -103,6 +103,10 @@ impl sqlx::FromRow<'_, sqlx::postgres::PgRow> for VectorIndexRow {
 }
 
 impl From<VectorIndexRow> for VectorIndex {
+    #[expect(
+        clippy::expect_used,
+        reason = "row.kind comes from a column constrained by the application's enum vocabulary; an unrecognised value indicates DB corruption or schema drift, both of which should fail loudly"
+    )]
     fn from(row: VectorIndexRow) -> Self {
         Self {
             index_id: row.id,

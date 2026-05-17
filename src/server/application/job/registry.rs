@@ -60,7 +60,9 @@ impl Job {
 
         let mut inner = self.inner.lock().await;
         inner.buffered.push(event.clone());
-        let _ = self.sender.send(JobMessage::Event(event));
+        if let Err(send_error) = self.sender.send(JobMessage::Event(event)) {
+            error!("Failed to send job message: {send_error}");
+        };
     }
 
     pub async fn info(&self, log: &str) {
@@ -78,7 +80,9 @@ impl Job {
     pub async fn finish(&self) {
         let mut inner = self.inner.lock().await;
         inner.finished = true;
-        let _ = self.sender.send(JobMessage::Done);
+        if let Err(send_error) = self.sender.send(JobMessage::Done) {
+            error!("Failed to send job message: {send_error}");
+        }
     }
 }
 

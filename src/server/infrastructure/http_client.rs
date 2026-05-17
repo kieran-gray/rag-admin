@@ -54,9 +54,3 @@ impl ReqwestHttpClient {
         Ok((status, body))
     }
 }
-
-impl Default for ReqwestHttpClient {
-    fn default() -> Self {
-        Self::new().expect("default reqwest client")
-    }
-}

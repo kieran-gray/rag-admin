@@ -131,6 +131,10 @@ pub fn provide_activity_state() {
     });
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "ActivityState is provided unconditionally by App at startup"
+)]
 pub fn use_activity_state() -> ActivityState {
     use_context::<ActivityState>().expect("ActivityState context must be provided in App")
 }
@@ -275,7 +279,7 @@ fn persist_open_on_change(open: RwSignal<bool>) {
             return;
         }
         if let Some(store) = web_sys::window().and_then(|w| w.local_storage().ok().flatten()) {
-            let _ = store.set_item(LS_OPEN_KEY, if value { "1" } else { "0" });
+            _ = store.set_item(LS_OPEN_KEY, if value { "1" } else { "0" });
         }
     });
 }
@@ -291,7 +295,7 @@ fn persist_height_on_change(height: RwSignal<f64>) {
             return;
         }
         if let Some(store) = web_sys::window().and_then(|w| w.local_storage().ok().flatten()) {
-            let _ = store.set_item(LS_HEIGHT_KEY, &format!("{value:.0}"));
+            _ = store.set_item(LS_HEIGHT_KEY, &format!("{value:.0}"));
         }
     });
 }

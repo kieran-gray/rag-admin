@@ -6,7 +6,9 @@ pub fn update_heading_path(path: &mut Vec<String>, heading: &HeadingBlock) {
     while path.len() < depth {
         path.push(String::new());
     }
-    path[depth - 1] = heading.text.clone();
+    if let Some(slot) = path.get_mut(depth - 1) {
+        *slot = heading.text.clone();
+    }
 }
 
 pub fn join_heading_path(path: &[String]) -> String {

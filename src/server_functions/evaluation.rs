@@ -236,7 +236,11 @@ pub async fn promote_variant_to_chunking_config(
 
     let trimmed_name = name.trim();
     let chosen_name = if trimmed_name.is_empty() {
-        format!("{}-{}", &run_id.to_string()[..8], chosen.variant_label)
+        format!(
+            "{}-{}",
+            run_id.to_string().chars().take(8).collect::<String>(),
+            chosen.variant_label
+        )
     } else {
         trimmed_name.to_string()
     };

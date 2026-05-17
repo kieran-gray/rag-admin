@@ -419,7 +419,9 @@ impl IndexingEffectExecutor {
         let post_version = document_version.to_string();
 
         let doc_id_hex = uuid_hex(document_id);
-        let pipeline_hex_short = &uuid_hex(pipeline_configuration_id)[..8];
+        let pipeline_hex_full = uuid_hex(pipeline_configuration_id);
+        let pipeline_hex_short: String = pipeline_hex_full.chars().take(8).collect();
+        let pipeline_hex_short = pipeline_hex_short.as_str();
 
         let records: Vec<VectorRecord> = embeddings
             .iter()
@@ -520,9 +522,7 @@ impl IndexingEffectExecutor {
 }
 
 fn uuid_hex(id: Uuid) -> String {
-    let mut buf = [0u8; 32];
-    id.as_simple().encode_lower(&mut buf);
-    String::from_utf8(buf.to_vec()).expect("hex uuid is utf-8")
+    id.as_simple().to_string()
 }
 
 fn vector_id(doc_id_hex: &str, pipeline_hex_short: &str, sequence: u32) -> String {

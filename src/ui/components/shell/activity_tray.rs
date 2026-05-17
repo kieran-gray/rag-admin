@@ -268,7 +268,7 @@ fn kind_label(kind: ActivityKind) -> &'static str {
 }
 
 fn short_id(id: Uuid) -> String {
-    id.to_string()[..8].to_string()
+    id.to_string().chars().take(8).collect()
 }
 
 fn status_dot_class(status: ActivityStatus) -> &'static str {
@@ -281,9 +281,9 @@ fn status_dot_class(status: ActivityStatus) -> &'static str {
 
 fn short_time(ts: &str) -> String {
     if ts.len() >= 19 {
-        ts[11..19].to_string()
+        ts.chars().skip(11).take(8).collect()
     } else if ts.len() >= 16 {
-        ts[..16].replace('T', " ")
+        ts.chars().take(16).collect::<String>().replace('T', " ")
     } else {
         ts.to_string()
     }
@@ -344,8 +344,7 @@ mod hydrate {
                 let next = !open.get_untracked();
                 set_tray_open(next);
             });
-        let _ =
-            window.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
+        _ = window.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
         closure.forget();
     }
 
@@ -359,8 +358,8 @@ mod hydrate {
         let body = window.document().and_then(|d| d.body());
 
         if let Some(body) = body.as_ref() {
-            let _ = body.style().set_property("cursor", "row-resize");
-            let _ = body.style().set_property("user-select", "none");
+            _ = body.style().set_property("cursor", "row-resize");
+            _ = body.style().set_property("user-select", "none");
         }
 
         let move_closure: MouseClosureCell = Rc::new(Cell::new(None));
@@ -378,29 +377,29 @@ mod hydrate {
                 let next = clamp_tray_height(start_height + delta);
                 height.set(next);
             });
-        let _ = move_window
+        _ = move_window
             .add_event_listener_with_callback("mousemove", on_move.as_ref().unchecked_ref());
 
         let on_up =
             Closure::<dyn FnMut(web_sys::MouseEvent)>::new(move |_ev: web_sys::MouseEvent| {
                 if let Some(c) = move_clone.take() {
-                    let _ = up_window.remove_event_listener_with_callback(
+                    _ = up_window.remove_event_listener_with_callback(
                         "mousemove",
                         c.as_ref().unchecked_ref(),
                     );
                     drop(c);
                 }
                 if let Some(c) = up_clone.take() {
-                    let _ = up_window
+                    _ = up_window
                         .remove_event_listener_with_callback("mouseup", c.as_ref().unchecked_ref());
                     drop(c);
                 }
                 if let Some(body) = body_for_up.as_ref() {
-                    let _ = body.style().remove_property("cursor");
-                    let _ = body.style().remove_property("user-select");
+                    _ = body.style().remove_property("cursor");
+                    _ = body.style().remove_property("user-select");
                 }
             });
-        let _ = window.add_event_listener_with_callback("mouseup", on_up.as_ref().unchecked_ref());
+        _ = window.add_event_listener_with_callback("mouseup", on_up.as_ref().unchecked_ref());
 
         move_closure.set(Some(on_move));
         up_closure.set(Some(on_up));

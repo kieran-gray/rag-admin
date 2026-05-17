@@ -51,7 +51,7 @@ impl ChunkOptimiser {
                 let token_path = cheapest_path_indices(&reduced, max_chunk_size)?;
                 Ok(token_path
                     .into_iter()
-                    .map(|tok_idx| self.token_start_byte_idx[tok_idx])
+                    .filter_map(|tok_idx| self.token_start_byte_idx.get(tok_idx).copied())
                     .collect())
             }
         }

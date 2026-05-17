@@ -80,9 +80,15 @@ pub fn three_way(seed_source: Uuid, total: usize, ratios: ThreeWayRatios) -> Thr
     let holdout_size = total - tuning_size - validation_size;
     debug_assert!(holdout_size >= 1);
 
-    let mut tuning = indices[..tuning_size].to_vec();
-    let mut validation = indices[tuning_size..tuning_size + validation_size].to_vec();
-    let mut holdout = indices[tuning_size + validation_size..].to_vec();
+    let mut tuning = indices.get(..tuning_size).unwrap_or_default().to_vec();
+    let mut validation = indices
+        .get(tuning_size..tuning_size + validation_size)
+        .unwrap_or_default()
+        .to_vec();
+    let mut holdout = indices
+        .get(tuning_size + validation_size..)
+        .unwrap_or_default()
+        .to_vec();
     tuning.sort_unstable();
     validation.sort_unstable();
     holdout.sort_unstable();
@@ -111,7 +117,10 @@ pub fn k_fold(seed_source: Uuid, total: usize, k: u32) -> Vec<KFoldEntry> {
     let mut cursor = 0usize;
     for fold in 0..k as usize {
         let size = base + if fold < extras { 1 } else { 0 };
-        let validate_slice: Vec<usize> = indices[cursor..cursor + size].to_vec();
+        let validate_slice: Vec<usize> = indices
+            .get(cursor..cursor + size)
+            .unwrap_or_default()
+            .to_vec();
         cursor += size;
 
         let validate_set: std::collections::HashSet<usize> =
@@ -160,15 +169,16 @@ pub fn split_questions(
 
 fn seed_from_uuid(id: Uuid) -> u64 {
     let bytes = id.as_bytes();
+    let (hi_bytes, lo_bytes) = bytes.split_at(8);
     let mut hi = 0u64;
     let mut lo = 0u64;
-    for i in 0..8 {
-        hi = (hi << 8) | bytes[i] as u64;
-        lo = (lo << 8) | bytes[8 + i] as u64;
+    for (b_hi, b_lo) in hi_bytes.iter().zip(lo_bytes.iter()) {
+        hi = (hi << 8) | u64::from(*b_hi);
+        lo = (lo << 8) | u64::from(*b_lo);
     }
     let seed = hi ^ lo;
     if seed == 0 {
-        0x9E3779B97F4A7C15
+        0x9E37_79B9_7F4A_7C15
     } else {
         seed
     }

@@ -38,9 +38,13 @@ impl NodeRanges {
 
         node_ranges.sort_by_key(|r| r.start);
 
+        let mut iter = node_ranges.iter();
+        let Some(&first) = iter.next() else {
+            return;
+        };
         let mut merged = Vec::with_capacity(node_ranges.len());
-        let mut current = node_ranges[0];
-        for next in &node_ranges[1..] {
+        let mut current = first;
+        for next in iter {
             if next.start <= current.end {
                 current.end = current.end.max(next.end);
             } else {

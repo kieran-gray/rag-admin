@@ -88,14 +88,14 @@ impl MdParser {
         let mut start = 0;
 
         while start < bytes.len() {
-            while start < bytes.len() && bytes[start].is_ascii_whitespace() {
+            while bytes.get(start).is_some_and(|b| b.is_ascii_whitespace()) {
                 start += 1;
             }
             if start >= bytes.len() {
                 break;
             }
             let mut end = start;
-            while end < bytes.len() && !bytes[end].is_ascii_whitespace() {
+            while bytes.get(end).is_some_and(|b| !b.is_ascii_whitespace()) {
                 end += 1;
             }
             ranges.add(NodeType::Word, start as u32, end as u32);

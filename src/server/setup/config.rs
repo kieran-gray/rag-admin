@@ -93,9 +93,9 @@ impl Config {
     fn parse<T: FromStr>(var: &str) -> Result<T, SetupError> {
         let type_name = type_name::<T>();
         env::var(var)
-            .map_err(|_| SetupError::MissingVariable(var.to_owned()))?
+            .map_err(|_e| SetupError::MissingVariable(var.to_owned()))?
             .parse()
-            .map_err(|_| SetupError::InvalidVariable(format!("{var} must be {type_name}")))
+            .map_err(|_e| SetupError::InvalidVariable(format!("{var} must be {type_name}")))
     }
 
     fn parse_optional<T: FromStr>(var: &str) -> Option<T> {

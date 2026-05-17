@@ -86,6 +86,10 @@ where
 
             match projector.project(&envelopes).await {
                 Ok(()) => {
+                    #[expect(
+                        clippy::expect_used,
+                        reason = "envelopes verified non-empty by early continue above"
+                    )]
                     let last = envelopes.last().expect("non-empty");
                     let next = ProjectionCheckpoint {
                         projector_name: projector.name().to_string(),

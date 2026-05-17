@@ -69,7 +69,10 @@ impl RuleManager {
         let len = end - start;
         let mut tmp = vec![0usize; len];
         f(scale, len, &mut tmp);
-        for (dst, val) in output[start..end].iter_mut().zip(tmp) {
+        let Some(target) = output.get_mut(start..end) else {
+            return;
+        };
+        for (dst, val) in target.iter_mut().zip(tmp) {
             *dst += val;
         }
     }

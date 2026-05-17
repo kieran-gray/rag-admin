@@ -360,11 +360,9 @@ fn derive_status(indexings: &[IndexingDto], latest_version: u32) -> (Status, Str
         };
     }
 
-    let most_advanced = live
-        .iter()
-        .copied()
-        .max_by_key(|ix| milestone_rank(ix))
-        .expect("live is non-empty");
+    let Some(most_advanced) = live.iter().copied().max_by_key(|ix| milestone_rank(ix)) else {
+        return (Status::Stale, "Not indexed".to_string());
+    };
 
     match (most_advanced.chunk_set_id, most_advanced.embedding_set_id) {
         (None, _) => (Status::Pending, "Chunking…".to_string()),

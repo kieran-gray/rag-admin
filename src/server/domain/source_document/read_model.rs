@@ -21,6 +21,10 @@ pub struct SourceDocumentReadModel {
 }
 
 impl From<&SourceDocument> for SourceDocumentReadModel {
+    #[expect(
+        clippy::expect_used,
+        reason = "SourceDocument aggregate invariant: always has at least one version"
+    )]
     fn from(doc: &SourceDocument) -> Self {
         let latest = doc
             .latest_version()

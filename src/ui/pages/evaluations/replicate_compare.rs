@@ -69,8 +69,8 @@ fn CompareView(
 ) -> impl IntoView {
     let left_id = left.run_id;
     let right_id = right.run_id;
-    let left_short = left_id.to_string()[..8].to_string();
-    let right_short = right_id.to_string()[..8].to_string();
+    let left_short = left_id.to_string().chars().take(8).collect::<String>();
+    let right_short = right_id.to_string().chars().take(8).collect::<String>();
 
     let left_champion = champion_of(&left.variants);
     let right_champion = champion_of(&right.variants);

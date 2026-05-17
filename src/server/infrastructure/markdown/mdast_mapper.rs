@@ -44,13 +44,10 @@ impl MdastMapper {
             });
         }
 
-        if raw_blocks[0].start > 0 {
-            blocks.push(make_block(
-                source,
-                0,
-                raw_blocks[0].start,
-                BlockKind::Other,
-            )?);
+        if let Some(first) = raw_blocks.first() {
+            if first.start > 0 {
+                blocks.push(make_block(source, 0, first.start, BlockKind::Other)?);
+            }
         }
 
         for (idx, raw) in raw_blocks.iter().enumerate() {
@@ -109,8 +106,8 @@ fn make_block(source: &str, start: usize, end: usize, kind: BlockKind) -> Result
         .to_string();
     Ok(Block {
         span: Span {
-            char_start: source[..start].chars().count(),
-            char_end: source[..end].chars().count(),
+            char_start: source.get(..start).map_or(0, |s| s.chars().count()),
+            char_end: source.get(..end).map_or(0, |s| s.chars().count()),
         },
         text,
         kind,

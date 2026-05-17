@@ -51,7 +51,7 @@ pub fn OptimizeProgressPage() -> impl IntoView {
 
 #[component]
 fn ProgressView(run: EvaluationRunDto) -> impl IntoView {
-    let short = run.run_id.to_string()[..8].to_string();
+    let short = run.run_id.to_string().chars().take(8).collect::<String>();
     let status_kind = match run.status.as_str() {
         "completed" => Status::Ok,
         "failed" => Status::Fail,

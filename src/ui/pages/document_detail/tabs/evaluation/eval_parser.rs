@@ -9,7 +9,7 @@ pub fn parse_u32_values(
         if let Some((range, step)) = token.split_once(':') {
             let step = step
                 .parse::<u32>()
-                .map_err(|_| format!("invalid step in '{token}'"))?;
+                .map_err(|e| format!("invalid step in '{token}': {e}"))?;
             push_range_values(&mut values, range, min, max, step)?;
         } else if token.contains('-') {
             push_range_values(&mut values, token, min, max, default_step)?;
@@ -58,7 +58,7 @@ fn push_range_values(
 fn parse_bounded(token: &str, min: u32, max: u32) -> Result<u32, String> {
     let value = token
         .parse::<u32>()
-        .map_err(|_| format!("invalid number '{token}'"))?;
+        .map_err(|e| format!("invalid number '{token}': {e}"))?;
     if value < min || value > max {
         Err(format!("{value} is outside {min}..={max}"))
     } else {

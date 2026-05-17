@@ -4,7 +4,10 @@ use crate::core::{evaluation_score, EvaluationVariantResult};
 use crate::ui::components::primitives::{MetricBar, MetricKind, Surface};
 
 use super::promote::{PromoteHandle, VariantSaveButton};
-use super::shared::{ci_half, metric_cell, row_key, variant_display, MetricBests, METRIC_DEFS};
+use super::shared::{
+    ci_half, metric_cell, row_key, variant_display, MetricBests, IOU_DEF, PRECISION_DEF,
+    PRECISION_OMEGA_DEF, RECALL_DEF,
+};
 use super::summary::AxisLegend;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -158,7 +161,7 @@ fn VariantCard(
                 <MetricBar
                     label="Recall"
                     short="R"
-                    help=METRIC_DEFS[0].help.to_string()
+                    help=RECALL_DEF.help.to_string()
                     value=m.recall_mean
                     stddev=ci_half(m.recall_ci_low, m.recall_ci_high)
                     best=bests.recall
@@ -167,7 +170,7 @@ fn VariantCard(
                 <MetricBar
                     label="Precision"
                     short="P"
-                    help=METRIC_DEFS[1].help.to_string()
+                    help=PRECISION_DEF.help.to_string()
                     value=m.precision_mean
                     stddev=ci_half(m.precision_ci_low, m.precision_ci_high)
                     best=bests.precision
@@ -176,7 +179,7 @@ fn VariantCard(
                 <MetricBar
                     label="IoU"
                     short="IoU"
-                    help=METRIC_DEFS[2].help.to_string()
+                    help=IOU_DEF.help.to_string()
                     value=m.iou_mean
                     stddev=ci_half(m.iou_ci_low, m.iou_ci_high)
                     best=bests.iou
@@ -185,7 +188,7 @@ fn VariantCard(
                 <MetricBar
                     label="Precision-ω"
                     short="Pω"
-                    help=METRIC_DEFS[3].help.to_string()
+                    help=PRECISION_OMEGA_DEF.help.to_string()
                     value=m.precision_omega_mean
                     stddev=ci_half(m.precision_omega_ci_low, m.precision_omega_ci_high)
                     best=bests.precision_omega

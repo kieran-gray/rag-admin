@@ -1,9 +1,18 @@
+#![expect(
+    clippy::indexing_slicing,
+    reason = "hot DP loop with indices proven in-bounds by `len` (caller invariant); switching to `.get()` would only add unreachable bounds checks"
+)]
+
 use std::cmp::Ordering;
 
 use crate::server::application::AppError;
 
 /// Picks the best successor `j` for index `i` over the range `i+1..=i+n`.
 /// Ties break toward the *largest* jump, which keeps chunks as long as possible.
+#[expect(
+    clippy::unwrap_used,
+    reason = "range i+1..=i+n is non-empty (n >= 1 enforced by caller), so min_by always returns Some"
+)]
 fn best_successor(i: usize, punishments: &[usize], dp_cost: &[usize], n: usize) -> (usize, usize) {
     (i + 1..=i + n)
         .map(|j| (punishments[i] + dp_cost[j], j))

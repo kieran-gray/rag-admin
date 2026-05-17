@@ -7,18 +7,15 @@ pub fn equivalence_class<T: Scored>(entries: &[T]) -> Vec<usize> {
     if entries.is_empty() {
         return Vec::new();
     }
-    let leader_idx = entries
-        .iter()
-        .enumerate()
-        .max_by(|(_, a), (_, b)| {
-            a.score()
-                .partial_cmp(&b.score())
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .map(|(i, _)| i)
-        .unwrap_or(0);
+    let Some((leader_idx, leader)) = entries.iter().enumerate().max_by(|(_, a), (_, b)| {
+        a.score()
+            .partial_cmp(&b.score())
+            .unwrap_or(std::cmp::Ordering::Equal)
+    }) else {
+        return Vec::new();
+    };
 
-    let (leader_lo, leader_hi) = entries[leader_idx].score_ci();
+    let (leader_lo, leader_hi) = leader.score_ci();
 
     entries
         .iter()

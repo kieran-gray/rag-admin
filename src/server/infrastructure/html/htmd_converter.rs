@@ -23,9 +23,9 @@ impl HtmlToMarkdown for HtmdConverter {
 fn extract_title(html: &str) -> Option<String> {
     let lower = html.to_ascii_lowercase();
     let open = lower.find("<title")?;
-    let after_open = open + html[open..].find('>')?;
-    let close = lower[after_open..].find("</title>")?;
-    let raw = html[after_open + 1..after_open + close].trim();
+    let after_open = open + html.get(open..)?.find('>')?;
+    let close = lower.get(after_open..)?.find("</title>")?;
+    let raw = html.get(after_open + 1..after_open + close)?.trim();
     if raw.is_empty() {
         None
     } else {

@@ -9,32 +9,36 @@ pub(super) struct MetricDef {
     pub help: &'static str,
 }
 
-pub(super) const METRIC_DEFS: &[MetricDef] = &[
-    MetricDef {
-        name: "Recall",
-        short: "R",
-        help: "Fraction of each question's reference span that the retrieved chunks cover. \
-               1.0 means every byte of every reference was returned. Penalised by missing content.",
-    },
-    MetricDef {
-        name: "Precision",
-        short: "P",
-        help: "Fraction of the retrieved chunks' bytes that fall inside a reference span. \
-               Penalised by retrieving extra non-relevant content alongside the answer.",
-    },
-    MetricDef {
-        name: "IoU",
-        short: "IoU",
-        help: "Intersection-over-Union: overlap between retrieved and reference spans divided \
-               by their union. A combined measure that punishes both missed and excess content.",
-    },
-    MetricDef {
-        name: "Precision-ω",
-        short: "Pω",
-        help: "Precision over only the chunks whose spans touch a reference. \
-               Isolates retrieval quality from chunk-boundary noise.",
-    },
-];
+pub(super) const RECALL_DEF: MetricDef = MetricDef {
+    name: "Recall",
+    short: "R",
+    help: "Fraction of each question's reference span that the retrieved chunks cover. \
+           1.0 means every byte of every reference was returned. Penalised by missing content.",
+};
+
+pub(super) const PRECISION_DEF: MetricDef = MetricDef {
+    name: "Precision",
+    short: "P",
+    help: "Fraction of the retrieved chunks' bytes that fall inside a reference span. \
+           Penalised by retrieving extra non-relevant content alongside the answer.",
+};
+
+pub(super) const IOU_DEF: MetricDef = MetricDef {
+    name: "IoU",
+    short: "IoU",
+    help: "Intersection-over-Union: overlap between retrieved and reference spans divided \
+           by their union. A combined measure that punishes both missed and excess content.",
+};
+
+pub(super) const PRECISION_OMEGA_DEF: MetricDef = MetricDef {
+    name: "Precision-ω",
+    short: "Pω",
+    help: "Precision over only the chunks whose spans touch a reference. \
+           Isolates retrieval quality from chunk-boundary noise.",
+};
+
+pub(super) const METRIC_DEFS: &[MetricDef] =
+    &[RECALL_DEF, PRECISION_DEF, IOU_DEF, PRECISION_OMEGA_DEF];
 
 #[derive(Clone, Copy, Default)]
 pub(super) struct MetricBests {

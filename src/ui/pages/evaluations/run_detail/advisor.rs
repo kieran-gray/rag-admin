@@ -160,8 +160,7 @@ pub(super) fn reliability_advisor(
         });
 
         let q_size = in_bucket.len().div_ceil(4).clamp(2, 12);
-        if in_bucket.len() >= 4 {
-            let bucket_leader = in_bucket[0];
+        if let Some(&bucket_leader) = in_bucket.first().filter(|_| in_bucket.len() >= 4) {
             let top: Vec<&EvaluationVariantResult> =
                 in_bucket.iter().take(q_size).copied().collect();
             if top.iter().all(|v| ci_overlaps(bucket_leader, v)) {

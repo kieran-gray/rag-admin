@@ -172,7 +172,7 @@ pub fn classify_event(event: &PublishedEvent) -> Option<ActivityDelta> {
 }
 
 fn short_id(id: Uuid) -> String {
-    id.to_string()[..8].to_string()
+    id.to_string().chars().take(8).collect()
 }
 
 fn event_payload(event_data: &serde_json::Value) -> &serde_json::Value {

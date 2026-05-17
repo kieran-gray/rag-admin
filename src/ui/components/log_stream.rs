@@ -14,7 +14,7 @@ pub fn LogStream(#[prop(into)] url: Signal<Option<String>>) -> impl IntoView {
             if let Some(url) = url.get() {
                 set_events.set(Vec::new());
                 set_running.set(true);
-                handle.set_value(Some(self::hydrate::open(url, set_events, set_running)));
+                handle.set_value(self::hydrate::open(url, set_events, set_running));
             } else {
                 handle.set_value(None);
                 set_events.set(Vec::new());
@@ -85,7 +85,7 @@ mod hydrate {
         url: String,
         set_events: WriteSignal<Vec<LogEvent>>,
         set_running: WriteSignal<bool>,
-    ) -> StreamHandle {
+    ) -> Option<StreamHandle> {
         let source = match EventSource::new(&url) {
             Ok(s) => s,
             Err(err) => {
@@ -96,11 +96,7 @@ mod hydrate {
                     })
                 });
                 set_running.set(false);
-
-                return StreamHandle {
-                    source: EventSource::new("about:blank")
-                        .unwrap_or_else(|_| EventSource::new(&url).expect("event source")),
-                };
+                return None;
             }
         };
 
@@ -133,6 +129,6 @@ mod hydrate {
         source.set_onerror(Some(on_error.as_ref().unchecked_ref()));
         on_error.forget();
 
-        StreamHandle { source }
+        Some(StreamHandle { source })
     }
 }

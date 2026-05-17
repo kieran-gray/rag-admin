@@ -120,10 +120,12 @@ fn distribute_with_remainder(total: u32, weights_milli: &[u32]) -> Vec<u32> {
         .enumerate()
         .max_by_key(|(_, w)| **w)
         .unwrap_or((0, &0));
-    if assigned < total {
-        counts[idx] += total - assigned;
-    } else {
-        counts[idx] = counts[idx].saturating_sub(assigned - total);
+    if let Some(slot) = counts.get_mut(idx) {
+        if assigned < total {
+            *slot += total - assigned;
+        } else {
+            *slot = slot.saturating_sub(assigned - total);
+        }
     }
     counts
 }

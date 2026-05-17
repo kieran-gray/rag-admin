@@ -28,7 +28,7 @@ impl ReferenceLocator {
                 ))
             })?;
             references.push(EvaluationReferenceDto {
-                content: document[start..end].to_string(),
+                content: document.get(start..end).unwrap_or_default().to_string(),
                 char_start: byte_to_char_index(document, start) as u32,
                 char_end: byte_to_char_index(document, end) as u32,
                 embedding: None,
@@ -68,7 +68,11 @@ fn find_despite_whitespace(document: &str, reference: &str) -> Option<(usize, us
             if i > 0 {
                 pos = skip_whitespace(document, pos);
             }
-            if pos > document.len() || !document[pos..].starts_with(word) {
+            let Some(suffix) = document.get(pos..) else {
+                matched = false;
+                break;
+            };
+            if !suffix.starts_with(word) {
                 matched = false;
                 break;
             }
@@ -83,7 +87,7 @@ fn find_despite_whitespace(document: &str, reference: &str) -> Option<(usize, us
 
 fn skip_whitespace(document: &str, mut pos: usize) -> usize {
     while pos < document.len() {
-        let Some(ch) = document[pos..].chars().next() else {
+        let Some(ch) = document.get(pos..).and_then(|s| s.chars().next()) else {
             break;
         };
         if !ch.is_whitespace() {
@@ -196,15 +200,16 @@ fn find_contiguous_token_span(
         return None;
     }
 
-    'outer: for start in 0..=document_tokens.len() - reference_tokens.len() {
-        for (offset, reference) in reference_tokens.iter().enumerate() {
-            if document_tokens[start + offset].text != reference.text {
-                continue 'outer;
-            }
+    for window in document_tokens.windows(reference_tokens.len()) {
+        if window
+            .iter()
+            .zip(reference_tokens.iter())
+            .all(|(d, r)| d.text == r.text)
+        {
+            let first = window.first()?;
+            let last = window.last()?;
+            return Some((first.start, last.end));
         }
-
-        let end_index = start + reference_tokens.len() - 1;
-        return Some((document_tokens[start].start, document_tokens[end_index].end));
     }
 
     None
@@ -224,8 +229,8 @@ fn find_ordered_token_span(
 
     for reference in reference_tokens {
         let mut found = None;
-        while doc_index < document_tokens.len() {
-            if document_tokens[doc_index].text == reference.text {
+        while let Some(tok) = document_tokens.get(doc_index) {
+            if tok.text == reference.text {
                 found = Some(doc_index);
                 doc_index += 1;
                 break;
@@ -261,8 +266,8 @@ fn find_ordered_token_span(
     }
 
     Some((
-        document_tokens[start_index].start,
-        document_tokens[end_index].end,
+        document_tokens.get(start_index)?.start,
+        document_tokens.get(end_index)?.end,
     ))
 }
 
@@ -338,7 +343,7 @@ fn push_normalized_char(
 }
 
 fn byte_to_char_index(document: &str, byte_index: usize) -> usize {
-    document[..byte_index].chars().count()
+    document.get(..byte_index).map_or(0, |s| s.chars().count())
 }
 
 fn truncate(s: &str, max: usize) -> String {

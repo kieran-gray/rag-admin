@@ -101,6 +101,10 @@ impl sqlx::FromRow<'_, sqlx::postgres::PgRow> for GenerationModelRow {
 }
 
 impl From<GenerationModelRow> for GenerationModel {
+    #[expect(
+        clippy::expect_used,
+        reason = "row.kind comes from a column constrained by the application's enum vocabulary; an unrecognised value indicates DB corruption or schema drift, both of which should fail loudly"
+    )]
     fn from(row: GenerationModelRow) -> Self {
         Self {
             generation_model_id: row.id,

@@ -90,14 +90,16 @@ impl EmbeddingService {
         let texts = vec![text_a.to_string(), text_b.to_string()];
         let vecs = self.embed_batch(embedding_model_id, &texts).await?;
 
-        if vecs.len() < 2 || vecs[0].is_empty() {
+        let (Some(a), Some(b)) = (vecs.first(), vecs.get(1)) else {
+            return Err(AppError::Internal(
+                "embedder returned unexpected result".into(),
+            ));
+        };
+        if a.is_empty() {
             return Err(AppError::Internal(
                 "embedder returned unexpected result".into(),
             ));
         }
-
-        let a = &vecs[0];
-        let b = &vecs[1];
 
         let norm_a = l2_norm(a);
         let norm_b = l2_norm(b);

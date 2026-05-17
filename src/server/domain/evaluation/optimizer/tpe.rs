@@ -149,7 +149,10 @@ impl Tpe {
             return self.sample_from_prior();
         }
         let pivot_idx = (self.next_u64() as usize) % good.len();
-        let pivot = &good[pivot_idx].params.clone();
+        let Some(pivot_obs) = good.get(pivot_idx) else {
+            return self.sample_from_prior();
+        };
+        let pivot = pivot_obs.params.clone();
 
         let mut out: HashMap<String, Value> = HashMap::new();
         for p in descriptors {
@@ -189,7 +192,7 @@ impl Tpe {
                     }
                 }
                 let idx = (self.next_u64() as usize) % values.len();
-                Value::String(values[idx].clone())
+                Value::String(values.get(idx).cloned().unwrap_or_default())
             }
             Parameter::IntRange {
                 low,
@@ -257,7 +260,7 @@ impl Tpe {
         match p {
             Parameter::Categorical { values, .. } => {
                 let idx = (self.next_u64() as usize) % values.len().max(1);
-                Value::String(values[idx].clone())
+                Value::String(values.get(idx).cloned().unwrap_or_default())
             }
             Parameter::IntRange {
                 low,

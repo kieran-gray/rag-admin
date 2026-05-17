@@ -5,25 +5,22 @@ impl Document {
         let mut units = Vec::new();
         let mut idx = 0usize;
 
-        while idx < self.blocks.len() {
-            let block = &self.blocks[idx];
-            if matches!(block.kind, BlockKind::Paragraph)
-                && self
-                    .blocks
-                    .get(idx + 1)
-                    .map(|next| matches!(next.kind, BlockKind::List))
-                    .unwrap_or(false)
-                && block.text.trim_end().ends_with(':')
-            {
-                let next = &self.blocks[idx + 1];
-                units.push(TextUnit {
-                    text: format!("{}{}", block.text, next.text),
-                    char_start: block.span.char_start,
-                    char_end: next.span.char_end,
-                    atomic: true,
-                });
-                idx += 2;
-                continue;
+        while let Some(block) = self.blocks.get(idx) {
+            let next_block = self
+                .blocks
+                .get(idx + 1)
+                .filter(|next| matches!(next.kind, BlockKind::List));
+            if matches!(block.kind, BlockKind::Paragraph) && block.text.trim_end().ends_with(':') {
+                if let Some(next) = next_block {
+                    units.push(TextUnit {
+                        text: format!("{}{}", block.text, next.text),
+                        char_start: block.span.char_start,
+                        char_end: next.span.char_end,
+                        atomic: true,
+                    });
+                    idx += 2;
+                    continue;
+                }
             }
 
             if block.is_atomic_text_unit() {
@@ -104,8 +101,8 @@ fn split_prose_on_terminators(text: &str, char_start: usize) -> Vec<TextUnit> {
     let mut start = 0usize;
     let mut i = 0usize;
 
-    while i < chars.len() {
-        if is_terminating_punctuation(chars[i])
+    while let Some(&ch) = chars.get(i) {
+        if is_terminating_punctuation(ch)
             && chars.get(i + 1).map(|c| c.is_whitespace()).unwrap_or(true)
         {
             let mut end = i + 1;
@@ -135,7 +132,7 @@ fn push_unit_from_chars(
     base_char_start: usize,
     atomic: bool,
 ) {
-    let text: String = chars[start..end].iter().collect();
+    let text: String = chars.get(start..end).unwrap_or_default().iter().collect();
     if text.trim().is_empty() {
         return;
     }
@@ -154,13 +151,13 @@ fn is_terminating_punctuation(c: char) -> bool {
 fn parse_atx_heading(line: &str) -> Option<(usize, String)> {
     let bytes = line.as_bytes();
     let mut depth = 0usize;
-    while depth < bytes.len() && bytes[depth] == b'#' {
+    while bytes.get(depth).copied() == Some(b'#') {
         depth += 1;
     }
     if depth == 0 || depth > 6 {
         return None;
     }
-    let after = &line[depth..];
+    let after = line.get(depth..)?;
     let first = after.chars().next()?;
     if !first.is_whitespace() {
         return None;

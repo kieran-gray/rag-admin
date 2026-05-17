@@ -5,8 +5,8 @@ use async_trait::async_trait;
 use crate::server::event_sourcing::process_manager::{EffectError, EffectExecutor};
 
 use super::optimize_executor::OptimizeRunEffectExecutor;
-use crate::server::domain::evaluation::run::effects::EvaluationRunEffect;
 use super::run_executor::EvaluationRunEffectExecutor;
+use crate::server::domain::evaluation::run::effects::EvaluationRunEffect;
 
 pub struct EvaluationRunEffectDispatcher {
     execute: Arc<EvaluationRunEffectExecutor>,

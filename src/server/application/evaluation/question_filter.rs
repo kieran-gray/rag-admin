@@ -140,13 +140,17 @@ impl<'a> GeneratedQuestionGate<'a> {
 
         match classify_candidate(
             question_embedding.as_deref(),
-            &embeddings[1..],
+            embeddings.get(1..).unwrap_or_default(),
             &self.question_embeddings,
             self.excerpt_similarity_threshold,
             self.duplicate_similarity_threshold,
             requires_references,
         ) {
             CandidateClassification::Accepted => {
+                #[expect(
+                    clippy::expect_used,
+                    reason = "classify_candidate only returns Accepted when question_embedding is Some"
+                )]
                 let question_embedding =
                     question_embedding.expect("accepted candidate has embedding");
                 let mut question = question;
@@ -219,11 +223,15 @@ fn filter_questions_by_embeddings(
     let mut stats = QuestionFilterStats::default();
 
     for (question_index, question) in questions.into_iter().enumerate() {
-        let reference_embeddings_for_question = references_by_question[question_index]
-            .iter()
-            .filter_map(|i| reference_embeddings.get(*i))
-            .cloned()
-            .collect::<Vec<_>>();
+        let reference_embeddings_for_question = references_by_question
+            .get(question_index)
+            .map(|refs| {
+                refs.iter()
+                    .filter_map(|i| reference_embeddings.get(*i))
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
         let kept_embeddings = kept_embedding_indexes
             .iter()
             .filter_map(|kept_index| question_embeddings.get(*kept_index))

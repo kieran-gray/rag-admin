@@ -117,7 +117,7 @@ fn RunsTable(runs: Vec<RecentEvaluationRunDto>) -> impl IntoView {
 fn RunRow(run: RecentEvaluationRunDto) -> impl IntoView {
     let href = format!("/runs/{}", run.run_id);
     let (status_label, status_kind) = run_status(&run.status);
-    let run_short = run.run_id.to_string()[..8].to_string();
+    let run_short = run.run_id.to_string().chars().take(8).collect::<String>();
     let when = run
         .created_at
         .get(..16)
@@ -128,7 +128,12 @@ fn RunRow(run: RecentEvaluationRunDto) -> impl IntoView {
         .clone()
         .unwrap_or_else(|| "Unknown document".to_string());
     let title_attr = title.clone();
-    let document_short = run.document_id.to_string()[..8].to_string();
+    let document_short = run
+        .document_id
+        .to_string()
+        .chars()
+        .take(8)
+        .collect::<String>();
     let variant_count = run.variant_count;
 
     view! {

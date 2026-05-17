@@ -28,7 +28,9 @@ impl DocumentChunker for SectionChunker {
         tokenizer: &dyn Tokenizer,
     ) -> Result<Vec<ChunkOutput>, AppError> {
         let ChunkingConfig::Section(config) = config else {
-            unreachable!()
+            return Err(AppError::Validation(
+                "Section chunker called with invalid chunking config".to_string(),
+            ));
         };
 
         let budget = TokenBudget::new(tokenizer);
@@ -72,17 +74,24 @@ fn split_oversized(
     let total = chars.len();
     let mut start = 0usize;
     while start < total {
-        let prefix_len = budget.max_prefix_chars(&chars[start..], max_tokens)?;
+        let prefix_len =
+            budget.max_prefix_chars(chars.get(start..).unwrap_or_default(), max_tokens)?;
         let end = (start + prefix_len).min(total);
         let break_at = if end < total {
-            last_double_newline(&chars[start..end])
+            chars
+                .get(start..end)
+                .and_then(last_double_newline)
                 .map(|p| start + p)
                 .unwrap_or(end)
         } else {
             end
         };
         let break_at = if break_at <= start { end } else { break_at };
-        let piece: String = chars[start..break_at].iter().collect();
+        let piece: String = chars
+            .get(start..break_at)
+            .unwrap_or_default()
+            .iter()
+            .collect();
         out.push(SectionBlock {
             text: piece,
             char_start: section.char_start + start,
@@ -90,7 +99,7 @@ fn split_oversized(
             heading: section.heading.clone(),
         });
         start = break_at;
-        while start < total && chars[start] == '\n' {
+        while chars.get(start) == Some(&'\n') {
             start += 1;
         }
     }
@@ -98,19 +107,11 @@ fn split_oversized(
 }
 
 fn last_double_newline(window: &[char]) -> Option<usize> {
-    if window.len() < 2 {
-        return None;
-    }
-    let mut i = window.len() - 2;
-    loop {
-        if window[i] == '\n' && window[i + 1] == '\n' {
-            return Some(i);
-        }
-        if i == 0 {
-            return None;
-        }
-        i -= 1;
-    }
+    window
+        .windows(2)
+        .enumerate()
+        .rev()
+        .find_map(|(i, w)| (w == ['\n', '\n']).then_some(i))
 }
 
 #[cfg(test)]

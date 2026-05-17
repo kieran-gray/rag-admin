@@ -96,35 +96,43 @@ const LLM_PARAMS: &[ChunkParamDefinition] = &[
     },
 ];
 
+const BERT_DEFINITION: ChunkerDefinition = ChunkerDefinition {
+    strategy: ChunkStrategy::Bert,
+    id: "bert",
+    label: "bert",
+    hint: "sliding window with overlap",
+    params: BERT_PARAMS,
+};
+
+const SECTION_DEFINITION: ChunkerDefinition = ChunkerDefinition {
+    strategy: ChunkStrategy::Section,
+    id: "section",
+    label: "section",
+    hint: "heading-aware markdown sections",
+    params: SECTION_PARAMS,
+};
+
+const LLM_DEFINITION: ChunkerDefinition = ChunkerDefinition {
+    strategy: ChunkStrategy::Llm,
+    id: "llm",
+    label: "llm",
+    hint: "LLM-selected semantic boundaries over micro chunks",
+    params: LLM_PARAMS,
+};
+
+const DARN_DEFINITION: ChunkerDefinition = ChunkerDefinition {
+    strategy: ChunkStrategy::Darn,
+    id: "darn",
+    label: "darn",
+    hint: "mathematically optimal cuts via DP over markdown structure penalties",
+    params: DARN_PARAMS,
+};
+
 pub const CHUNKER_DEFINITIONS: &[ChunkerDefinition] = &[
-    ChunkerDefinition {
-        strategy: ChunkStrategy::Bert,
-        id: "bert",
-        label: "bert",
-        hint: "sliding window with overlap",
-        params: BERT_PARAMS,
-    },
-    ChunkerDefinition {
-        strategy: ChunkStrategy::Section,
-        id: "section",
-        label: "section",
-        hint: "heading-aware markdown sections",
-        params: SECTION_PARAMS,
-    },
-    ChunkerDefinition {
-        strategy: ChunkStrategy::Llm,
-        id: "llm",
-        label: "llm",
-        hint: "LLM-selected semantic boundaries over micro chunks",
-        params: LLM_PARAMS,
-    },
-    ChunkerDefinition {
-        strategy: ChunkStrategy::Darn,
-        id: "darn",
-        label: "darn",
-        hint: "mathematically optimal cuts via DP over markdown structure penalties",
-        params: DARN_PARAMS,
-    },
+    BERT_DEFINITION,
+    SECTION_DEFINITION,
+    LLM_DEFINITION,
+    DARN_DEFINITION,
 ];
 
 impl ChunkStrategy {
@@ -144,10 +152,12 @@ impl ChunkStrategy {
     }
 
     pub fn definition(self) -> &'static ChunkerDefinition {
-        CHUNKER_DEFINITIONS
-            .iter()
-            .find(|definition| definition.strategy == self)
-            .expect("chunk strategy has a definition")
+        match self {
+            ChunkStrategy::Bert => &BERT_DEFINITION,
+            ChunkStrategy::Section => &SECTION_DEFINITION,
+            ChunkStrategy::Llm => &LLM_DEFINITION,
+            ChunkStrategy::Darn => &DARN_DEFINITION,
+        }
     }
 
     pub fn preview_limit_uses_tokens(self) -> bool {

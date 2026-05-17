@@ -1,5 +1,10 @@
 #[cfg(feature = "ssr")]
 #[tokio::main]
+#[expect(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "main: startup failures cannot be handled, so panicking is the appropriate response"
+)]
 async fn main() {
     use axum::Router;
     use leptos::prelude::*;

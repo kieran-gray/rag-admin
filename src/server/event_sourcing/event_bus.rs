@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use tracing::error;
 
 use tokio::sync::broadcast;
 
@@ -23,7 +24,9 @@ impl EventBus {
     }
 
     pub fn publish(&self, event: Arc<PublishedEvent>) {
-        let _ = self.sender.send(event);
+        if let Err(publish_error) = self.sender.send(event) {
+            error!("Failed to publish event: {publish_error}");
+        }
     }
 
     pub fn subscribe(&self) -> EventBusSubscription {

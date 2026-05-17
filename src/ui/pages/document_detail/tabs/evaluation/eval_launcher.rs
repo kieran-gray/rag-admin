@@ -1107,17 +1107,14 @@ fn variants_summary(computed: Memo<Result<Vec<ChunkingVariant>, String>>) -> Str
 
 fn options_summary(computed: Memo<Result<Vec<EvaluationRunOptions>, String>>) -> String {
     match computed.get() {
-        Ok(list) => match list.len() {
-            0 => "no options".to_string(),
-            1 => {
-                let o = &list[0];
-                format!(
-                    "top-k {} · min-score {:.2}",
-                    o.top_k,
-                    o.min_score_milli as f32 / 1000.0,
-                )
-            }
-            n => format!("{n} option sets"),
+        Ok(list) => match list.as_slice() {
+            [] => "no options".to_string(),
+            [o] => format!(
+                "top-k {} · min-score {:.2}",
+                o.top_k,
+                o.min_score_milli as f32 / 1000.0,
+            ),
+            many => format!("{} option sets", many.len()),
         },
         Err(e) => format!("⚠ {e}"),
     }
@@ -1271,10 +1268,10 @@ fn store_sweep_template_pref(id: Option<Uuid>) {
     };
     match id {
         Some(id) => {
-            let _ = storage.set_item(SWEEP_TEMPLATE_STORAGE_KEY, &id.to_string());
+            _ = storage.set_item(SWEEP_TEMPLATE_STORAGE_KEY, &id.to_string());
         }
         None => {
-            let _ = storage.remove_item(SWEEP_TEMPLATE_STORAGE_KEY);
+            _ = storage.remove_item(SWEEP_TEMPLATE_STORAGE_KEY);
         }
     }
 }

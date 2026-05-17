@@ -281,7 +281,9 @@ impl EvaluationRunEffectExecutor {
         split: EvaluationResultSplit,
     ) -> Result<(), AppError> {
         for (rank, combo) in candidates.iter().enumerate() {
-            let variant = &prepared[combo.variant_index];
+            let Some(variant) = prepared.get(combo.variant_index) else {
+                continue;
+            };
             let (metrics, traces) = self
                 .trial_scorer
                 .score_variant(run_id, variant, subset, &combo.options)

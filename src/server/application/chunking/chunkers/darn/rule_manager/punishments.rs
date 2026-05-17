@@ -18,7 +18,9 @@ pub fn inverse_triangular_punishment(scale: usize, length: usize, out: &mut [usi
         return;
     }
     if length == 1 {
-        out[0] = 0;
+        if let Some(slot) = out.first_mut() {
+            *slot = 0;
+        }
         return;
     }
 

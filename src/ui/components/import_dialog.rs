@@ -128,7 +128,10 @@ fn UploadPane(on_imported: Callback<SourceDocumentDto>) -> impl IntoView {
                 return;
             }
         };
-        let file = files.item(0).expect("file at index 0");
+        let Some(file) = files.item(0) else {
+            set_error.set(Some("Could not read selected file.".into()));
+            return;
+        };
         let auto_index = index_after.get_untracked();
 
         set_busy.set(true);
@@ -329,9 +332,10 @@ fn AdapterRow(doc: DocumentListItemDto) -> impl IntoView {
 async fn upload_file(file: web_sys::File) -> Result<SourceDocumentDto, String> {
     use gloo_net::http::Request;
 
-    let form = web_sys::FormData::new().map_err(|_| "could not build FormData".to_string())?;
+    let form =
+        web_sys::FormData::new().map_err(|e| format!("could not build FormData: {:#?}", e))?;
     form.append_with_blob_and_filename("file", &file, &file.name())
-        .map_err(|_| "could not append file to FormData".to_string())?;
+        .map_err(|e| format!("could not append file to FormData: {:#?}", e))?;
 
     let response = Request::post("/api/source_documents/upload")
         .body(form)

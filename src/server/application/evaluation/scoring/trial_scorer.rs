@@ -55,8 +55,11 @@ impl<'a> QuestionSubset<'a> {
         indices: &[usize],
     ) -> Self {
         Self {
-            questions: indices.iter().map(|&i| &questions[i]).collect(),
-            embeddings: indices.iter().map(|&i| embeddings[i].clone()).collect(),
+            questions: indices.iter().filter_map(|&i| questions.get(i)).collect(),
+            embeddings: indices
+                .iter()
+                .filter_map(|&i| embeddings.get(i).cloned())
+                .collect(),
         }
     }
 }
@@ -433,12 +436,16 @@ impl TrialScorer {
         };
 
         let weights = EvaluationScorePolicy::default().weights();
-        let composite_per_question: Vec<f32> = (0..n)
-            .map(|i| {
-                recall_scores[i] * weights.recall
-                    + iou_scores[i] * weights.iou
-                    + precision_scores[i] * weights.precision
-                    + omega_scores[i] * weights.precision_omega
+        let composite_per_question: Vec<f32> = recall_scores
+            .iter()
+            .zip(iou_scores.iter())
+            .zip(precision_scores.iter())
+            .zip(omega_scores.iter())
+            .map(|(((r, i), p), o)| {
+                r * weights.recall
+                    + i * weights.iou
+                    + p * weights.precision
+                    + o * weights.precision_omega
             })
             .collect();
 
@@ -506,7 +513,9 @@ fn ci_seed(run_id: Uuid, variant_label: &str, options: &EvaluationRunOptions) ->
     let mut acc: u64 = 0xCBF2_9CE4_8422_2325;
     for chunk in bytes.chunks(8) {
         let mut buf = [0u8; 8];
-        buf[..chunk.len()].copy_from_slice(chunk);
+        for (slot, src) in buf.iter_mut().zip(chunk.iter()) {
+            *slot = *src;
+        }
         acc ^= u64::from_le_bytes(buf);
         acc = acc.wrapping_mul(0x100000001B3);
     }

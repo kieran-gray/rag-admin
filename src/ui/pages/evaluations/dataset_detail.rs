@@ -71,7 +71,7 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
     let is_generating = dataset.status == "generating";
 
     let dataset_id = dataset.dataset_id;
-    let dataset_short = dataset_id.to_string()[..8].to_string();
+    let dataset_short = dataset_id.to_string().chars().take(8).collect::<String>();
     let document_id = dataset.document_id;
     let document_version = dataset.document_version;
     let content_hash_short = short_hash(&dataset.content_hash).to_string();

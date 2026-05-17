@@ -213,7 +213,7 @@ fn TrayGlyph(open: RwSignal<bool>) -> impl IntoView {
 }
 
 fn short_id(id: Uuid) -> String {
-    id.to_string()[..8].to_string()
+    id.to_string().chars().take(8).collect()
 }
 
 #[cfg(feature = "hydrate")]
@@ -229,7 +229,7 @@ mod hydrate {
     impl Drop for OutsideClick {
         fn drop(&mut self) {
             if let (Some(window), Some(c)) = (web_sys::window(), self.closure.take()) {
-                let _ = window
+                _ = window
                     .remove_event_listener_with_callback("mousedown", c.as_ref().unchecked_ref());
             }
         }
@@ -251,8 +251,7 @@ mod hydrate {
                 }
                 set_open.set(false);
             });
-        let _ =
-            window.add_event_listener_with_callback("mousedown", closure.as_ref().unchecked_ref());
+        _ = window.add_event_listener_with_callback("mousedown", closure.as_ref().unchecked_ref());
         OutsideClick {
             closure: Some(closure),
         }

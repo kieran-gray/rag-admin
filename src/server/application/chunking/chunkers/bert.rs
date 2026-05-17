@@ -22,7 +22,9 @@ impl DocumentChunker for BertChunker {
         tokenizer: &dyn Tokenizer,
     ) -> Result<Vec<ChunkOutput>, AppError> {
         let ChunkingConfig::Bert(config) = config else {
-            unreachable!()
+            return Err(AppError::Validation(
+                "Bert chunker called with invalid chunking config".to_string(),
+            ));
         };
 
         let target = config.target_tokens.max(1) as usize;
@@ -95,19 +97,11 @@ fn pack_segments(
 }
 
 fn last_double_newline(window: &[char]) -> Option<usize> {
-    if window.len() < 2 {
-        return None;
-    }
-    let mut i = window.len() - 2;
-    loop {
-        if window[i] == '\n' && window[i + 1] == '\n' {
-            return Some(i);
-        }
-        if i == 0 {
-            return None;
-        }
-        i -= 1;
-    }
+    window
+        .windows(2)
+        .enumerate()
+        .rev()
+        .find_map(|(i, w)| (w == ['\n', '\n']).then_some(i))
 }
 
 fn last_sentence_break(window: &[char]) -> Option<usize> {
@@ -118,7 +112,7 @@ fn last_sentence_break(window: &[char]) -> Option<usize> {
         }
     }
     let i = last_punct?;
-    if i + 1 < window.len() && window[i + 1].is_whitespace() {
+    if window.get(i + 1).is_some_and(|c| c.is_whitespace()) {
         Some(i)
     } else {
         None
@@ -146,11 +140,12 @@ fn split_oversized(
             if start >= total {
                 break;
             }
-            let prefix_len = budget.max_prefix_chars(&text_chars[start..], target)?;
+            let suffix = text_chars.get(start..).unwrap_or_default();
+            let prefix_len = budget.max_prefix_chars(suffix, target)?;
             let end = (start + prefix_len).min(total);
             let mut break_at = end;
             if end < total {
-                let window = &text_chars[start..end];
+                let window = text_chars.get(start..end).unwrap_or_default();
                 let last_para = last_double_newline(window);
                 let last_sent = last_sentence_break(window);
                 if let Some(p) = last_para {
@@ -167,13 +162,21 @@ fn split_oversized(
                     }
                 }
             }
-            let raw_piece: String = text_chars[start..break_at].iter().collect();
+            let raw_piece: String = text_chars
+                .get(start..break_at)
+                .unwrap_or_default()
+                .iter()
+                .collect();
             let piece = raw_piece.trim().to_string();
             let piece_len = budget.count_str(&piece)?;
             if !piece.is_empty() {
                 let last_atomic = out.last().map(|s: &SegmentBlock| s.atomic).unwrap_or(true);
-                if piece_len < min && !out.is_empty() && !last_atomic {
-                    let prev = out.last_mut().unwrap();
+                let prev_for_merge = if piece_len < min && !last_atomic {
+                    out.last_mut()
+                } else {
+                    None
+                };
+                if let Some(prev) = prev_for_merge {
                     let merged = format!("{}\n\n{}", prev.text, piece);
                     if budget.count_str(&merged)? <= target {
                         prev.text = merged;

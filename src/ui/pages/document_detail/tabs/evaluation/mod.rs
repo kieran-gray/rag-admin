@@ -428,7 +428,7 @@ fn RunCard(run: EvaluationRunSummaryDto) -> impl IntoView {
         .get(..16)
         .unwrap_or(&run.created_at)
         .to_string();
-    let run_short = run.run_id.to_string()[..8].to_string();
+    let run_short = run.run_id.to_string().chars().take(8).collect::<String>();
     let variant_count = run.variant_count;
     let run_id = run.run_id;
 

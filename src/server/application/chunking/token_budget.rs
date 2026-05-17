@@ -31,7 +31,8 @@ impl<'a> TokenBudget<'a> {
         let mut high = chars.len();
         while low < high {
             let mid = (low + high + 1).div_ceil(2);
-            if self.count_chars(&chars[..mid])? <= max_tokens {
+            let prefix = chars.get(..mid).unwrap_or_default();
+            if self.count_chars(prefix)? <= max_tokens {
                 low = mid;
             } else {
                 high = mid - 1;
@@ -56,7 +57,8 @@ impl<'a> TokenBudget<'a> {
         let mut best = end;
         while low <= high {
             let mid = (low + high) / 2;
-            if self.count_chars(&chars[mid..end])? <= overlap_tokens {
+            let window = chars.get(mid..end).unwrap_or_default();
+            if self.count_chars(window)? <= overlap_tokens {
                 best = mid;
                 if mid == 0 {
                     break;

@@ -59,7 +59,10 @@ pub fn PlaygroundPage() -> impl IntoView {
 #[component]
 fn PlaygroundBody(pipelines: Vec<PipelineConfigurationDto>) -> impl IntoView {
     let pipelines_stored = StoredValue::new(pipelines.clone());
-    let initial_pipeline = pipelines[0].pipeline_configuration_id;
+    let initial_pipeline = pipelines
+        .first()
+        .map(|p| p.pipeline_configuration_id)
+        .unwrap_or_default();
 
     let (query, set_query) = signal(String::new());
     let (pipeline_id, set_pipeline_id) = signal(initial_pipeline);

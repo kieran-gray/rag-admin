@@ -158,9 +158,11 @@ impl EvaluationDatasetEffectExecutor {
         let decision = gate.try_accept(shared).await?;
         match decision {
             QuestionFilterDecision::Accepted { .. } => {
-                let q = gate
-                    .latest_question()
-                    .expect("gate.try_accept returned Accepted");
+                let Some(q) = gate.latest_question() else {
+                    job.info("Rejected: filter accepted candidate but produced no question")
+                        .await;
+                    return self.maybe_terminate(state.dataset_id, &job).await;
+                };
                 let references: Vec<EvaluationReference> = q
                     .references
                     .iter()
@@ -479,7 +481,12 @@ fn recent_coverage(questions: &[EvaluationQuestion]) -> Vec<String> {
         .filter(|q| q.paraphrase_of.is_none())
         .collect();
     let start = clean.len().saturating_sub(PREVIOUS_QUESTION_PROMPT_LIMIT);
-    clean[start..].iter().map(|q| coverage_entry(q)).collect()
+    clean
+        .get(start..)
+        .unwrap_or_default()
+        .iter()
+        .map(|q| coverage_entry(q))
+        .collect()
 }
 
 fn coverage_entry(q: &EvaluationQuestion) -> String {
@@ -501,10 +508,10 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     let mut dot = 0.0f32;
     let mut na = 0.0f32;
     let mut nb = 0.0f32;
-    for i in 0..n {
-        dot += a[i] * b[i];
-        na += a[i] * a[i];
-        nb += b[i] * b[i];
+    for (av, bv) in a.iter().zip(b.iter()).take(n) {
+        dot += av * bv;
+        na += av * av;
+        nb += bv * bv;
     }
     let denom = na.sqrt() * nb.sqrt();
     if denom <= 1e-9 {

@@ -26,7 +26,9 @@ impl DocumentChunker for DarnChunker {
         tokenizer: &dyn Tokenizer,
     ) -> Result<Vec<ChunkOutput>, AppError> {
         let ChunkingConfig::Darn(config) = config else {
-            unreachable!()
+            return Err(AppError::Validation(
+                "Darn chunker called with invalid chunking config".to_string(),
+            ));
         };
 
         let text = source.source.as_str();
@@ -112,8 +114,8 @@ fn assemble_chunks(
         out.push(RawChunk {
             text: slice.to_string(),
             heading: extract_heading(slice),
-            char_start: text[..safe_start].chars().count(),
-            char_end: text[..safe_end].chars().count(),
+            char_start: text.get(..safe_start).map_or(0, |s| s.chars().count()),
+            char_end: text.get(..safe_end).map_or(0, |s| s.chars().count()),
         });
     }
 
@@ -128,9 +130,10 @@ fn extend_with_overlap(
 ) -> usize {
     match config.granularity {
         DarnGranularity::Characters => {
+            let suffix = text.get(base_end..).unwrap_or("");
             let mut count = 0;
             let mut end = base_end;
-            for (i, _) in text[base_end..].char_indices() {
+            for (i, _) in suffix.char_indices() {
                 if count >= overlap {
                     break;
                 }
@@ -195,13 +198,13 @@ fn extract_heading(text: &str) -> String {
 fn parse_atx_heading(line: &str) -> Option<(usize, String)> {
     let bytes = line.as_bytes();
     let mut depth = 0usize;
-    while depth < bytes.len() && bytes[depth] == b'#' {
+    while bytes.get(depth).copied() == Some(b'#') {
         depth += 1;
     }
     if depth == 0 || depth > 6 {
         return None;
     }
-    let after = &line[depth..];
+    let after = line.get(depth..)?;
     let first = after.chars().next()?;
     if !first.is_whitespace() {
         return None;
