@@ -11,22 +11,29 @@ pipeline to production.
 
 ## Run
 
-You need Postgres (with the `vector` extension) and, optionally, Ollama or
-Cloudflare credentials depending on which providers you want to use.
+The recommended way to run the app is via Docker Compose, which brings up
+Postgres (with pgvector), Ollama, and the app itself in one go.
 
-```sh
-docker compose up -d db
-cargo install cargo-leptos
-cargo leptos watch
-```
+Prerequisites:
 
-Then open `http://127.0.0.1:3000`.
+- [Docker](https://docs.docker.com/get-docker/) (with Compose)
+- Optional: [just](https://github.com/casey/just) for convenience recipes
+- Optional: [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+  if you have an NVIDIA GPU and want Ollama to use it. See
+  [mythrantic/ollama-docker](https://github.com/mythrantic/ollama-docker) for a
+  worked example.
 
-To run the app and local Ollama stack fully in Compose:
+Copy `.env.example` to `.env`, then start the stack:
 
 ```sh
 docker compose up -d
+# or, with just:
+just up
 ```
+
+Then open `http://localhost:3000`.
+
+### First run: model downloads
 
 The Compose stack starts Ollama, stores its model files in the `ollama-data`
 volume, and populates the local models seeded by the app:
@@ -34,11 +41,32 @@ volume, and populates the local models seeded by the app:
 - `qwen3-embedding:0.6b` for embeddings
 - `gemma3:12b-it-qat` for generation
 
-The first run downloads the model files and can take a while. Adjust
-`OLLAMA_MEMORY_RESERVATION` and `OLLAMA_MEMORY_LIMIT` in `.env` if Docker does
-not have enough memory available for the generation model. Keep at least 20 GB
-free in Docker's volume store for the Ollama model blobs, partial downloads, and
-future model updates.
+The first run downloads these models and can take a while. **The defaults are
+not suitable for all hardware** — `gemma3:12b-it-qat` needs roughly 12–16 GB of
+RAM/VRAM to run comfortably. If your machine can't fit it, edit
+`docker-compose.yml` (the `ollama-pull-*` services) to pull smaller variants
+such as `gemma3:4b-it-qat` or `gemma3:1b-it-qat` and adjust the models in the
+UI accordingly.
+
+Adjust `OLLAMA_MEMORY_RESERVATION` and `OLLAMA_MEMORY_LIMIT` in `.env` if Docker
+does not have enough memory available for the generation model. Keep at least
+20 GB free in Docker's volume store for the Ollama model blobs, partial
+downloads, and future model updates.
+
+### Local development (without the app container)
+
+If you want to run the Rust app on the host with hot reload and only Postgres
+in Docker:
+
+```sh
+just db-up         # docker compose up -d db
+just dev           # cargo leptos watch
+```
+
+This needs the Rust toolchain plus `cargo-leptos` installed locally.
+
+Run `just` with no arguments to see all available recipes (build, test, lint,
+format, …).
 
 ## Configuration
 

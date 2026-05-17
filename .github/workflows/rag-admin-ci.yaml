@@ -73,25 +73,6 @@ jobs:
       - name: Run tests (SSR)
         run: cargo test --features ssr
 
-  tailwind:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build CSS
-        run: npm run build
 
   machete:
     runs-on: ubuntu-latest

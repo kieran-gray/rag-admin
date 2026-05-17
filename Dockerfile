@@ -7,7 +7,7 @@ RUN rm -f /etc/apt/apt.conf.d/docker-clean \
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update -y \
-    && apt-get install -y --no-install-recommends clang nodejs npm
+    && apt-get install -y --no-install-recommends clang
 
 ADD https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-musl.tgz /tmp/cargo-binstall.tgz
 RUN tar -xzf /tmp/cargo-binstall.tgz -C /usr/local/cargo/bin \
@@ -20,10 +20,6 @@ RUN rustup target add wasm32-unknown-unknown
 WORKDIR /app
 
 FROM base AS builder
-
-COPY package.json package-lock.json ./
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci
 
 COPY . .
 
