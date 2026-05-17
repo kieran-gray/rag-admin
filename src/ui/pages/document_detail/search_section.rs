@@ -131,7 +131,7 @@ fn SearchPane(
         pipeline_id.get().map(|pid| {
             let q = query.get();
             let q_enc = urlencoding::encode(&q);
-            format!("/playground?q={q_enc}&pipeline={pid}")
+            format!("/playground/retrieve?q={q_enc}&pipeline={pid}")
         })
     };
 

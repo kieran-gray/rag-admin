@@ -22,7 +22,7 @@ pub fn ChunkCard(chunk: ChunkDto) -> impl IntoView {
             </pre>
             <div class="flex justify-end pt-1 border-t border-[var(--color-border)]">
                 <a
-                    href=text.with_value(|t| format!("/embed?a={}", urlencoding::encode(t)))
+                    href=text.with_value(|t| format!("/playground/embed?a={}", urlencoding::encode(t)))
                     class="text-xs muted hover:text-text"
                 >
                     "Probe similarity →"

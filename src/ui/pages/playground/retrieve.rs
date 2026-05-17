@@ -24,7 +24,7 @@ struct MarkedRelevant {
 }
 
 #[component]
-pub fn PlaygroundPage() -> impl IntoView {
+pub fn RetrievePage() -> impl IntoView {
     let pipelines = Resource::new(
         || (),
         |_| async move { get_pipeline_configurations().await.unwrap_or_default() },
@@ -33,7 +33,7 @@ pub fn PlaygroundPage() -> impl IntoView {
     view! {
         <div>
             <PageHeader
-                title="Playground"
+                title="Retrieve"
                 subtitle="Run retrieval against any pipeline. Results route back to the source document for chunking iteration.".to_string()
             />
             <Transition fallback=|| view! { <Surface><p class="muted">"Loading…"</p></Surface> }>
@@ -176,7 +176,7 @@ fn PlaygroundBody(pipelines: Vec<PipelineConfigurationDto>) -> impl IntoView {
                         placeholder="Ask a question…"
                         prop:value=move || query.get()
                         on:input=move |ev| set_query.set(event_target_value(&ev))
-                        rows="3"
+                        rows="8"
                     ></textarea>
 
                     <div class="playground-controls">
@@ -309,24 +309,27 @@ fn PipelinePicker(
     set_value: WriteSignal<Uuid>,
 ) -> impl IntoView {
     view! {
-        <select
-            class="playground-pipeline-picker"
-            on:change=move |ev| {
-                if let Ok(uuid) = Uuid::parse_str(&event_target_value(&ev)) {
-                    set_value.set(uuid);
+        <label class="playground-picker-label">
+            <span class="eyebrow">"Pipeline"</span>
+            <select
+                class="playground-pipeline-picker"
+                on:change=move |ev| {
+                    if let Ok(uuid) = Uuid::parse_str(&event_target_value(&ev)) {
+                        set_value.set(uuid);
+                    }
                 }
-            }
-        >
-            {pipelines.into_iter().map(|p| {
-                let pid = p.pipeline_configuration_id;
-                let id_str = pid.to_string();
-                view! {
-                    <option value=id_str.clone() selected=move || value.get() == pid>
-                        {p.name}
-                    </option>
-                }
-            }).collect_view()}
-        </select>
+            >
+                {pipelines.into_iter().map(|p| {
+                    let pid = p.pipeline_configuration_id;
+                    let id_str = pid.to_string();
+                    view! {
+                        <option value=id_str.clone() selected=move || value.get() == pid>
+                            {p.name}
+                        </option>
+                    }
+                }).collect_view()}
+            </select>
+        </label>
     }
 }
 

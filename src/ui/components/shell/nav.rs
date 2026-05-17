@@ -3,9 +3,41 @@ use leptos_router::components::A;
 use leptos_router::hooks::use_location;
 use uuid::Uuid;
 
+use super::nav_menu::{NavMenu, NavMenuItem};
 use crate::contracts::{ActivityJobDto, ActivityKind};
 use crate::ui::components::activity::{open_tray_with, set_tray_open, use_activity_state};
 use crate::ui::components::event_bus::{use_event_bus, ConnectionState};
+
+const CONFIGURATION_ITEMS: &[NavMenuItem] = &[
+    NavMenuItem {
+        href: "/configuration/catalog",
+        label: "Catalog",
+        hint: "models · indexes",
+    },
+    NavMenuItem {
+        href: "/configuration/pipelines",
+        label: "Pipelines",
+        hint: "compose models + index",
+    },
+    NavMenuItem {
+        href: "/configuration/chunking",
+        label: "Chunking",
+        hint: "strategies · sweeps",
+    },
+];
+
+const PLAYGROUND_ITEMS: &[NavMenuItem] = &[
+    NavMenuItem {
+        href: "/playground/embed",
+        label: "Embed",
+        hint: "compare vectors",
+    },
+    NavMenuItem {
+        href: "/playground/retrieve",
+        label: "Retrieve",
+        hint: "top-K search",
+    },
+];
 
 #[component]
 pub fn AppNav() -> impl IntoView {
@@ -13,14 +45,6 @@ pub fn AppNav() -> impl IntoView {
     let bus = use_event_bus();
     let activity = use_activity_state();
     let tray_open = activity.open;
-
-    let destinations: &[(&'static str, &'static str)] = &[
-        ("/", "Documents"),
-        ("/evaluations", "Evaluations"),
-        ("/pipelines", "Pipelines"),
-        ("/chunking", "Chunking"),
-        ("/playground", "Playground"),
-    ];
 
     let is_active = move |href: &'static str| {
         let path = location.pathname.get();
@@ -60,8 +84,8 @@ pub fn AppNav() -> impl IntoView {
                 <A href="/" attr:class="wordmark" attr:aria-label="rag-admin home">
                     "rag-admin"
                 </A>
-                <nav class="flex gap-5 text-sm">
-                    {destinations.iter().copied().map(|(href, label)| {
+                <nav class="flex flex-grow justify-around gap-5 text-sm items-center">
+                    {[("/", "Documents"), ("/evaluations", "Evaluations")].iter().copied().map(|(href, label)| {
                         let active = move || is_active(href);
                         view! {
                             <A
@@ -73,8 +97,9 @@ pub fn AppNav() -> impl IntoView {
                             </A>
                         }
                     }).collect_view()}
+                    <NavMenu label="Playground" prefix="/playground" items=PLAYGROUND_ITEMS />
+                    <NavMenu label="Configuration" prefix="/configuration" items=CONFIGURATION_ITEMS />
                 </nav>
-                <div class="toolbar-spacer"></div>
 
                 <RunningCount running=running />
 
@@ -94,9 +119,6 @@ pub fn AppNav() -> impl IntoView {
                 >
                     <TrayGlyph open=tray_open />
                 </button>
-                <A href="/settings" attr:class="btn-ghost btn" attr:title="Settings">
-                    "Settings"
-                </A>
             </div>
         </header>
     }

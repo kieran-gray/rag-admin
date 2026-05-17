@@ -1,25 +1,40 @@
 use leptos::prelude::*;
 use leptos_meta::{provide_meta_context, MetaTags, Title};
+use leptos_router::hooks::use_navigate;
 use leptos_router::{
     components::{Route, Router, Routes},
-    ParamSegment, StaticSegment,
+    NavigateOptions, ParamSegment, StaticSegment,
 };
 
 use crate::ui::components::event_bus::provide_event_bus;
 use crate::ui::components::shell::AppShell;
 use crate::ui::pages::{
+    catalog::CatalogPage,
     chunking::ChunkingPage,
     document_detail::{DocumentByIdRedirect, DocumentDetailPage},
     documents_list::DocumentsPage,
-    embed_test::EmbedTestPage,
     evaluations::{
         DatasetDetailPage, EvaluationsPage, OptimizeProgressPage, ReplicateComparePage,
         RunDetailPage,
     },
     pipelines::PipelinesPage,
-    playground::PlaygroundPage,
-    settings::SettingsPage,
+    playground::{embed::EmbedPage, retrieve::RetrievePage},
 };
+
+#[component]
+fn RedirectTo(to: &'static str) -> impl IntoView {
+    Effect::new(move |_| {
+        use_navigate()(
+            to,
+            NavigateOptions {
+                replace: true,
+                ..Default::default()
+            },
+        );
+    });
+
+    view! { <p class="muted">"Redirecting…"</p> }
+}
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
     view! {
@@ -93,11 +108,50 @@ pub fn App() -> impl IntoView {
                         path=(StaticSegment("datasets"), ParamSegment("dataset_id"))
                         view=DatasetDetailPage
                     />
-                    <Route path=StaticSegment("pipelines") view=PipelinesPage />
-                    <Route path=StaticSegment("chunking") view=ChunkingPage />
-                    <Route path=StaticSegment("playground") view=PlaygroundPage />
-                    <Route path=StaticSegment("settings") view=SettingsPage />
-                    <Route path=StaticSegment("embed") view=EmbedTestPage />
+                    <Route
+                        path=(StaticSegment("configuration"), StaticSegment("catalog"))
+                        view=CatalogPage
+                    />
+                    <Route
+                        path=(StaticSegment("configuration"), StaticSegment("pipelines"))
+                        view=PipelinesPage
+                    />
+                    <Route
+                        path=(StaticSegment("configuration"), StaticSegment("chunking"))
+                        view=ChunkingPage
+                    />
+                    <Route
+                        path=StaticSegment("configuration")
+                        view=|| view! { <RedirectTo to="/configuration/catalog" /> }
+                    />
+                    <Route
+                        path=(StaticSegment("playground"), StaticSegment("embed"))
+                        view=EmbedPage
+                    />
+                    <Route
+                        path=(StaticSegment("playground"), StaticSegment("retrieve"))
+                        view=RetrievePage
+                    />
+                    <Route
+                        path=StaticSegment("playground")
+                        view=|| view! { <RedirectTo to="/playground/retrieve" /> }
+                    />
+                    <Route
+                        path=StaticSegment("settings")
+                        view=|| view! { <RedirectTo to="/configuration/catalog" /> }
+                    />
+                    <Route
+                        path=StaticSegment("pipelines")
+                        view=|| view! { <RedirectTo to="/configuration/pipelines" /> }
+                    />
+                    <Route
+                        path=StaticSegment("chunking")
+                        view=|| view! { <RedirectTo to="/configuration/chunking" /> }
+                    />
+                    <Route
+                        path=StaticSegment("embed")
+                        view=|| view! { <RedirectTo to="/playground/embed" /> }
+                    />
                 </Routes>
             </AppShell>
         </Router>

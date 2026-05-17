@@ -154,12 +154,12 @@ fn PipelineList(
                 <EmptyState
                     title="No pipelines yet"
                     body=if registry_hint {
-                        "Add at least one embedding model, generation model, and vector index in Settings, then come back to compose them into a pipeline.".to_string()
+                        "Add at least one embedding model, generation model, and vector index in the Catalog, then come back to compose them into a pipeline.".to_string()
                     } else {
                         "Pipelines compose an embedding model, generation model, and vector index for a named environment.".to_string()
                     }
                     action=Box::new(|| view! {
-                        <A href="/settings" attr:class="btn">"Open Settings"</A>
+                        <A href="/configuration/catalog" attr:class="btn">"Open Catalog"</A>
                     }.into_any())
                 />
             </Surface>

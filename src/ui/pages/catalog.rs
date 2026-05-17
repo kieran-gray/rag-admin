@@ -63,7 +63,7 @@ fn dispatch_catalog_command<F: FnOnce() + 'static>(
 }
 
 #[component]
-pub fn SettingsPage() -> impl IntoView {
+pub fn CatalogPage() -> impl IntoView {
     let invalidator = use_invalidator(|e| {
         e.from_any(&[
             aggregate_type::EMBEDDING_MODEL_CATALOG,
@@ -84,8 +84,8 @@ pub fn SettingsPage() -> impl IntoView {
     view! {
         <div>
             <PageHeader
-                title="Settings"
-                subtitle="Catalogue of models and indexes that pipelines compose.".to_string()
+                title="Catalog"
+                subtitle="Models and vector indexes that pipelines and chunking configurations compose.".to_string()
             />
 
             <StatusBanner status=status />
