@@ -7,6 +7,7 @@ use tokio::time::timeout;
 use tracing::{debug, error, info};
 
 use super::aggregate::Aggregate;
+use super::policy::HasPolicies;
 use super::process_manager::ProcessManager;
 
 const POLL_HEARTBEAT: Duration = Duration::from_secs(2);
@@ -23,6 +24,7 @@ where
 impl<A, R> EffectDispatcher<A, R>
 where
     A: Aggregate + 'static,
+    A::Event: HasPolicies<A, R>,
     R: Serialize + DeserializeOwned + Clone + Send + Sync + 'static,
 {
     pub fn new(process_manager: Arc<ProcessManager<A, R>>, wakeup: Arc<Notify>) -> Self {

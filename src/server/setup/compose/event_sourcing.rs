@@ -12,6 +12,7 @@ use crate::event_sourcing::command_processor::CommandProcessor;
 use crate::event_sourcing::effect_dispatcher::EffectDispatcher;
 use crate::event_sourcing::event_bus::EventBus;
 use crate::event_sourcing::event_store::EventStore;
+use crate::event_sourcing::policy::HasPolicies;
 use crate::event_sourcing::process_manager::ProcessManager;
 use crate::event_sourcing::projection_driver::ProjectionDriver;
 use crate::event_sourcing::projector::Projector;
@@ -93,6 +94,7 @@ pub fn spawn_driver<A, R>(
     wakeups: &mut HashMap<String, Arc<Notify>>,
 ) where
     A: Aggregate + 'static,
+    A::Event: HasPolicies<A, R>,
     R: Serialize + DeserializeOwned + Clone + Send + Sync + 'static,
     AppError: From<A::Error>,
 {

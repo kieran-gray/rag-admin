@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::event_sourcing::policy::HasPolicies;
 use crate::event_sourcing::Aggregate;
 
 use super::{
@@ -142,6 +143,8 @@ impl Aggregate for SourceDocument {
         state
     }
 }
+
+impl HasPolicies<SourceDocument, ()> for SourceDocumentEvent {}
 
 impl SourceDocument {
     #[cfg(test)]

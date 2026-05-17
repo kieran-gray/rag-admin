@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::event_sourcing::policy::HasPolicies;
 use crate::event_sourcing::Aggregate;
 
 use super::commands::ConfigurationDefaultsCommand;
@@ -99,6 +100,8 @@ impl Aggregate for ConfigurationDefaults {
         Some(state)
     }
 }
+
+impl HasPolicies<ConfigurationDefaults, ()> for ConfigurationDefaultsEvent {}
 
 #[cfg(test)]
 mod tests {

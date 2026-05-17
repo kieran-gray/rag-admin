@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::event_sourcing::policy::HasPolicies;
 use crate::event_sourcing::Aggregate;
 use crate::server::domain::configuration::catalog::{CatalogEntry, CatalogError, CatalogState};
 
@@ -149,3 +150,5 @@ impl Aggregate for GenerationModelCatalog {
         state
     }
 }
+
+impl HasPolicies<GenerationModelCatalog, ()> for GenerationModelCatalogEvent {}

@@ -36,14 +36,11 @@ use crate::server::domain::configuration::vector_index::{
 };
 use crate::server::domain::evaluation::dataset::aggregate::EvaluationDataset;
 use crate::server::domain::evaluation::dataset::effects::EvaluationDatasetEffect;
-use crate::server::domain::evaluation::dataset::policies::derive_dataset_effects;
 use crate::server::domain::evaluation::dataset::projector::EvaluationDatasetProjector;
 use crate::server::domain::evaluation::run::aggregate::EvaluationRun;
 use crate::server::domain::evaluation::run::effects::EvaluationRunEffect;
-use crate::server::domain::evaluation::run::policies::derive_run_effects;
 use crate::server::domain::evaluation::run::projector::EvaluationRunProjector;
 use crate::server::domain::indexing::aggregate::Indexing;
-use crate::server::domain::indexing::policies::derive_indexing_effects;
 use crate::server::domain::indexing::projector::IndexingProjector;
 use crate::server::domain::source_document::aggregate::SourceDocument;
 use crate::server::domain::source_document::projector::SourceDocumentProjector;
@@ -186,7 +183,6 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
         Arc::clone(&wirings.indexing.aggregate_repository),
         indexing_job_queue,
         indexing_effect_executor,
-        derive_indexing_effects,
     ));
 
     spawn_driver::<Indexing, IndexingEffect>(
@@ -261,13 +257,11 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
         Arc::clone(&wirings.dataset.aggregate_repository),
         dataset_job_queue,
         dataset_effect_executor,
-        derive_dataset_effects,
     ));
     let run_process_manager = Arc::new(ProcessManager::new(
         Arc::clone(&wirings.run.aggregate_repository),
         run_job_queue,
         run_effect_dispatcher,
-        derive_run_effects,
     ));
 
     spawn_driver::<EvaluationDataset, EvaluationDatasetEffect>(

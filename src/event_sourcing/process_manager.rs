@@ -16,7 +16,7 @@ use super::aggregate_repository::AggregateRepository;
 use super::envelope::EventEnvelope;
 use super::error::EsError;
 use super::job_queue::{JobQueue, NewJob};
-use super::policy::PolicyContext;
+use super::policy::{HasPolicies, PolicyContext};
 
 pub(crate) const LEASE: Duration = Duration::from_secs(30);
 pub(crate) const HEARTBEAT: Duration = Duration::from_secs(10);
@@ -39,30 +39,25 @@ where
     repository: Arc<AggregateRepository<A>>,
     queue: Arc<dyn JobQueue<R>>,
     executor: Arc<dyn EffectExecutor<R>>,
-    derive_effects: DeriveEffectsFn<A, R>,
     worker_id: String,
     _phantom: PhantomData<R>,
 }
 
-pub type DeriveEffectsFn<A, R> =
-    fn(envelope: &EventEnvelope<<A as Aggregate>::Event>, state: &A) -> Vec<NewJob<R>>;
-
 impl<A, R> ProcessManager<A, R>
 where
-    A: Aggregate,
+    A: Aggregate + 'static,
+    A::Event: HasPolicies<A, R>,
     R: Serialize + DeserializeOwned + Clone + Send + Sync + 'static,
 {
     pub fn new(
         repository: Arc<AggregateRepository<A>>,
         queue: Arc<dyn JobQueue<R>>,
         executor: Arc<dyn EffectExecutor<R>>,
-        derive_effects: DeriveEffectsFn<A, R>,
     ) -> Self {
         Self {
             repository,
             queue,
             executor,
-            derive_effects,
             worker_id: format!("{}-{}", A::aggregate_type(), Uuid::new_v4()),
             _phantom: PhantomData,
         }
@@ -92,8 +87,8 @@ where
             let state = &loaded.aggregate;
             let mut pending: Vec<NewJob<R>> = Vec::new();
             for env in events {
-                let _ctx = PolicyContext::new(env, state);
-                pending.extend((self.derive_effects)(env, state));
+                let ctx = PolicyContext::new(env, state);
+                pending.extend(env.event.apply_policies(&ctx));
             }
             if !pending.is_empty() {
                 let job_types: Vec<&'static str> = pending.iter().map(|p| p.job_type).collect();

@@ -1,5 +1,5 @@
-use crate::event_sourcing::envelope::EventEnvelope;
 use crate::event_sourcing::job_queue::{IdempotencyKey, NewJob};
+use crate::event_sourcing::policy::{HasPolicies, PolicyContext, PolicyFn};
 
 use super::aggregate::Indexing;
 use super::effects::{
@@ -11,38 +11,77 @@ const CHUNKING: &str = "execute_chunking";
 const EMBEDDING: &str = "execute_embedding";
 const INDEXING: &str = "execute_indexing";
 
-pub fn derive_indexing_effects(
-    envelope: &EventEnvelope<IndexingEvent>,
-    state: &Indexing,
-) -> Vec<NewJob<IndexingEffect>> {
-    let indexing_id = state.indexing_id;
-    let log_position = envelope.metadata.log_position;
-    match &envelope.event {
-        IndexingEvent::IngestRequested(_) | IndexingEvent::ChunkingRequeued(_) => {
-            vec![chunking_effect(indexing_id, log_position)]
-        }
-        IndexingEvent::EmbeddingRequeued(_) => {
-            vec![embedding_effect(indexing_id, log_position)]
-        }
-        IndexingEvent::IndexingRequeued(_) => {
-            vec![indexing_effect(indexing_id, log_position)]
-        }
-        IndexingEvent::ChunkingCompleted(_) if state.auto_advance => {
-            vec![embedding_effect(indexing_id, log_position)]
-        }
-        IndexingEvent::EmbeddingCompleted(_) if state.auto_advance => {
-            vec![indexing_effect(indexing_id, log_position)]
-        }
-        IndexingEvent::ChunkingCompleted(_)
-        | IndexingEvent::EmbeddingCompleted(_)
-        | IndexingEvent::IndexingCompleted(_)
-        | IndexingEvent::IngestionFailed(_)
-        | IndexingEvent::IngestionRetried(_)
-        | IndexingEvent::IndexingRemoved(_) => Vec::new(),
+impl HasPolicies<Indexing, IndexingEffect> for IndexingEvent {
+    fn policies() -> &'static [PolicyFn<Self, Indexing, IndexingEffect>] {
+        &[
+            chunk_on_ingest_or_requeue,
+            embed_on_embedding_requeued,
+            index_on_indexing_requeued,
+            embed_on_chunking_completed,
+            index_on_embedding_completed,
+        ]
     }
 }
 
-fn chunking_effect(indexing_id: uuid::Uuid, log_position: i64) -> NewJob<IndexingEffect> {
+fn chunk_on_ingest_or_requeue(
+    event: &IndexingEvent,
+    ctx: &PolicyContext<'_, Indexing, IndexingEvent>,
+) -> Vec<NewJob<IndexingEffect>> {
+    match event {
+        IndexingEvent::IngestRequested(_) | IndexingEvent::ChunkingRequeued(_) => {
+            vec![chunking_effect(ctx)]
+        }
+        _ => Vec::new(),
+    }
+}
+
+fn embed_on_embedding_requeued(
+    event: &IndexingEvent,
+    ctx: &PolicyContext<'_, Indexing, IndexingEvent>,
+) -> Vec<NewJob<IndexingEffect>> {
+    match event {
+        IndexingEvent::EmbeddingRequeued(_) => vec![embedding_effect(ctx)],
+        _ => Vec::new(),
+    }
+}
+
+fn index_on_indexing_requeued(
+    event: &IndexingEvent,
+    ctx: &PolicyContext<'_, Indexing, IndexingEvent>,
+) -> Vec<NewJob<IndexingEffect>> {
+    match event {
+        IndexingEvent::IndexingRequeued(_) => vec![indexing_effect(ctx)],
+        _ => Vec::new(),
+    }
+}
+
+fn embed_on_chunking_completed(
+    event: &IndexingEvent,
+    ctx: &PolicyContext<'_, Indexing, IndexingEvent>,
+) -> Vec<NewJob<IndexingEffect>> {
+    match event {
+        IndexingEvent::ChunkingCompleted(_) if ctx.state.auto_advance => {
+            vec![embedding_effect(ctx)]
+        }
+        _ => Vec::new(),
+    }
+}
+
+fn index_on_embedding_completed(
+    event: &IndexingEvent,
+    ctx: &PolicyContext<'_, Indexing, IndexingEvent>,
+) -> Vec<NewJob<IndexingEffect>> {
+    match event {
+        IndexingEvent::EmbeddingCompleted(_) if ctx.state.auto_advance => {
+            vec![indexing_effect(ctx)]
+        }
+        _ => Vec::new(),
+    }
+}
+
+fn chunking_effect(ctx: &PolicyContext<'_, Indexing, IndexingEvent>) -> NewJob<IndexingEffect> {
+    let indexing_id = ctx.state.indexing_id;
+    let log_position = ctx.envelope.metadata.log_position;
     NewJob {
         partition_key: indexing_id,
         job_type: CHUNKING,
@@ -51,7 +90,9 @@ fn chunking_effect(indexing_id: uuid::Uuid, log_position: i64) -> NewJob<Indexin
     }
 }
 
-fn embedding_effect(indexing_id: uuid::Uuid, log_position: i64) -> NewJob<IndexingEffect> {
+fn embedding_effect(ctx: &PolicyContext<'_, Indexing, IndexingEvent>) -> NewJob<IndexingEffect> {
+    let indexing_id = ctx.state.indexing_id;
+    let log_position = ctx.envelope.metadata.log_position;
     NewJob {
         partition_key: indexing_id,
         job_type: EMBEDDING,
@@ -60,7 +101,9 @@ fn embedding_effect(indexing_id: uuid::Uuid, log_position: i64) -> NewJob<Indexi
     }
 }
 
-fn indexing_effect(indexing_id: uuid::Uuid, log_position: i64) -> NewJob<IndexingEffect> {
+fn indexing_effect(ctx: &PolicyContext<'_, Indexing, IndexingEvent>) -> NewJob<IndexingEffect> {
+    let indexing_id = ctx.state.indexing_id;
+    let log_position = ctx.envelope.metadata.log_position;
     NewJob {
         partition_key: indexing_id,
         job_type: INDEXING,

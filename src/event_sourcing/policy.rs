@@ -12,12 +12,14 @@ impl<'a, A, E> PolicyContext<'a, A, E> {
     }
 }
 
-pub type PolicyFn<E, A, EnvE, R> = fn(&E, &PolicyContext<'_, A, EnvE>) -> Vec<NewJob<R>>;
+pub type PolicyFn<E, A, R> = fn(&E, &PolicyContext<'_, A, E>) -> Vec<NewJob<R>>;
 
-pub trait HasPolicies<A: 'static, EnvE: 'static, R: 'static>: Sized + 'static {
-    fn policies() -> &'static [PolicyFn<Self, A, EnvE, R>];
+pub trait HasPolicies<A: 'static, R: 'static>: Sized + 'static {
+    fn policies() -> &'static [PolicyFn<Self, A, R>] {
+        &[]
+    }
 
-    fn apply_policies(&self, ctx: &PolicyContext<'_, A, EnvE>) -> Vec<NewJob<R>> {
+    fn apply_policies(&self, ctx: &PolicyContext<'_, A, Self>) -> Vec<NewJob<R>> {
         Self::policies().iter().flat_map(|f| f(self, ctx)).collect()
     }
 }

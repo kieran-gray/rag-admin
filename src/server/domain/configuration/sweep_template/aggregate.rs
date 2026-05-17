@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::event_sourcing::policy::HasPolicies;
 use crate::event_sourcing::Aggregate;
 
 use super::commands::SweepTemplateCommand;
@@ -130,6 +131,8 @@ impl Aggregate for SweepTemplate {
         state
     }
 }
+
+impl HasPolicies<SweepTemplate, ()> for SweepTemplateEvent {}
 
 fn validate_name(name: &str) -> Result<(), SweepTemplateError> {
     if name.trim().is_empty() {

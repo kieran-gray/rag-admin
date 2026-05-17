@@ -13,6 +13,7 @@ use super::envelope::EventEnvelope;
 use super::error::EsError;
 use super::event_bus::EventBus;
 use super::event_store::EventStore;
+use super::policy::HasPolicies;
 use super::process_manager::ProcessManager;
 use super::projector::Projector;
 
@@ -37,6 +38,7 @@ where
 impl<A, R> ProjectionDriver<A, R>
 where
     A: Aggregate + 'static,
+    A::Event: HasPolicies<A, R>,
     R: Serialize + DeserializeOwned + Clone + Send + Sync + 'static,
 {
     pub fn new(

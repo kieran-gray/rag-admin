@@ -1,6 +1,5 @@
-use crate::event_sourcing::envelope::EventEnvelope;
 use crate::event_sourcing::job_queue::{IdempotencyKey, NewJob};
-use crate::event_sourcing::policy::PolicyContext;
+use crate::event_sourcing::policy::{HasPolicies, PolicyContext, PolicyFn};
 use crate::server::domain::evaluation::question::QuestionCategory;
 
 use super::aggregate::{DatasetGenerationStatus, EvaluationDataset};
@@ -10,43 +9,79 @@ use super::events::EvaluationDatasetEvent;
 const ATTEMPT_EFFECT: &str = "attempt_question_generation";
 const PARAPHRASE_EFFECT: &str = "generate_paraphrase";
 
-pub fn derive_dataset_effects(
-    envelope: &EventEnvelope<EvaluationDatasetEvent>,
-    state: &EvaluationDataset,
-) -> Vec<NewJob<EvaluationDatasetEffect>> {
-    let ctx = PolicyContext::new(envelope, state);
+impl HasPolicies<EvaluationDataset, EvaluationDatasetEffect> for EvaluationDatasetEvent {
+    fn policies() -> &'static [PolicyFn<Self, EvaluationDataset, EvaluationDatasetEffect>] {
+        &[
+            attempt_on_generation_requested,
+            paraphrase_on_question_accepted,
+            attempt_more_on_question_accepted,
+            attempt_more_on_question_rejected,
+        ]
+    }
+}
 
-    if !matches!(state.status, DatasetGenerationStatus::Generating) {
+fn attempt_on_generation_requested(
+    event: &EvaluationDatasetEvent,
+    ctx: &PolicyContext<'_, EvaluationDataset, EvaluationDatasetEvent>,
+) -> Vec<NewJob<EvaluationDatasetEffect>> {
+    if !is_generating(ctx.state) {
         return Vec::new();
     }
-
-    match &envelope.event {
-        EvaluationDatasetEvent::DatasetGenerationRequested(_) => {
-            vec![attempt_effect(&ctx)]
-        }
-        EvaluationDatasetEvent::QuestionAccepted(e) => {
-            let mut out = Vec::new();
-            if e.paraphrase_of.is_none() && state.grammar_variants_enabled {
-                out.push(paraphrase_effect(&ctx, e.sequence, e.category));
-            }
-            if should_attempt_more(state) {
-                out.push(attempt_effect(&ctx));
-            }
-            out
-        }
-        EvaluationDatasetEvent::QuestionRejected(_) => {
-            if should_attempt_more(state) {
-                vec![attempt_effect(&ctx)]
-            } else {
-                Vec::new()
-            }
-        }
-        EvaluationDatasetEvent::DatasetGenerationCompleted(_)
-        | EvaluationDatasetEvent::DatasetGenerationFailed(_)
-        | EvaluationDatasetEvent::DatasetRenamed(_)
-        | EvaluationDatasetEvent::DatasetDeleted(_)
-        | EvaluationDatasetEvent::DatasetGenerationCancelled(_) => Vec::new(),
+    match event {
+        EvaluationDatasetEvent::DatasetGenerationRequested(_) => vec![attempt_effect(ctx)],
+        _ => Vec::new(),
     }
+}
+
+fn paraphrase_on_question_accepted(
+    event: &EvaluationDatasetEvent,
+    ctx: &PolicyContext<'_, EvaluationDataset, EvaluationDatasetEvent>,
+) -> Vec<NewJob<EvaluationDatasetEffect>> {
+    if !is_generating(ctx.state) {
+        return Vec::new();
+    }
+    match event {
+        EvaluationDatasetEvent::QuestionAccepted(e)
+            if e.paraphrase_of.is_none() && ctx.state.grammar_variants_enabled =>
+        {
+            vec![paraphrase_effect(ctx, e.sequence, e.category)]
+        }
+        _ => Vec::new(),
+    }
+}
+
+fn attempt_more_on_question_accepted(
+    event: &EvaluationDatasetEvent,
+    ctx: &PolicyContext<'_, EvaluationDataset, EvaluationDatasetEvent>,
+) -> Vec<NewJob<EvaluationDatasetEffect>> {
+    if !is_generating(ctx.state) {
+        return Vec::new();
+    }
+    match event {
+        EvaluationDatasetEvent::QuestionAccepted(_) if should_attempt_more(ctx.state) => {
+            vec![attempt_effect(ctx)]
+        }
+        _ => Vec::new(),
+    }
+}
+
+fn attempt_more_on_question_rejected(
+    event: &EvaluationDatasetEvent,
+    ctx: &PolicyContext<'_, EvaluationDataset, EvaluationDatasetEvent>,
+) -> Vec<NewJob<EvaluationDatasetEffect>> {
+    if !is_generating(ctx.state) {
+        return Vec::new();
+    }
+    match event {
+        EvaluationDatasetEvent::QuestionRejected(_) if should_attempt_more(ctx.state) => {
+            vec![attempt_effect(ctx)]
+        }
+        _ => Vec::new(),
+    }
+}
+
+fn is_generating(state: &EvaluationDataset) -> bool {
+    matches!(state.status, DatasetGenerationStatus::Generating)
 }
 
 fn should_attempt_more(state: &EvaluationDataset) -> bool {
