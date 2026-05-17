@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use sqlx::PgPool;
+use sqlx::{postgres::PgRow, PgPool};
 use uuid::Uuid;
 
 use crate::server::domain::configuration::pipeline_configuration::{
@@ -72,7 +72,7 @@ impl PipelineConfigurationRepository for PostgresPipelineConfigurationRepository
         row: NewPipelineConfiguration,
     ) -> Result<(), PipelineConfigurationRepositoryError> {
         sqlx::query(
-            r#"
+            "
             INSERT INTO pipeline_configurations (
                 id, name, embedding_model_id, generation_model_id, vector_index_id, dimensions
             )
@@ -80,7 +80,7 @@ impl PipelineConfigurationRepository for PostgresPipelineConfigurationRepository
                 $1, $2, $3, $4, $5,
                 (SELECT dimensions FROM embedding_models WHERE id = $3)
             )
-            "#,
+            ",
         )
         .bind(row.id)
         .bind(&row.name)
@@ -90,7 +90,7 @@ impl PipelineConfigurationRepository for PostgresPipelineConfigurationRepository
         .execute(&self.pool)
         .await
         .map(|_| ())
-        .map_err(map_db_error)
+        .map_err(|e| map_db_error(&e))
     }
 
     async fn update(
@@ -98,7 +98,7 @@ impl PipelineConfigurationRepository for PostgresPipelineConfigurationRepository
         row: PipelineConfigurationUpdate,
     ) -> Result<(), PipelineConfigurationRepositoryError> {
         let affected = sqlx::query(
-            r#"
+            "
             UPDATE pipeline_configurations
             SET name                = $2,
                 embedding_model_id  = $3,
@@ -107,7 +107,7 @@ impl PipelineConfigurationRepository for PostgresPipelineConfigurationRepository
                 dimensions          = (SELECT dimensions FROM embedding_models WHERE id = $3),
                 updated_at          = NOW()
             WHERE id = $1
-            "#,
+            ",
         )
         .bind(row.id)
         .bind(&row.name)
@@ -116,7 +116,7 @@ impl PipelineConfigurationRepository for PostgresPipelineConfigurationRepository
         .bind(row.vector_index_id)
         .execute(&self.pool)
         .await
-        .map_err(map_db_error)?;
+        .map_err(|e| map_db_error(&e))?;
         if affected.rows_affected() == 0 {
             return Err(PipelineConfigurationRepositoryError::NotFound(row.id));
         }
@@ -169,10 +169,13 @@ impl PipelineConfigurationRepository for PostgresPipelineConfigurationRepository
     }
 }
 
-fn map_db_error(error: sqlx::Error) -> PipelineConfigurationRepositoryError {
-    match &error {
+fn map_db_error(error: &sqlx::Error) -> PipelineConfigurationRepositoryError {
+    match error {
         sqlx::Error::Database(db) => {
-            let code = db.code().map(|c| c.into_owned()).unwrap_or_default();
+            let code = db
+                .code()
+                .map(std::borrow::Cow::into_owned)
+                .unwrap_or_default();
             match code.as_str() {
                 "23505" => PipelineConfigurationRepositoryError::NameConflict,
                 "23503" | "23502" => PipelineConfigurationRepositoryError::ReferenceViolation(
@@ -198,8 +201,8 @@ struct PipelineConfigurationRow {
     is_default: bool,
 }
 
-impl sqlx::FromRow<'_, sqlx::postgres::PgRow> for PipelineConfigurationRow {
-    fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
+impl sqlx::FromRow<'_, PgRow> for PipelineConfigurationRow {
+    fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
         use sqlx::Row;
         Ok(Self {
             id: row.try_get("id")?,

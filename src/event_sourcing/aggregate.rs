@@ -1,9 +1,11 @@
+use std::error::Error;
+
 use serde::{de::DeserializeOwned, Serialize};
 
 pub trait Aggregate: Sized + Clone + Serialize + DeserializeOwned + Send + Sync {
     type Event: Clone + Serialize + DeserializeOwned + Send + Sync + 'static;
     type Command: Send + Sync + 'static;
-    type Error: std::error::Error + Send + Sync + 'static;
+    type Error: Error + Send + Sync + 'static;
 
     fn aggregate_type() -> &'static str;
 

@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SearchBudget {
     Quick,
@@ -86,7 +88,7 @@ impl Rung {
 
 pub fn survivors(scored: &[(u32, f32)], take: usize) -> Vec<u32> {
     let mut sorted: Vec<(u32, f32)> = scored.to_vec();
-    sorted.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    sorted.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
     sorted
         .into_iter()
         .take(take.min(scored.len()))

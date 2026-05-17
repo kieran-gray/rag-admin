@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -8,6 +9,8 @@ use crate::core::{
     evaluation_score, ChunkingConfig, EvaluationMetrics, EvaluationResultSplit,
     EvaluationRunOptions, OptimizationBudget, OptimizationScope,
 };
+use crate::event_sourcing::command_processor::CommandProcessor;
+use crate::event_sourcing::event_store::EventStore;
 use crate::server::application::evaluation::ports::LlmJudge;
 use crate::server::application::evaluation::scoring::{
     PreparedVariant, QuestionSubset, RunContext, TrialScorer,
@@ -20,7 +23,7 @@ use crate::server::domain::evaluation::optimizer::search_space::{
     Fitness, Observation, Parameter, SearchSpace, Trial, Value,
 };
 use crate::server::domain::evaluation::optimizer::tpe::WARMUP_TRIALS;
-use crate::server::domain::evaluation::optimizer::{encoding, halving, SearchBudget, Tpe};
+use crate::server::domain::evaluation::optimizer::{encoding, halving, Rung, SearchBudget, Tpe};
 use crate::server::domain::evaluation::run::aggregate::EvaluationRun;
 use crate::server::domain::evaluation::run::commands::{
     AdvanceRung, CompleteRun, EvaluationRunCommand, FailRun, MarkVariantPrepared, ProposeTrial,
@@ -28,8 +31,6 @@ use crate::server::domain::evaluation::run::commands::{
 };
 use crate::server::domain::evaluation::run::events::EvaluationRunEvent;
 use crate::server::domain::evaluation::split::{three_way, ThreeWayRatios};
-use crate::server::event_sourcing::command_processor::CommandProcessor;
-use crate::server::event_sourcing::event_store::EventStore;
 
 use crate::server::domain::evaluation::run::effects::OptimizeRunEffect;
 
@@ -383,7 +384,7 @@ impl OptimizeRunEffectExecutor {
             .iter()
             .filter_map(|tid| last_metrics.get(tid).map(|m| (*tid, evaluation_score(m))))
             .collect();
-        final_scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        final_scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
         final_scored.truncate(holdout_top_n);
 
         let validation_subset = QuestionSubset::from_indices(
@@ -475,7 +476,7 @@ impl OptimizeRunEffectExecutor {
             .max_by(|a, b| {
                 evaluation_score(a.1)
                     .partial_cmp(&evaluation_score(b.1))
-                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .unwrap_or(Ordering::Equal)
             })
             .map(|(tid, _)| *tid);
 
@@ -673,10 +674,10 @@ impl OptimizeRunEffectExecutor {
             scored_tuning,
             scored_validation,
             scored_holdout,
+            holdout_metrics,
             scored_metrics,
             final_rung_obs,
             validation_metrics,
-            holdout_metrics,
             rung_survivors,
             has_champion,
         })
@@ -772,7 +773,7 @@ impl OptimizeRunEffectExecutor {
                 let score = (accum / counted as f32).clamp(0.0, 1.0);
                 judge_scores.insert(*trial_id, score);
                 job.emit(
-                    InternalLogEvent::info(format!("Trial {trial_id} judge score = {:.2}", score))
+                    InternalLogEvent::info(format!("Trial {trial_id} judge score = {score:.2}"))
                         .with_meta("trial_id", json!(trial_id))
                         .with_meta("judge_score", json!(score)),
                 )
@@ -927,7 +928,7 @@ fn plan_rung_batches(
 fn build_rung_subset<'a>(
     ctx: &'a RunContext,
     tuning_order: &[usize],
-    rung: crate::server::domain::evaluation::optimizer::Rung,
+    rung: Rung,
 ) -> QuestionSubset<'a> {
     let take = rung
         .question_count(tuning_order.len())

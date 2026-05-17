@@ -1,3 +1,5 @@
+use std::mem;
+
 use super::{BlockKind, Document, TextUnit};
 
 impl Document {
@@ -65,7 +67,7 @@ fn bind_headings_to_following_units(units: Vec<TextUnit>) -> Vec<TextUnit> {
             continue;
         }
 
-        let mut text = std::mem::take(&mut pending_heading);
+        let mut text = mem::take(&mut pending_heading);
         text.push_str(&unit.text);
         out.push(TextUnit {
             text,

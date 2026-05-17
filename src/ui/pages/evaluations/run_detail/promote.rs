@@ -53,13 +53,13 @@ pub(super) fn VariantSaveButton(
     #[prop(optional)] compact: bool,
 ) -> impl IntoView {
     let label_for_save = variant_label.clone();
-    let label_for_busy = variant_label.clone();
+    let label_for_busy = variant_label;
     let is_busy = move || {
         promote
             .busy_label
             .with(|b| b.as_deref() == Some(label_for_busy.as_str()))
     };
-    let any_busy = move || promote.busy_label.with(|b| b.is_some());
+    let any_busy = move || promote.busy_label.with(Option::is_some);
     let class_base = if is_leader { "btn btn-primary" } else { "btn" };
     let class = if compact {
         format!("{class_base} btn-compact")

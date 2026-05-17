@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use crate::server::domain::chunk_set::entity::Chunk;
 use crate::server::domain::evaluation::question::EvaluationQuestion;
 
@@ -148,7 +150,7 @@ pub fn bootstrap_ci(per_question: &[f32], seed: u64, samples: usize, alpha: f32)
         }
         means.push((sum / n as f64) as f32);
     }
-    means.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    means.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
 
     let low = percentile(&means, alpha / 2.0);
     let high = percentile(&means, 1.0 - alpha / 2.0);

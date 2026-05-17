@@ -6,6 +6,7 @@
     reason = "main: startup failures cannot be handled, so panicking is the appropriate response"
 )]
 async fn main() {
+    use axum::routing::{get, post};
     use axum::Router;
     use leptos::prelude::*;
     use leptos_axum::{generate_route_list, LeptosRoutes};
@@ -16,6 +17,7 @@ async fn main() {
     use rag_admin::server::api::upload::upload_document;
     use rag_admin::server::setup::bootstrap;
     use std::sync::Arc;
+    use tokio::net::TcpListener;
     use tracing_subscriber::EnvFilter;
 
     tracing_subscriber::fmt()
@@ -32,16 +34,10 @@ async fn main() {
     let app = Arc::new(bootstrap().await.expect("failed to bootstrap application"));
 
     let router = Router::new()
-        .route(
-            "/api/job/logs/{job_id}",
-            axum::routing::get(job_logs_handler),
-        )
-        .route("/api/events/ws", axum::routing::get(events_ws_handler))
-        .route("/api/health", axum::routing::get(health_check))
-        .route(
-            "/api/source_documents/upload",
-            axum::routing::post(upload_document),
-        )
+        .route("/api/job/logs/{job_id}", get(job_logs_handler))
+        .route("/api/events/ws", get(events_ws_handler))
+        .route("/api/health", get(health_check))
+        .route("/api/source_documents/upload", post(upload_document))
         .leptos_routes_with_context(
             &leptos_options,
             routes,
@@ -59,7 +55,7 @@ async fn main() {
 
     let router = app.apply_axum_extensions(router);
 
-    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    let listener = TcpListener::bind(&addr).await.unwrap();
     tracing::info!("rag-admin listening on http://{}", &addr);
     axum::serve(listener, router.into_make_service())
         .await

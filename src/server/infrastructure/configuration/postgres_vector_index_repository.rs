@@ -1,13 +1,14 @@
 use async_trait::async_trait;
+use sqlx::postgres::PgRow;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::catalog::VectorStoreKind;
+use crate::event_sourcing::error::ProjectionError;
 use crate::server::domain::configuration::catalog::CatalogRepository;
 use crate::server::domain::configuration::vector_index::{
     VectorIndex, VectorIndexRepository, VectorIndexRepositoryError,
 };
-use crate::server::event_sourcing::error::ProjectionError;
 
 pub struct PostgresVectorIndexRepository {
     pool: PgPool,
@@ -23,7 +24,7 @@ impl PostgresVectorIndexRepository {
 impl CatalogRepository<VectorIndex> for PostgresVectorIndexRepository {
     async fn upsert(&self, index: VectorIndex) -> Result<(), ProjectionError> {
         sqlx::query(
-            r#"
+            "
             INSERT INTO vector_indexes (id, kind, name, dimensions)
             VALUES ($1, $2, $3, $4)
             ON CONFLICT (id) DO UPDATE SET
@@ -31,7 +32,7 @@ impl CatalogRepository<VectorIndex> for PostgresVectorIndexRepository {
                 name       = $3,
                 dimensions = $4,
                 updated_at = NOW()
-            "#,
+            ",
         )
         .bind(index.index_id)
         .bind(index.kind.as_str())
@@ -57,11 +58,11 @@ impl CatalogRepository<VectorIndex> for PostgresVectorIndexRepository {
 impl VectorIndexRepository for PostgresVectorIndexRepository {
     async fn load_all(&self) -> Result<Vec<VectorIndex>, VectorIndexRepositoryError> {
         let rows: Vec<VectorIndexRow> = sqlx::query_as(
-            r#"
+            "
             SELECT id, kind, name, dimensions
             FROM vector_indexes
             ORDER BY created_at ASC
-            "#,
+            ",
         )
         .fetch_all(&self.pool)
         .await
@@ -90,8 +91,8 @@ struct VectorIndexRow {
     dimensions: i32,
 }
 
-impl sqlx::FromRow<'_, sqlx::postgres::PgRow> for VectorIndexRow {
-    fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
+impl sqlx::FromRow<'_, PgRow> for VectorIndexRow {
+    fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
         use sqlx::Row;
         Ok(Self {
             id: row.try_get("id")?,

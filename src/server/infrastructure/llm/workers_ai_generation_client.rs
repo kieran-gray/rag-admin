@@ -141,7 +141,7 @@ impl GenerationClient for WorkersAiGenerationClient {
                     envelope
                         .result
                         .as_ref()
-                        .map(|v| v.to_string())
+                        .map(ToString::to_string)
                         .unwrap_or_else(|| "<missing>".into())
                 ))
             })?;

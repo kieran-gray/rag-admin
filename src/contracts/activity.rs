@@ -80,11 +80,13 @@ pub fn classify(
                 started_at: occurred_at.to_string(),
             }))
         }
-        (aggregate_type::INDEXING, "IndexingCompleted") => Some(ActivityDelta::Complete {
+        (aggregate_type::INDEXING, "IndexingCompleted")
+        | (aggregate_type::EVALUATION_RUN, "RunCompleted") => Some(ActivityDelta::Complete {
             stream_id,
             occurred_at: occurred_at.to_string(),
         }),
-        (aggregate_type::INDEXING, "IngestionFailed") => Some(ActivityDelta::Fail {
+        (aggregate_type::INDEXING, "IngestionFailed")
+        | (aggregate_type::EVALUATION_RUN, "RunFailed") => Some(ActivityDelta::Fail {
             stream_id,
             occurred_at: occurred_at.to_string(),
         }),
@@ -92,7 +94,7 @@ pub fn classify(
         (aggregate_type::INDEXING, "ChunkingCompleted" | "EmbeddingCompleted") => {
             let auto_advance = event_payload(event_data)
                 .get("auto_advance")
-                .and_then(|v| v.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .unwrap_or(true);
             if auto_advance {
                 Some(ActivityDelta::Refresh { stream_id })
@@ -148,14 +150,6 @@ pub fn classify(
                 started_at: occurred_at.to_string(),
             }))
         }
-        (aggregate_type::EVALUATION_RUN, "RunCompleted") => Some(ActivityDelta::Complete {
-            stream_id,
-            occurred_at: occurred_at.to_string(),
-        }),
-        (aggregate_type::EVALUATION_RUN, "RunFailed") => Some(ActivityDelta::Fail {
-            stream_id,
-            occurred_at: occurred_at.to_string(),
-        }),
 
         _ => None,
     }

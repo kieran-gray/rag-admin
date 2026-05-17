@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -7,9 +8,9 @@ use tracing::warn;
 use uuid::Uuid;
 
 use crate::contracts::{classify, ActivityDelta, ActivityJobDto, ActivityStart, ActivityStatus};
-use crate::server::event_sourcing::event_bus::EventBus;
+use crate::event_sourcing::event_bus::EventBus;
 
-const TERMINAL_RETENTION: Duration = Duration::from_secs(15 * 60);
+const TERMINAL_RETENTION: Duration = Duration::from_mins(15);
 
 struct Row {
     dto: ActivityJobDto,
@@ -48,8 +49,8 @@ impl ActivityRegistry {
         let mut out: Vec<ActivityJobDto> = state.rows.values().map(|r| r.dto.clone()).collect();
         out.sort_by(|a, b| match (a.status, b.status) {
             (ActivityStatus::Running, ActivityStatus::Running) => a.started_at.cmp(&b.started_at),
-            (ActivityStatus::Running, _) => std::cmp::Ordering::Less,
-            (_, ActivityStatus::Running) => std::cmp::Ordering::Greater,
+            (ActivityStatus::Running, _) => Ordering::Less,
+            (_, ActivityStatus::Running) => Ordering::Greater,
             _ => b
                 .finished_at
                 .cmp(&a.finished_at)

@@ -28,7 +28,7 @@ impl Value {
         match self {
             Value::Float(f) => Some(*f),
             Value::Int(n) => Some(*n as f64),
-            _ => None,
+            Value::String(_) => None,
         }
     }
 }
@@ -62,9 +62,9 @@ pub enum Parameter {
 impl Parameter {
     pub fn name(&self) -> &str {
         match self {
-            Parameter::Categorical { name, .. } => name,
-            Parameter::IntRange { name, .. } => name,
-            Parameter::Float { name, .. } => name,
+            Parameter::Categorical { name, .. }
+            | Parameter::IntRange { name, .. }
+            | Parameter::Float { name, .. } => name,
             Parameter::Conditional { inner, .. } => inner.name(),
         }
     }

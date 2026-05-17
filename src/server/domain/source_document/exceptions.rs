@@ -1,3 +1,6 @@
+use std::error::Error;
+use std::fmt;
+
 #[derive(Debug, Clone)]
 pub enum SourceDocumentError {
     NotFound,
@@ -7,16 +10,18 @@ pub enum SourceDocumentError {
     InvalidCommand(String),
 }
 
-impl std::fmt::Display for SourceDocumentError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for SourceDocumentError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SourceDocumentError::NotFound => write!(f, "source document not found"),
             SourceDocumentError::AlreadyExists => write!(f, "source document already exists"),
             SourceDocumentError::AlreadyDeleted => write!(f, "source document has been deleted"),
-            SourceDocumentError::ValidationError(msg) => write!(f, "{msg}"),
-            SourceDocumentError::InvalidCommand(msg) => write!(f, "{msg}"),
+            SourceDocumentError::ValidationError(msg)
+            | SourceDocumentError::InvalidCommand(msg) => {
+                write!(f, "{msg}")
+            }
         }
     }
 }
 
-impl std::error::Error for SourceDocumentError {}
+impl Error for SourceDocumentError {}

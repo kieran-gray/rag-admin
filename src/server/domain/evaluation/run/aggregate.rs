@@ -4,11 +4,11 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::core::{
-    ChunkingVariant, EvaluationAutotuneRequest, EvaluationResultSplit, EvaluationRunOptions,
-    OptimizationConfig,
+    ChunkingConfig, ChunkingVariant, DarnGranularity, EvaluationAutotuneRequest,
+    EvaluationResultSplit, EvaluationRunOptions, OptimizationConfig, OptimizationScope,
 };
+use crate::event_sourcing::Aggregate;
 use crate::server::domain::shared::Timestamp;
-use crate::server::event_sourcing::Aggregate;
 
 use super::{
     commands::EvaluationRunCommand,
@@ -81,7 +81,7 @@ pub struct EvaluationRun {
     pub variants: Vec<ChunkingVariant>,
     pub options: Vec<EvaluationRunOptions>,
     pub autotune_request: Option<EvaluationAutotuneRequest>,
-    pub optimization: Option<crate::core::OptimizationConfig>,
+    pub optimization: Option<OptimizationConfig>,
     pub scoring_policy: ScoringPolicy,
     pub prepared_labels: BTreeSet<String>,
     pub scored_keys: BTreeSet<ScoredVariantKey>,
@@ -207,7 +207,6 @@ impl Aggregate for EvaluationRun {
 
     fn apply(&mut self, event: &Self::Event) {
         match event {
-            Self::Event::RunRequested(_) => {}
             Self::Event::VariantPrepared(e) => {
                 self.prepared_labels.insert(e.variant_label.clone());
                 self.status = EvaluationRunStatus::Running {
@@ -227,7 +226,7 @@ impl Aggregate for EvaluationRun {
             Self::Event::TrialProposed(e) => {
                 self.proposed_trials.insert(e.trial_id);
             }
-            Self::Event::RungAdvanced(_) => {}
+            Self::Event::RunRequested(_) | Self::Event::RungAdvanced(_) => {}
             Self::Event::ChampionSelected(e) => {
                 self.champion_trial_id = Some(e.trial_id);
             }
@@ -422,10 +421,7 @@ impl Aggregate for EvaluationRun {
 
         for event in events {
             match (&mut state, event) {
-                (None, Self::Event::RunRequested(e)) => {
-                    state = Some(Self::from_requested(e));
-                }
-                (Some(_), Self::Event::RunRequested(e)) => {
+                (None | Some(_), Self::Event::RunRequested(e)) => {
                     state = Some(Self::from_requested(e));
                 }
                 (None, _) => return None,
@@ -443,7 +439,7 @@ fn hash_str(hasher: &mut sha2::Sha256, s: &str) {
     hasher.update(s.as_bytes());
 }
 
-fn hash_chunking_config(hasher: &mut sha2::Sha256, config: &crate::core::ChunkingConfig) {
+fn hash_chunking_config(hasher: &mut sha2::Sha256, config: &ChunkingConfig) {
     use crate::core::ChunkingConfig::*;
     use sha2::Digest;
     match config {
@@ -468,8 +464,8 @@ fn hash_chunking_config(hasher: &mut sha2::Sha256, config: &crate::core::Chunkin
             hasher.update(c.max_chunk_size.to_le_bytes());
             hasher.update(c.overlap.to_le_bytes());
             let g: u8 = match c.granularity {
-                crate::core::DarnGranularity::Characters => 0,
-                crate::core::DarnGranularity::Tokens => 1,
+                DarnGranularity::Characters => 0,
+                DarnGranularity::Tokens => 1,
             };
             hasher.update([g]);
         }
@@ -491,9 +487,9 @@ fn hash_optimization(hasher: &mut sha2::Sha256, o: &OptimizationConfig) {
     };
     hasher.update([budget]);
     let scope: u8 = match o.scope {
-        crate::core::OptimizationScope::Chunking => 0,
-        crate::core::OptimizationScope::Retrieval => 1,
-        crate::core::OptimizationScope::Both => 2,
+        OptimizationScope::Chunking => 0,
+        OptimizationScope::Retrieval => 1,
+        OptimizationScope::Both => 2,
     };
     hasher.update([scope]);
     hasher.update([o.judges_enabled as u8]);

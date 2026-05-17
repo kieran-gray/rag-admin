@@ -20,7 +20,7 @@ pub async fn embed_texts(
     let configuration = ctx::<Arc<ConfigurationQueryService>>()?
         .get()
         .await
-        .map_err(map_app_error)?;
+        .map_err(|e| map_app_error(&e))?;
     let embedding_model_id = configuration
         .embedding_models
         .iter()
@@ -35,5 +35,5 @@ pub async fn embed_texts(
     ctx::<Arc<EmbeddingService>>()?
         .embed_texts(embedding_model_id, &text_a, &text_b)
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }

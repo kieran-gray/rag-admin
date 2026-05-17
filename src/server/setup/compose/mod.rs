@@ -11,6 +11,7 @@ use leptos::context::provide_context;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 
+use crate::event_sourcing::event_bus::EventBus;
 use crate::server::application::configuration::{
     ChunkingConfigurationQueryService, ChunkingConfigurationService, ConfigurationQueryService,
     EmbeddingModelCatalogCommandHandler, GenerationModelCatalogCommandHandler,
@@ -31,7 +32,6 @@ use crate::server::application::source_document::{
     SourceDocumentIngestService, SourceDocumentQueryService,
 };
 use crate::server::application::{ActivityRegistry, JobRegistry};
-use crate::server::event_sourcing::event_bus::EventBus;
 use crate::server::infrastructure::clients::{CloudflareApi, OllamaApi};
 use crate::server::infrastructure::http_client::ReqwestHttpClient;
 use crate::server::infrastructure::id::UuidGenerator;

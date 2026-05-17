@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use sqlx::PgPool;
+use sqlx::{postgres::PgRow, PgPool};
 use uuid::Uuid;
 
 use crate::server::domain::configuration::sweep_template::{
@@ -20,11 +20,11 @@ impl PostgresSweepTemplateRepository {
 impl SweepTemplateRepository for PostgresSweepTemplateRepository {
     async fn load_all(&self) -> Result<Vec<SweepTemplateReadModel>, SweepTemplateRepositoryError> {
         let rows: Vec<SweepTemplateRow> = sqlx::query_as(
-            r#"
+            "
             SELECT id, name, members, is_default
             FROM sweep_templates
             ORDER BY created_at ASC
-            "#,
+            ",
         )
         .fetch_all(&self.pool)
         .await
@@ -42,14 +42,14 @@ impl SweepTemplateRepository for PostgresSweepTemplateRepository {
         })?;
 
         sqlx::query(
-            r#"
+            "
             INSERT INTO sweep_templates (id, name, members)
             VALUES ($1, $2, $3)
             ON CONFLICT (id) DO UPDATE SET
                 name       = $2,
                 members    = $3,
                 updated_at = NOW()
-            "#,
+            ",
         )
         .bind(read_model.sweep_template_id)
         .bind(&read_model.name)
@@ -103,8 +103,8 @@ struct SweepTemplateRow {
     is_default: bool,
 }
 
-impl sqlx::FromRow<'_, sqlx::postgres::PgRow> for SweepTemplateRow {
-    fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
+impl sqlx::FromRow<'_, PgRow> for SweepTemplateRow {
+    fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
         use sqlx::Row;
         Ok(Self {
             id: row.try_get("id")?,

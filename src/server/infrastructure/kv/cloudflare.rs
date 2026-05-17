@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -46,7 +47,7 @@ fn urlencode(s: &str) -> String {
         if unreserved {
             out.push(b as char);
         } else {
-            out.push_str(&format!("%{:02X}", b));
+            _ = write!(out, "%{b:02X}");
         }
     }
     out

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::server::event_sourcing::process_manager::{EffectError, EffectExecutor};
+use crate::event_sourcing::process_manager::{EffectError, EffectExecutor};
 
 use super::optimize_executor::OptimizeRunEffectExecutor;
 use super::run_executor::EvaluationRunEffectExecutor;

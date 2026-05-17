@@ -20,16 +20,17 @@ pub fn Surface(
     } else {
         "surface-header"
     };
-    let header = match (title.as_ref(), actions.is_some()) {
-        (None, false) => None,
-        _ => Some(view! {
+    let header = if title.is_some() || actions.is_some() {
+        Some(view! {
             <div class=header_class>
-                <div class="section-title">{title.clone().unwrap_or_default()}</div>
+                <div class="section-title">{title.unwrap_or_default()}</div>
                 <div class="flex items-center gap-2">
                     {actions.map(|c| c())}
                 </div>
             </div>
-        }),
+        })
+    } else {
+        None
     };
 
     view! {

@@ -33,11 +33,11 @@ impl ChunkSetRepository for PostgresChunkSetRepository {
             })?;
 
         sqlx::query(
-            r#"
+            "
             INSERT INTO chunk_sets (chunk_set_id, document_id, document_version, chunking_config, created_at)
             VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (chunk_set_id) DO NOTHING
-            "#,
+            ",
         )
         .bind(chunk_set.chunk_set_id)
         .bind(chunk_set.document_id)
@@ -50,11 +50,11 @@ impl ChunkSetRepository for PostgresChunkSetRepository {
 
         for chunk in &chunks {
             sqlx::query(
-                r#"
+                "
                 INSERT INTO chunks (chunk_id, chunk_set_id, sequence, heading, text, char_start, char_end)
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                 ON CONFLICT (chunk_id) DO NOTHING
-                "#,
+                ",
             )
             .bind(chunk.chunk_id)
             .bind(chunk.chunk_set_id)

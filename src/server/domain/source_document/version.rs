@@ -1,3 +1,5 @@
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
 use crate::server::domain::shared::Timestamp;
@@ -15,8 +17,8 @@ impl ContentHash {
     }
 }
 
-impl std::fmt::Display for ContentHash {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for ContentHash {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
@@ -50,6 +52,7 @@ pub enum DocumentMetadata {
 
 impl DocumentMetadata {
     pub fn title(&self) -> &str {
+        #[allow(clippy::match_same_arms)]
         match self {
             DocumentMetadata::BlogPost(m) => &m.title,
             DocumentMetadata::Markdown(m) => &m.title,

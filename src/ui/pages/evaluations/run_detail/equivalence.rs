@@ -11,7 +11,9 @@ pub(super) fn EquivalenceClassPanel(
     bucket: Option<EvaluationResultSplit>,
 ) -> impl IntoView {
     let count = members.len();
-    let bucket_label = bucket.map(|b| b.as_str()).unwrap_or("analysis");
+    let bucket_label = bucket
+        .map(EvaluationResultSplit::as_str)
+        .unwrap_or("analysis");
     view! {
         <Surface
             title=format!("Possible ties · {count} configs overlap on {bucket_label}")

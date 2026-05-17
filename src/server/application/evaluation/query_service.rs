@@ -3,6 +3,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::server::application::AppError;
+use crate::server::domain::evaluation::question::EvaluationQuestion;
 use crate::server::domain::evaluation::{
     dataset::{read_model::EvaluationDatasetReadModel, repository::EvaluationDatasetRepository},
     run::{
@@ -50,8 +51,7 @@ impl EvaluationQueryService {
     pub async fn load_questions(
         &self,
         dataset_id: Uuid,
-    ) -> Result<Vec<crate::server::domain::evaluation::question::EvaluationQuestion>, AppError>
-    {
+    ) -> Result<Vec<EvaluationQuestion>, AppError> {
         self.dataset_repository
             .load_questions(dataset_id)
             .await

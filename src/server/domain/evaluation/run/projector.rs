@@ -2,14 +2,14 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
+use crate::event_sourcing::envelope::EventEnvelope;
+use crate::event_sourcing::error::ProjectionError;
+use crate::event_sourcing::projector::Projector;
 use crate::server::domain::evaluation::run::events::EvaluationRunEvent;
 use crate::server::domain::evaluation::run::read_model::{
     EvaluationVariantResultDto, NewRunSummary,
 };
 use crate::server::domain::evaluation::run::repository::EvaluationRunRepository;
-use crate::server::event_sourcing::envelope::EventEnvelope;
-use crate::server::event_sourcing::error::ProjectionError;
-use crate::server::event_sourcing::projector::Projector;
 
 pub struct EvaluationRunProjector {
     repository: Arc<dyn EvaluationRunRepository>,

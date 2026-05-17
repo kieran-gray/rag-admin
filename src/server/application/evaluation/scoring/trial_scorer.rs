@@ -14,6 +14,7 @@ use crate::server::application::source_document::ports::BlobStore;
 use crate::server::application::AppError;
 use crate::server::domain::chunk_set::entity::{Chunk, ChunkSet};
 use crate::server::domain::chunk_set::repository::ChunkSetRepository;
+use crate::server::domain::configuration::embedding_model::EmbeddingModel;
 use crate::server::domain::embedding_set::entity::{ChunkEmbedding, EmbeddingSet};
 use crate::server::domain::embedding_set::repository::EmbeddingSetRepository;
 use crate::server::domain::evaluation::dataset::repository::EvaluationDatasetRepository;
@@ -315,13 +316,12 @@ impl TrialScorer {
             embedding_set_id,
             chunk_set_id,
             embedding_model_id: embedding_model.embedding_model_id,
-            embedding_model_snapshot:
-                crate::server::domain::configuration::embedding_model::EmbeddingModel {
-                    embedding_model_id: embedding_model.embedding_model_id,
-                    kind: embedding_model.kind,
-                    model: embedding_model.model.clone(),
-                    dimensions: embedding_model.dimensions,
-                },
+            embedding_model_snapshot: EmbeddingModel {
+                embedding_model_id: embedding_model.embedding_model_id,
+                kind: embedding_model.kind,
+                model: embedding_model.model.clone(),
+                dimensions: embedding_model.dimensions,
+            },
             dimensions: embedding_model.dimensions,
             created_at: occurred_at.to_string(),
         };

@@ -1,3 +1,7 @@
+use std::cmp::Ordering;
+use std::collections::{HashMap, HashSet};
+use std::fmt::Write as _;
+
 use leptos::prelude::*;
 use leptos_router::components::A;
 use leptos_router::hooks::use_params_map;
@@ -198,10 +202,10 @@ fn BestSoFarChart(trials: Vec<EvaluationVariantResult>) -> impl IntoView {
     if best.iter().any(|(_, lo, hi)| hi > lo) {
         for (i, (_, _, hi)) in best.iter().enumerate() {
             let cmd = if i == 0 { "M" } else { "L" };
-            band_path.push_str(&format!("{cmd} {:.1} {:.1} ", to_x(i), to_y(*hi)));
+            _ = write!(band_path, "{cmd} {:.1} {:.1} ", to_x(i), to_y(*hi));
         }
         for (i, (_, lo, _)) in best.iter().enumerate().rev() {
-            band_path.push_str(&format!("L {:.1} {:.1} ", to_x(i), to_y(*lo)));
+            _ = write!(band_path, "L {:.1} {:.1} ", to_x(i), to_y(*lo));
         }
         band_path.push('Z');
     }
@@ -304,9 +308,8 @@ struct RungRow {
 
 fn rung_summary(variants: &[EvaluationVariantResult]) -> Vec<RungRow> {
     use std::collections::BTreeMap;
-    let mut by_rung: BTreeMap<u32, (Vec<f32>, std::collections::HashSet<u32>)> = BTreeMap::new();
-    let mut max_rung_by_trial: std::collections::HashMap<u32, u32> =
-        std::collections::HashMap::new();
+    let mut by_rung: BTreeMap<u32, (Vec<f32>, HashSet<u32>)> = BTreeMap::new();
+    let mut max_rung_by_trial: HashMap<u32, u32> = HashMap::new();
 
     for v in variants {
         let Some((trial_id, rung)) = parse_trial_rung(&v.variant.label) else {
@@ -389,7 +392,7 @@ fn retired_trials(variants: &[EvaluationVariantResult]) -> Vec<RetiredRow> {
     out.sort_by(|a, b| {
         b.last_composite
             .partial_cmp(&a.last_composite)
-            .unwrap_or(std::cmp::Ordering::Equal)
+            .unwrap_or(Ordering::Equal)
     });
     out
 }
@@ -477,7 +480,7 @@ fn TrialList(trials: Vec<EvaluationVariantResult>) -> impl IntoView {
     trials.sort_by(|a, b| {
         evaluation_score(&b.metrics)
             .partial_cmp(&evaluation_score(&a.metrics))
-            .unwrap_or(std::cmp::Ordering::Equal)
+            .unwrap_or(Ordering::Equal)
     });
     view! {
         <table class="variants-table">

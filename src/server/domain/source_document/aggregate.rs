@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::server::event_sourcing::Aggregate;
+use crate::event_sourcing::Aggregate;
 
 use super::{
     commands::SourceDocumentCommand,
@@ -134,8 +134,7 @@ impl Aggregate for SourceDocument {
                 (None, Self::Event::DocumentCreated(created)) => {
                     state = Some(Self::from_created(created));
                 }
-                (Some(_), Self::Event::DocumentCreated(_)) => return None,
-                (None, _) => return None,
+                (Some(_), Self::Event::DocumentCreated(_)) | (None, _) => return None,
                 (Some(doc), event) => doc.apply(event),
             }
         }

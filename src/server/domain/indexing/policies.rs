@@ -1,5 +1,5 @@
-use crate::server::event_sourcing::envelope::EventEnvelope;
-use crate::server::event_sourcing::job_queue::{IdempotencyKey, NewJob};
+use crate::event_sourcing::envelope::EventEnvelope;
+use crate::event_sourcing::job_queue::{IdempotencyKey, NewJob};
 
 use super::aggregate::Indexing;
 use super::effects::{

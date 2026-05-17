@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{core::ChunkingConfig, server::event_sourcing::Aggregate};
+use crate::{core::ChunkingConfig, event_sourcing::Aggregate};
 
 use super::{
     commands::IndexingCommand,
@@ -119,18 +119,9 @@ impl Aggregate for Indexing {
     ) -> Result<Vec<Self::Event>, Self::Error> {
         match command {
             Self::Command::RequestIngest(cmd) => match state {
-                None => Ok(vec![Self::Event::IngestRequested(IngestRequested {
-                    document_id: cmd.document_id,
-                    pipeline_configuration_id: cmd.pipeline_configuration_id,
-                    document_version: cmd.document_version,
-                    chunking_config: cmd.chunking_config,
-                    request_id: cmd.request_id,
-                    auto_advance: cmd.auto_advance,
-                    occurred_at: cmd.occurred_at,
-                })]),
                 Some(s) if s.removed => Err(IndexingError::Removed),
                 Some(s) if s.last_request_id == Some(cmd.request_id) => Ok(vec![]),
-                Some(_) => Ok(vec![Self::Event::IngestRequested(IngestRequested {
+                None | Some(_) => Ok(vec![Self::Event::IngestRequested(IngestRequested {
                     document_id: cmd.document_id,
                     pipeline_configuration_id: cmd.pipeline_configuration_id,
                     document_version: cmd.document_version,

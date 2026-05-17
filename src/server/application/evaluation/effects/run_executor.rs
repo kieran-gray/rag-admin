@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::sync::Arc;
 
 use serde_json::json;
@@ -6,6 +7,7 @@ use uuid::Uuid;
 use crate::core::{
     evaluation_score, EvaluationMetrics, EvaluationResultSplit, EvaluationRunOptions,
 };
+use crate::event_sourcing::command_processor::CommandProcessor;
 use crate::server::application::evaluation::scoring::{
     PreparedVariant, QuestionSubset, RunContext, TrialScorer,
 };
@@ -19,7 +21,6 @@ use crate::server::domain::evaluation::run::commands::{
 };
 use crate::server::domain::evaluation::run::events::RetrievalTraceEntry;
 use crate::server::domain::evaluation::split::{split_questions, DatasetSplit};
-use crate::server::event_sourcing::command_processor::CommandProcessor;
 
 use crate::server::domain::evaluation::run::effects::ExecuteRunEffect;
 
@@ -448,7 +449,7 @@ fn top_n(scored: &[ScoredCombo], n: usize) -> Vec<&ScoredCombo> {
     indexed.sort_by(|(ai, a), (bi, b)| {
         b.score
             .partial_cmp(&a.score)
-            .unwrap_or(std::cmp::Ordering::Equal)
+            .unwrap_or(Ordering::Equal)
             .then(ai.cmp(bi))
     });
     indexed

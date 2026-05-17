@@ -1,3 +1,4 @@
+use std::mem;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -94,7 +95,7 @@ impl DocumentChunker for LlmChunker {
         let merged = merge_micro_chunks(&micro_chunks, &split_points, target_tokens, &budget)?;
 
         Ok(merged
-            .into_iter()
+            .iter()
             .enumerate()
             .map(|(i, mc)| chunk_output_from_micro_chunk(i, mc))
             .collect())
@@ -115,7 +116,7 @@ impl LlmChunker {
     }
 }
 
-fn chunk_output_from_micro_chunk(chunk_id: usize, mc: MicroChunk) -> ChunkOutput {
+fn chunk_output_from_micro_chunk(chunk_id: usize, mc: &MicroChunk) -> ChunkOutput {
     let (text, char_start, char_end) = trim_chunk_text(&mc.text, mc.char_start, mc.char_end);
     let heading = extract_heading(&text);
     ChunkOutput {
@@ -247,7 +248,7 @@ fn flush_micro_chunk(
         return;
     }
     out.push(MicroChunk {
-        text: std::mem::take(current_text),
+        text: mem::take(current_text),
         char_start: current_start,
         char_end: current_end,
     });
@@ -631,7 +632,7 @@ mod tests {
             char_end: 7 + text.chars().count(),
         };
 
-        let output = chunk_output_from_micro_chunk(2, mc);
+        let output = chunk_output_from_micro_chunk(2, &mc);
 
         assert_eq!(output.chunk_id, 2);
         assert_eq!(output.text, "£ Trimmed text.");

@@ -4,9 +4,9 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::server::event_sourcing::aggregate::Aggregate;
-use crate::server::event_sourcing::aggregate_repository::{AggregateSnapshot, SnapshotStore};
-use crate::server::event_sourcing::error::EsError;
+use crate::event_sourcing::aggregate::Aggregate;
+use crate::event_sourcing::aggregate_repository::{AggregateSnapshot, SnapshotStore};
+use crate::event_sourcing::error::EsError;
 
 pub struct PostgresAggregateSnapshotStore<A>
 where

@@ -1,5 +1,5 @@
 use crate::contracts::EvaluationQuestionDto;
-use crate::core::ordered_f32_vec;
+use crate::core::{ordered_f32_vec, plain_f32_vec};
 use crate::server::application::embedding::{EmbeddingService, ResolvedEmbeddingModel};
 use crate::server::application::AppError;
 use crate::server::domain::evaluation::question::QuestionCategory;
@@ -100,7 +100,7 @@ impl<'a> GeneratedQuestionGate<'a> {
         let mut questions = Vec::with_capacity(existing.len());
         for question in existing {
             if let Some(embedding) = question.embedding.as_ref() {
-                question_embeddings.push(crate::core::plain_f32_vec(embedding));
+                question_embeddings.push(plain_f32_vec(embedding));
             }
             questions.push(question);
         }

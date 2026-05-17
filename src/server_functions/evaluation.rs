@@ -6,6 +6,7 @@ use crate::contracts::BestVariantDto;
 use crate::contracts::{
     EvaluationDatasetDto, EvaluationDatasetSummaryDto, EvaluationJobInfo, EvaluationRunDto,
     EvaluationRunSummaryDto, RecentEvaluationRunDto, RunEvaluationRequestDto,
+    RunOptimizationRequestDto,
 };
 
 #[cfg(feature = "ssr")]
@@ -18,6 +19,8 @@ use crate::server::application::evaluation::{
 use crate::server::application::source_document::SourceDocumentQueryService;
 #[cfg(feature = "ssr")]
 use crate::server_functions::error::{ctx, map_app_error};
+#[cfg(feature = "ssr")]
+use std::cmp::Ordering;
 #[cfg(feature = "ssr")]
 use std::collections::HashMap;
 #[cfg(feature = "ssr")]
@@ -34,7 +37,7 @@ pub async fn get_datasets_for_document(
     let datasets = ctx::<Arc<EvaluationQueryService>>()?
         .list_datasets_for_document(document_id)
         .await
-        .map_err(map_app_error)?;
+        .map_err(|e| map_app_error(&e))?;
 
     Ok(datasets
         .into_iter()
@@ -52,13 +55,16 @@ pub async fn get_datasets_for_document(
 pub async fn get_dataset(dataset_id: Uuid) -> Result<Option<EvaluationDatasetDto>, ServerFnError> {
     let query = ctx::<Arc<EvaluationQueryService>>()?;
 
-    let dataset = query.get_dataset(dataset_id).await.map_err(map_app_error)?;
+    let dataset = query
+        .get_dataset(dataset_id)
+        .await
+        .map_err(|e| map_app_error(&e))?;
 
     if let Some(d) = dataset {
         let questions = query
             .load_questions(dataset_id)
             .await
-            .map_err(map_app_error)?;
+            .map_err(|e| map_app_error(&e))?;
 
         Ok(Some(EvaluationDatasetDto {
             dataset_id: d.dataset_id,
@@ -74,7 +80,7 @@ pub async fn get_dataset(dataset_id: Uuid) -> Result<Option<EvaluationDatasetDto
             generation_model: d.generation_model,
             embedding_model_id: d.embedding_model_id,
             failure_reason: d.failure_reason,
-            questions: questions.into_iter().map(|q| q.into()).collect(),
+            questions: questions.into_iter().map(Into::into).collect(),
             created_at: d.created_at.to_string(),
         }))
     } else {
@@ -105,7 +111,7 @@ pub async fn start_generate_synthetic_dataset(
             duplicate_similarity_threshold_milli,
         })
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(name = RenameDataset, prefix = "/api", endpoint = "rename_dataset")]
@@ -113,7 +119,7 @@ pub async fn rename_dataset(dataset_id: Uuid, label: String) -> Result<(), Serve
     ctx::<Arc<EvaluationDatasetCommandHandler>>()?
         .rename(dataset_id, label)
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(name = DeleteDataset, prefix = "/api", endpoint = "delete_dataset")]
@@ -121,7 +127,7 @@ pub async fn delete_dataset(dataset_id: Uuid) -> Result<(), ServerFnError> {
     ctx::<Arc<EvaluationDatasetCommandHandler>>()?
         .delete(dataset_id)
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(name = CancelDatasetGeneration, prefix = "/api", endpoint = "cancel_dataset_generation")]
@@ -129,7 +135,7 @@ pub async fn cancel_dataset_generation(dataset_id: Uuid) -> Result<(), ServerFnE
     ctx::<Arc<EvaluationDatasetCommandHandler>>()?
         .cancel_generation(dataset_id)
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -138,12 +144,12 @@ pub async fn cancel_dataset_generation(dataset_id: Uuid) -> Result<(), ServerFnE
     endpoint = "start_run_optimization"
 )]
 pub async fn start_run_optimization(
-    request: crate::contracts::RunOptimizationRequestDto,
+    request: RunOptimizationRequestDto,
 ) -> Result<EvaluationJobInfo, ServerFnError> {
     ctx::<Arc<EvaluationRunCommandHandler>>()?
         .start_optimization(request)
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -157,7 +163,7 @@ pub async fn start_run_evaluation(
     ctx::<Arc<EvaluationRunCommandHandler>>()?
         .start_run(request)
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -171,7 +177,7 @@ pub async fn get_runs_for_document(
     let runs = ctx::<Arc<EvaluationQueryService>>()?
         .list_runs_for_document(document_id)
         .await
-        .map_err(map_app_error)?;
+        .map_err(|e| map_app_error(&e))?;
 
     Ok(runs
         .into_iter()
@@ -194,7 +200,7 @@ pub async fn replicate_optimization_run(run_id: Uuid) -> Result<Uuid, ServerFnEr
     ctx::<Arc<EvaluationRunCommandHandler>>()?
         .replicate_optimization(run_id)
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -221,7 +227,7 @@ pub async fn promote_variant_to_chunking_config(
     let run = query
         .get_run(run_id)
         .await
-        .map_err(map_app_error)?
+        .map_err(|e| map_app_error(&e))?
         .ok_or_else(|| ServerFnError::new(format!("run {run_id} not found")))?;
 
     let chosen = run
@@ -255,7 +261,7 @@ pub async fn promote_variant_to_chunking_config(
     chunking_service
         .handle_dto(cmd)
         .await
-        .map_err(map_app_error)?;
+        .map_err(|e| map_app_error(&e))?;
 
     Ok(run_id)
 }
@@ -265,13 +271,13 @@ pub async fn get_run(run_id: Uuid) -> Result<Option<EvaluationRunDto>, ServerFnE
     let run = ctx::<Arc<EvaluationQueryService>>()?
         .get_run(run_id)
         .await
-        .map_err(map_app_error)?;
+        .map_err(|e| map_app_error(&e))?;
 
     Ok(run.map(|r| EvaluationRunDto {
         run_id: r.run_id,
         dataset_id: r.dataset_id,
         status: r.status.as_str().to_string(),
-        variants: r.variant_results.into_iter().map(|v| v.into()).collect(),
+        variants: r.variant_results.into_iter().map(Into::into).collect(),
         created_at: r.created_at.to_string(),
     }))
 }
@@ -282,12 +288,15 @@ pub async fn get_recent_runs(limit: u32) -> Result<Vec<RecentEvaluationRunDto>, 
     let query = ctx::<Arc<EvaluationQueryService>>()?;
     let documents = ctx::<Arc<SourceDocumentQueryService>>()?;
 
-    let runs = query.list_recent_runs(limit).await.map_err(map_app_error)?;
+    let runs = query
+        .list_recent_runs(limit)
+        .await
+        .map_err(|e| map_app_error(&e))?;
 
     let doc_index: HashMap<Uuid, String> = documents
         .list()
         .await
-        .map_err(map_app_error)?
+        .map_err(|e| map_app_error(&e))?
         .into_iter()
         .map(|d| (d.document_id, d.title))
         .collect();
@@ -303,7 +312,7 @@ pub async fn get_recent_runs(limit: u32) -> Result<Vec<RecentEvaluationRunDto>, 
                     policy
                         .score(&a.metrics())
                         .partial_cmp(&policy.score(&b.metrics()))
-                        .unwrap_or(std::cmp::Ordering::Equal)
+                        .unwrap_or(Ordering::Equal)
                 })
                 .map(|v| BestVariantDto {
                     label: v.variant_label.clone(),

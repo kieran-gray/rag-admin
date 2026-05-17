@@ -1,3 +1,6 @@
+use std::error::Error;
+use std::fmt;
+
 #[derive(Debug, Clone)]
 pub enum EvaluationDatasetError {
     AlreadyExists,
@@ -12,8 +15,8 @@ pub enum EvaluationDatasetError {
     InvalidCommand(String),
 }
 
-impl std::fmt::Display for EvaluationDatasetError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for EvaluationDatasetError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             EvaluationDatasetError::AlreadyExists => {
                 write!(f, "evaluation dataset already exists")
@@ -45,4 +48,4 @@ impl std::fmt::Display for EvaluationDatasetError {
     }
 }
 
-impl std::error::Error for EvaluationDatasetError {}
+impl Error for EvaluationDatasetError {}

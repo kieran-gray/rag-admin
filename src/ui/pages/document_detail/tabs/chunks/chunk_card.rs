@@ -12,7 +12,7 @@ pub fn ChunkCard(chunk: ChunkDto) -> impl IntoView {
         <div class="surface-raised rounded p-3 flex flex-col gap-2">
             <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
-                    <div class="eyebrow">{format!("Chunk · seq {:03}", sequence)}</div>
+                    <div class="eyebrow">{format!("Chunk · seq {sequence:03}")}</div>
                     <div class="text-sm font-medium truncate">{heading}</div>
                 </div>
                 <span class="text-xs muted shrink-0">{format!("{text_length} chars")}</span>

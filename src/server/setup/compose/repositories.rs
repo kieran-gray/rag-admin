@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use sqlx::PgPool;
 
+use crate::event_sourcing::checkpoint::CheckpointRepository;
 use crate::server::application::indexing::ports::KvStore;
 use crate::server::application::source_document::ports::BlobStore;
 use crate::server::domain::chunk_set::repository::ChunkSetRepository;
@@ -16,7 +17,6 @@ use crate::server::domain::evaluation::dataset::repository::EvaluationDatasetRep
 use crate::server::domain::evaluation::run::repository::EvaluationRunRepository;
 use crate::server::domain::indexing::repository::IndexingRepository;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
-use crate::server::event_sourcing::checkpoint::CheckpointRepository;
 use crate::server::infrastructure::clients::CloudflareApi;
 use crate::server::infrastructure::configuration::{
     PostgresChunkingConfigurationRepository, PostgresEmbeddingModelRepository,

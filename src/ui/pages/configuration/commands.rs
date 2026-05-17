@@ -1,3 +1,5 @@
+use std::future::Future;
+
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use uuid::Uuid;
@@ -169,7 +171,7 @@ fn run_command<Fut, F>(
     set_refresh: WriteSignal<u32>,
     on_success: F,
 ) where
-    Fut: std::future::Future<Output = Result<(), ServerFnError>> + 'static,
+    Fut: Future<Output = Result<(), ServerFnError>> + 'static,
     F: FnOnce() + 'static,
 {
     set_busy.set(true);

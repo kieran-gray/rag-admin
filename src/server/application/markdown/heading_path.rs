@@ -7,7 +7,7 @@ pub fn update_heading_path(path: &mut Vec<String>, heading: &HeadingBlock) {
         path.push(String::new());
     }
     if let Some(slot) = path.get_mut(depth - 1) {
-        *slot = heading.text.clone();
+        slot.clone_from(&heading.text);
     }
 }
 

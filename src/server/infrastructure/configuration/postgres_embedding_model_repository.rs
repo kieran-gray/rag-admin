@@ -1,13 +1,14 @@
 use async_trait::async_trait;
+use sqlx::postgres::PgRow;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::catalog::AiProviderKind;
+use crate::event_sourcing::error::ProjectionError;
 use crate::server::domain::configuration::catalog::CatalogRepository;
 use crate::server::domain::configuration::embedding_model::{
     EmbeddingModel, EmbeddingModelRepository, EmbeddingModelRepositoryError,
 };
-use crate::server::event_sourcing::error::ProjectionError;
 
 pub struct PostgresEmbeddingModelRepository {
     pool: PgPool,
@@ -23,7 +24,7 @@ impl PostgresEmbeddingModelRepository {
 impl CatalogRepository<EmbeddingModel> for PostgresEmbeddingModelRepository {
     async fn upsert(&self, model: EmbeddingModel) -> Result<(), ProjectionError> {
         sqlx::query(
-            r#"
+            "
             INSERT INTO embedding_models (id, kind, model, dimensions)
             VALUES ($1, $2, $3, $4)
             ON CONFLICT (id) DO UPDATE SET
@@ -31,7 +32,7 @@ impl CatalogRepository<EmbeddingModel> for PostgresEmbeddingModelRepository {
                 model      = $3,
                 dimensions = $4,
                 updated_at = NOW()
-            "#,
+            ",
         )
         .bind(model.embedding_model_id)
         .bind(model.kind.as_str())
@@ -57,11 +58,11 @@ impl CatalogRepository<EmbeddingModel> for PostgresEmbeddingModelRepository {
 impl EmbeddingModelRepository for PostgresEmbeddingModelRepository {
     async fn load_all(&self) -> Result<Vec<EmbeddingModel>, EmbeddingModelRepositoryError> {
         let rows: Vec<EmbeddingModelRow> = sqlx::query_as(
-            r#"
+            "
             SELECT id, kind, model, dimensions
             FROM embedding_models
             ORDER BY created_at ASC
-            "#,
+            ",
         )
         .fetch_all(&self.pool)
         .await
@@ -91,8 +92,8 @@ struct EmbeddingModelRow {
     dimensions: i32,
 }
 
-impl sqlx::FromRow<'_, sqlx::postgres::PgRow> for EmbeddingModelRow {
-    fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
+impl sqlx::FromRow<'_, PgRow> for EmbeddingModelRow {
+    fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
         use sqlx::Row;
         Ok(Self {
             id: row.try_get("id")?,

@@ -14,5 +14,5 @@ pub async fn query_documents(req: QueryRequest) -> Result<QueryResult, ServerFnE
     ctx::<Arc<QueryService>>()?
         .query(req)
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }

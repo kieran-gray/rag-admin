@@ -3,7 +3,8 @@ use uuid::Uuid;
 
 use crate::core::{
     ChunkingConfig, ChunkingVariant, EvaluationAutotuneRequest, EvaluationMetrics,
-    EvaluationResultSplit, EvaluationRunOptions, OptimizationConfig,
+    EvaluationQuestionResult, EvaluationResultSplit, EvaluationRunOptions, EvaluationVariantResult,
+    OptimizationConfig,
 };
 use crate::server::domain::shared::Timestamp;
 
@@ -112,12 +113,12 @@ pub struct NewRunSummary {
     pub created_at: Timestamp,
 }
 
-impl From<EvaluationVariantResultDto> for crate::core::EvaluationVariantResult {
+impl From<EvaluationVariantResultDto> for EvaluationVariantResult {
     fn from(v: EvaluationVariantResultDto) -> Self {
-        let question_results: Vec<crate::core::EvaluationQuestionResult> = v
+        let question_results: Vec<EvaluationQuestionResult> = v
             .retrieval_traces
             .iter()
-            .map(|t| crate::core::EvaluationQuestionResult {
+            .map(|t| EvaluationQuestionResult {
                 question: format!("Q{}", t.question_sequence + 1),
                 recall: t.recall,
                 precision: t.precision,

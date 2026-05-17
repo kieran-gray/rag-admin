@@ -235,9 +235,9 @@ fn JobDetail(job: ActivityJobDto, #[prop(into)] url: Signal<Option<String>>) -> 
             <span class="activity-tray-meta-spacer"></span>
             <span class="activity-tray-meta-times">
                 {move || if finished.is_empty() {
-                    format!("started {}", started_for_status)
+                    format!("started {started_for_status}")
                 } else {
-                    format!("{} → {}", started, finished)
+                    format!("{started} → {finished}")
                 }}
             </span>
         </div>

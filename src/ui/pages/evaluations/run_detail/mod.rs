@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use leptos::prelude::*;
 use leptos_router::components::A;
 use leptos_router::hooks::use_params_map;
@@ -84,7 +86,7 @@ fn RunView(run: EvaluationRunDto) -> impl IntoView {
     variants.sort_by(|a, b| {
         evaluation_score(&b.metrics)
             .partial_cmp(&evaluation_score(&a.metrics))
-            .unwrap_or(std::cmp::Ordering::Equal)
+            .unwrap_or(Ordering::Equal)
     });
 
     let bests = best_per_metric(&variants);

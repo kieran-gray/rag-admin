@@ -12,6 +12,7 @@ use crate::server::application::llm::service::GenerationPrompt;
 use crate::server::application::llm::GenerationService;
 use crate::server::application::ports::GenerationResponseFormat;
 use crate::server::application::AppError;
+use crate::server::domain::evaluation::question::QuestionCategory;
 
 pub struct LlmEvaluationGenerator {
     generation_service: Arc<GenerationService>,
@@ -35,7 +36,7 @@ impl EvaluationGenerator for LlmEvaluationGenerator {
         &self,
         generation_model_id: Uuid,
         prompt: EvaluationPrompt,
-        category: crate::server::domain::evaluation::question::QuestionCategory,
+        category: QuestionCategory,
     ) -> Result<GeneratedEvaluationQuestion, AppError> {
         let response = self
             .generation_service
@@ -92,10 +93,8 @@ fn parse_paraphrase(content: &str) -> Result<String, AppError> {
 
 fn parse_generated_question(
     content: &str,
-    category: crate::server::domain::evaluation::question::QuestionCategory,
+    category: QuestionCategory,
 ) -> Result<GeneratedEvaluationQuestion, AppError> {
-    use crate::server::domain::evaluation::question::QuestionCategory;
-
     let json_text = strip_code_fence(content.trim());
     let value: Value = serde_json::from_str(json_text)
         .map_err(|e| AppError::Upstream(format!("parse generated question JSON: {e}")))?;

@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::server::domain::shared::Timestamp;
 
-use super::super::question::EvaluationReference;
+use super::super::question::{EvaluationReference, GrammarVariant, QuestionCategory};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DatasetGenerationRequested {
@@ -32,8 +32,8 @@ pub struct QuestionAccepted {
     pub question: String,
     pub references: Vec<EvaluationReference>,
     pub embedding: Option<Vec<f32>>,
-    pub category: crate::server::domain::evaluation::question::QuestionCategory,
-    pub grammar_variant: crate::server::domain::evaluation::question::GrammarVariant,
+    pub category: QuestionCategory,
+    pub grammar_variant: GrammarVariant,
     pub paraphrase_of: Option<u32>,
     pub occurred_at: Timestamp,
 }

@@ -3,12 +3,12 @@ use std::collections::{BTreeSet, HashMap};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::server::{
-    domain::{
+use crate::{
+    event_sourcing::Aggregate,
+    server::domain::{
         evaluation::{dataset::events::DatasetGenerationCancelled, question::QuestionCategory},
         shared::Timestamp,
     },
-    event_sourcing::Aggregate,
 };
 
 use super::{
@@ -119,7 +119,6 @@ impl Aggregate for EvaluationDataset {
 
     fn apply(&mut self, event: &Self::Event) {
         match event {
-            Self::Event::DatasetGenerationRequested(_) => {}
             Self::Event::QuestionAccepted(e) => {
                 self.accepted_sequences.insert(e.sequence);
                 if e.paraphrase_of.is_none() {
@@ -141,10 +140,10 @@ impl Aggregate for EvaluationDataset {
             Self::Event::DatasetGenerationCancelled(_) => {
                 self.status = DatasetGenerationStatus::Cancelled;
             }
-            Self::Event::DatasetRenamed(_) => {}
             Self::Event::DatasetDeleted(_) => {
                 self.deleted = true;
             }
+            Self::Event::DatasetGenerationRequested(_) | Self::Event::DatasetRenamed(_) => {}
         }
     }
 
@@ -313,8 +312,7 @@ impl Aggregate for EvaluationDataset {
                 (None, Self::Event::DatasetGenerationRequested(e)) => {
                     state = Some(Self::from_requested(e));
                 }
-                (Some(_), Self::Event::DatasetGenerationRequested(_)) => return None,
-                (None, _) => return None,
+                (Some(_), Self::Event::DatasetGenerationRequested(_)) | (None, _) => return None,
                 (Some(dataset), event) => dataset.apply(event),
             }
         }

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use uuid::Uuid;
 
-use crate::server::event_sourcing::error::ProjectionError;
+use crate::event_sourcing::error::ProjectionError;
 
 #[async_trait]
 pub trait CatalogRepository<E>: Send + Sync

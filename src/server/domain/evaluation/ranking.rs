@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 pub trait Scored {
     fn score(&self) -> f32;
     fn score_ci(&self) -> (f32, f32);
@@ -7,11 +9,11 @@ pub fn equivalence_class<T: Scored>(entries: &[T]) -> Vec<usize> {
     if entries.is_empty() {
         return Vec::new();
     }
-    let Some((leader_idx, leader)) = entries.iter().enumerate().max_by(|(_, a), (_, b)| {
-        a.score()
-            .partial_cmp(&b.score())
-            .unwrap_or(std::cmp::Ordering::Equal)
-    }) else {
+    let Some((leader_idx, leader)) = entries
+        .iter()
+        .enumerate()
+        .max_by(|(_, a), (_, b)| a.score().partial_cmp(&b.score()).unwrap_or(Ordering::Equal))
+    else {
         return Vec::new();
     };
 

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use http::header::CONTENT_TYPE;
 use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
@@ -76,7 +77,7 @@ impl GenerationClient for OllamaGenerationClient {
             .http
             .request_text(
                 Method::POST,
-                &format!("{}/api/generate", base_url),
+                &format!("{base_url}/api/generate"),
                 json_headers(),
                 Some(body),
             )
@@ -101,10 +102,7 @@ impl GenerationClient for OllamaGenerationClient {
 
 fn json_headers() -> HeaderMap {
     let mut headers = HeaderMap::new();
-    headers.insert(
-        reqwest::header::CONTENT_TYPE,
-        HeaderValue::from_static("application/json"),
-    );
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     headers
 }
 

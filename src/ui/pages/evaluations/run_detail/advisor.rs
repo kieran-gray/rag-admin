@@ -1,3 +1,6 @@
+use std::cmp::Ordering;
+use std::collections::HashSet;
+
 use leptos::prelude::*;
 
 use crate::core::{
@@ -41,7 +44,7 @@ pub(super) fn equivalence_class_members(
         .max_by(|a, b| {
             evaluation_score(&a.metrics)
                 .partial_cmp(&evaluation_score(&b.metrics))
-                .unwrap_or(std::cmp::Ordering::Equal)
+                .unwrap_or(Ordering::Equal)
         })
     else {
         return Vec::new();
@@ -63,7 +66,7 @@ pub(super) fn equivalence_class_members(
     out.sort_by(|a, b| {
         evaluation_score(&b.metrics)
             .partial_cmp(&evaluation_score(&a.metrics))
-            .unwrap_or(std::cmp::Ordering::Equal)
+            .unwrap_or(Ordering::Equal)
     });
     out
 }
@@ -139,7 +142,7 @@ pub(super) fn reliability_advisor(
 
     if tied.len() > 1 {
         let bucket_label = analysis_bucket
-            .map(|b| b.as_str())
+            .map(EvaluationResultSplit::as_str)
             .unwrap_or("the analysis bucket");
         out.push(AdvisorEntry {
             flag: ReliabilityFlag::StatisticalTie,
@@ -156,7 +159,7 @@ pub(super) fn reliability_advisor(
         in_bucket.sort_by(|a, b| {
             evaluation_score(&b.metrics)
                 .partial_cmp(&evaluation_score(&a.metrics))
-                .unwrap_or(std::cmp::Ordering::Equal)
+                .unwrap_or(Ordering::Equal)
         });
 
         let q_size = in_bucket.len().div_ceil(4).clamp(2, 12);
@@ -181,7 +184,7 @@ pub(super) fn reliability_advisor(
         .filter(|v| v.split == EvaluationResultSplit::Tuning)
         .count();
     let trial_count = if tuning_count > 0 {
-        let mut ids: std::collections::HashSet<u32> = std::collections::HashSet::new();
+        let mut ids: HashSet<u32> = HashSet::new();
         for v in variants
             .iter()
             .filter(|v| v.split == EvaluationResultSplit::Tuning)
@@ -205,8 +208,7 @@ pub(super) fn reliability_advisor(
 
     if let Some(leader) = primary_leader(variants) {
         if !leader.question_results.is_empty() {
-            let mut categories: std::collections::HashSet<String> =
-                std::collections::HashSet::new();
+            let mut categories: HashSet<String> = HashSet::new();
             for q in &leader.question_results {
                 categories.insert(q.category.clone());
             }

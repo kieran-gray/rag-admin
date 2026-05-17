@@ -3,6 +3,8 @@ pub use ssr::{ctx, map_app_error, map_setup_error};
 
 #[cfg(feature = "ssr")]
 mod ssr {
+    use std::any::type_name;
+
     use http::StatusCode;
     use leptos::prelude::*;
     use leptos_axum::ResponseOptions;
@@ -11,12 +13,11 @@ mod ssr {
     use crate::server::setup::SetupError;
 
     pub fn ctx<T: Clone + 'static>() -> Result<T, ServerFnError> {
-        use_context::<T>().ok_or_else(|| {
-            ServerFnError::new(format!("missing context: {}", std::any::type_name::<T>()))
-        })
+        use_context::<T>()
+            .ok_or_else(|| ServerFnError::new(format!("missing context: {}", type_name::<T>())))
     }
 
-    pub fn map_app_error(err: AppError) -> ServerFnError {
+    pub fn map_app_error(err: &AppError) -> ServerFnError {
         let status = match &err {
             AppError::NotFound(_) => StatusCode::NOT_FOUND,
             AppError::Validation(_) => StatusCode::BAD_REQUEST,
@@ -27,7 +28,7 @@ mod ssr {
         ServerFnError::new(err.to_string())
     }
 
-    pub fn map_setup_error(err: SetupError) -> ServerFnError {
+    pub fn map_setup_error(err: &SetupError) -> ServerFnError {
         let status = match &err {
             SetupError::Config(_) => StatusCode::BAD_REQUEST,
             SetupError::MissingVariable(_) | SetupError::InvalidVariable(_) => {

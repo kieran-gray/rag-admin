@@ -16,7 +16,7 @@ impl RuleManager {
         let rules = rules.unwrap_or(RULES);
         let mut result = vec![0usize; total_len];
 
-        for (node_type, ranges) in node_ranges.ranges.iter() {
+        for (node_type, ranges) in &node_ranges.ranges {
             let matching = Self::rules_for(node_type, rules);
             if matching.is_empty() {
                 continue;

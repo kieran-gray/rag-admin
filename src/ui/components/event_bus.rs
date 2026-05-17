@@ -88,6 +88,7 @@ mod hydrate {
     use leptos::prelude::*;
     use wasm_bindgen::prelude::*;
     use wasm_bindgen::JsCast;
+    use web_sys::console;
     use web_sys::{CloseEvent, MessageEvent, WebSocket};
 
     use super::{ConnectionState, PublishedEvent};
@@ -110,12 +111,9 @@ mod hydrate {
         set_connection: WriteSignal<ConnectionState>,
         attempt: u32,
     ) {
-        let url = match build_url() {
-            Some(u) => u,
-            None => {
-                set_connection.set(ConnectionState::Closed);
-                return;
-            }
+        let Some(url) = build_url() else {
+            set_connection.set(ConnectionState::Closed);
+            return;
         };
 
         set_connection.set(ConnectionState::Connecting);
@@ -138,9 +136,8 @@ mod hydrate {
         on_open.forget();
 
         let on_message = Closure::<dyn FnMut(MessageEvent)>::new(move |evt: MessageEvent| {
-            let data = match evt.data().as_string() {
-                Some(s) => s,
-                None => return,
+            let Some(data) = evt.data().as_string() else {
+                return;
             };
             match serde_json::from_str::<PublishedEvent>(&data) {
                 Ok(event) => set_last_event.set(Some(event)),
@@ -181,9 +178,8 @@ mod hydrate {
     ) {
         let delay_ms = ((1u32 << attempt.min(6)) * 500).min(30_000) as i32;
 
-        let window = match web_sys::window() {
-            Some(w) => w,
-            None => return,
+        let Some(window) = web_sys::window() else {
+            return;
         };
 
         let cb = Closure::<dyn FnMut()>::new(move || {
@@ -206,6 +202,6 @@ mod hydrate {
     }
 
     fn tracing_error(msg: &str) {
-        web_sys::console::error_1(&msg.into());
+        console::error_1(&msg.into());
     }
 }

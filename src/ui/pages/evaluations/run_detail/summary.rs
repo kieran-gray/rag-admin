@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use crate::core::{EvaluationResultSplit, EvaluationVariantResult};
+use crate::core::{EvaluationResultSplit, EvaluationScoreWeights, EvaluationVariantResult};
 use crate::ui::components::primitives::Surface;
 
 use super::shared::METRIC_DEFS;
@@ -33,7 +33,7 @@ pub(super) fn summarise_retrieval(variants: &[EvaluationVariantResult]) -> Retri
     let format_top_ks = |slice: &[u32]| {
         slice
             .iter()
-            .map(|k| k.to_string())
+            .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join(", ")
     };
@@ -100,7 +100,7 @@ pub(super) fn RunSummary(
     variants_count: usize,
     retrieval: RetrievalSummary,
 ) -> impl IntoView {
-    let weights = crate::core::EvaluationScoreWeights::default();
+    let weights = EvaluationScoreWeights::default();
     let score_str = leader_score
         .map(|s| format!("{:.1}%", s * 100.0))
         .unwrap_or_else(|| "—".to_string());
@@ -109,8 +109,7 @@ pub(super) fn RunSummary(
         Some(EvaluationResultSplit::Holdout) => "Leader score · holdout".to_string(),
         Some(EvaluationResultSplit::Validation) => "Leader score · validation".to_string(),
         Some(EvaluationResultSplit::Tuning) => "Leader score · tuning (preliminary)".to_string(),
-        Some(EvaluationResultSplit::Full) => "Leader score".to_string(),
-        None => "Leader score".to_string(),
+        Some(EvaluationResultSplit::Full) | None => "Leader score".to_string(),
     };
     let footnote = match leader_split {
         Some(EvaluationResultSplit::Holdout) => {

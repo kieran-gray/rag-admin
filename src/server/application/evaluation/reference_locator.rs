@@ -1,3 +1,5 @@
+use std::mem;
+
 use crate::contracts::{EvaluationQuestionDto, EvaluationReferenceDto};
 use crate::server::application::AppError;
 
@@ -159,7 +161,7 @@ fn tokenize_for_alignment(value: &str) -> Vec<AlignmentToken> {
 
         if !current.is_empty() {
             tokens.push(AlignmentToken {
-                text: std::mem::take(&mut current),
+                text: mem::take(&mut current),
                 start: token_start,
                 end: last_end,
             });
@@ -180,8 +182,7 @@ fn tokenize_for_alignment(value: &str) -> Vec<AlignmentToken> {
 fn normalize_alignment_char(ch: char) -> Option<char> {
     let normalized = match ch {
         'A'..='Z' => ch.to_ascii_lowercase(),
-        'a'..='z' | '0'..='9' => ch,
-        '-' | '_' | '/' | '.' | ':' | '@' => ch,
+        'a'..='z' | '0'..='9' | '-' | '_' | '/' | '.' | ':' | '@' => ch,
         '\'' | '"' | '`' | '*' | '~' | '[' | ']' | '(' | ')' | '{' | '}' | '<' | '>' | '#' => {
             return None
         }

@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::event_sourcing::Aggregate;
 use crate::server::domain::configuration::catalog::{CatalogEntry, CatalogError, CatalogState};
-use crate::server::event_sourcing::Aggregate;
 
 use super::commands::GenerationModelCatalogCommand;
 use super::entity::GenerationModel;
@@ -73,16 +73,15 @@ impl Aggregate for GenerationModelCatalog {
         command: Self::Command,
     ) -> Result<Vec<Self::Event>, Self::Error> {
         let mut bootstrap = Vec::new();
-        let owned_state = match state {
-            Some(s) => s.clone(),
-            None => {
-                bootstrap.push(Self::Event::GenerationModelCatalogCreated(
-                    GenerationModelCatalogCreated {
-                        catalog_id: Self::singleton_id(),
-                    },
-                ));
-                Self::empty(Self::singleton_id())
-            }
+        let owned_state = if let Some(s) = state {
+            s.clone()
+        } else {
+            bootstrap.push(Self::Event::GenerationModelCatalogCreated(
+                GenerationModelCatalogCreated {
+                    catalog_id: Self::singleton_id(),
+                },
+            ));
+            Self::empty(Self::singleton_id())
         };
 
         let mut events = match command {
@@ -141,8 +140,9 @@ impl Aggregate for GenerationModelCatalog {
                 (None, Self::Event::GenerationModelCatalogCreated(e)) => {
                     state = Some(Self::empty(e.catalog_id));
                 }
-                (Some(_), Self::Event::GenerationModelCatalogCreated(_)) => return None,
-                (None, _) => return None,
+                (Some(_), Self::Event::GenerationModelCatalogCreated(_)) | (None, _) => {
+                    return None
+                }
                 (Some(s), event) => s.apply(event),
             }
         }

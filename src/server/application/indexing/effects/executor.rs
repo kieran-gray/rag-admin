@@ -1,9 +1,12 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde_json::json;
 use uuid::Uuid;
 
+use crate::event_sourcing::command_processor::CommandProcessor;
+use crate::event_sourcing::process_manager::{EffectError, EffectExecutor};
 use crate::server::application::chunking::ChunkerRegistry;
 use crate::server::application::configuration::{PipelineResolver, ResolvedPipeline};
 use crate::server::application::embedding::EmbeddingService;
@@ -28,8 +31,6 @@ use crate::server::domain::indexing::repository::IndexingRepository;
 use crate::server::domain::indexing::status::IngestStage;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::server::domain::VectorRecord;
-use crate::server::event_sourcing::command_processor::CommandProcessor;
-use crate::server::event_sourcing::process_manager::{EffectError, EffectExecutor};
 
 use super::indexing::{
     ExecuteChunkingEffect, ExecuteEmbeddingEffect, ExecuteIndexingEffect, IndexingEffect,
@@ -403,8 +404,7 @@ impl IndexingEffectExecutor {
             .embedding_set_repository
             .load_embeddings(embedding_set_id)
             .await?;
-        let chunk_map: std::collections::HashMap<Uuid, &Chunk> =
-            chunks.iter().map(|c| (c.chunk_id, c)).collect();
+        let chunk_map: HashMap<Uuid, &Chunk> = chunks.iter().map(|c| (c.chunk_id, c)).collect();
 
         let document_id = indexing.document_id;
         let pipeline_configuration_id = indexing.pipeline_configuration_id;
@@ -451,8 +451,7 @@ impl IndexingEffectExecutor {
 
         job.emit(
             InternalLogEvent::info(format!(
-                "Upserting {} vectors to '{}'",
-                vector_count, vector_index_name
+                "Upserting {vector_count} vectors to '{vector_index_name}'"
             ))
             .with_meta("vector_count", json!(vector_count))
             .with_meta("vector_index", json!(vector_index_name)),

@@ -10,6 +10,9 @@ pub mod ui;
 #[cfg(feature = "ssr")]
 pub mod server;
 
+#[cfg(feature = "ssr")]
+pub mod event_sourcing;
+
 #[cfg(feature = "hydrate")]
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn hydrate() {

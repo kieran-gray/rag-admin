@@ -198,11 +198,11 @@ impl SourceDocumentIngestService {
 
         Ok(map_to_dto(
             document_id,
-            document_type,
-            source_ref,
-            metadata,
+            &document_type,
+            &source_ref,
+            &metadata,
             document_version,
-            content_hash,
+            &content_hash,
         ))
     }
 
@@ -283,7 +283,7 @@ fn document_type_from_filename(filename: &str) -> DocumentType {
     let ext = Path::new(filename)
         .extension()
         .and_then(|e| e.to_str())
-        .map(|s| s.to_ascii_lowercase())
+        .map(str::to_ascii_lowercase)
         .unwrap_or_default();
     match ext.as_str() {
         "md" | "markdown" => DocumentType::Markdown,
@@ -302,11 +302,11 @@ fn derive_title_from_filename(filename: &str) -> String {
 
 fn map_to_dto(
     document_id: Uuid,
-    document_type: DocumentType,
-    source_ref: SourceRef,
-    metadata: DocumentMetadata,
+    document_type: &DocumentType,
+    source_ref: &SourceRef,
+    metadata: &DocumentMetadata,
     document_version: u32,
-    content_hash: ContentHash,
+    content_hash: &ContentHash,
 ) -> SourceDocumentDto {
     SourceDocumentDto {
         document_id,

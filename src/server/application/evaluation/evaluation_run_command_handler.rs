@@ -4,13 +4,13 @@ use uuid::Uuid;
 
 use crate::contracts::{EvaluationJobInfo, RunEvaluationRequestDto, RunOptimizationRequestDto};
 use crate::core::{ChunkingVariant, EvaluationRunOptions, OptimizationConfig};
+use crate::event_sourcing::CommandProcessor;
 use crate::server::application::evaluation::query_service::EvaluationQueryService;
 use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::AppError;
 use crate::server::domain::evaluation::run::aggregate::EvaluationRun;
 use crate::server::domain::evaluation::run::commands::{EvaluationRunCommand, RequestRun};
 use crate::server::domain::evaluation::run::scoring_policy::ScoringPolicy;
-use crate::server::event_sourcing::CommandProcessor;
 
 pub struct EvaluationRunCommandHandler {
     processor: Arc<CommandProcessor<EvaluationRun>>,

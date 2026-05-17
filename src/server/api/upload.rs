@@ -23,7 +23,7 @@ pub async fn upload_document(
         .map_err(|e| UploadError::bad_request(format!("multipart read failed: {e}")))?
     {
         if field.name() == Some("file") {
-            filename = field.file_name().map(|s| s.to_string());
+            filename = field.file_name().map(ToString::to_string);
             let data = field
                 .bytes()
                 .await

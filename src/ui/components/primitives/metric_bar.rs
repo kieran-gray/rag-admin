@@ -66,7 +66,7 @@ pub fn MetricBar(
     });
 
     view! {
-        <div class="metric-bar-row" title=help.clone().unwrap_or_default()>
+        <div class="metric-bar-row" title=help.unwrap_or_default()>
             <div class="metric-bar-label">
                 <span class="metric-bar-label-name">{label}</span>
                 {short.map(|s| view! {

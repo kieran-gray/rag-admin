@@ -1,13 +1,14 @@
 use async_trait::async_trait;
+use sqlx::postgres::PgRow;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::catalog::AiProviderKind;
+use crate::event_sourcing::error::ProjectionError;
 use crate::server::domain::configuration::catalog::CatalogRepository;
 use crate::server::domain::configuration::generation_model::{
     GenerationModel, GenerationModelRepository, GenerationModelRepositoryError,
 };
-use crate::server::event_sourcing::error::ProjectionError;
 
 pub struct PostgresGenerationModelRepository {
     pool: PgPool,
@@ -23,14 +24,14 @@ impl PostgresGenerationModelRepository {
 impl CatalogRepository<GenerationModel> for PostgresGenerationModelRepository {
     async fn upsert(&self, model: GenerationModel) -> Result<(), ProjectionError> {
         sqlx::query(
-            r#"
+            "
             INSERT INTO generation_models (id, kind, model)
             VALUES ($1, $2, $3)
             ON CONFLICT (id) DO UPDATE SET
                 kind       = $2,
                 model      = $3,
                 updated_at = NOW()
-            "#,
+            ",
         )
         .bind(model.generation_model_id)
         .bind(model.kind.as_str())
@@ -55,11 +56,11 @@ impl CatalogRepository<GenerationModel> for PostgresGenerationModelRepository {
 impl GenerationModelRepository for PostgresGenerationModelRepository {
     async fn load_all(&self) -> Result<Vec<GenerationModel>, GenerationModelRepositoryError> {
         let rows: Vec<GenerationModelRow> = sqlx::query_as(
-            r#"
+            "
             SELECT id, kind, model
             FROM generation_models
             ORDER BY created_at ASC
-            "#,
+            ",
         )
         .fetch_all(&self.pool)
         .await
@@ -89,8 +90,8 @@ struct GenerationModelRow {
     model: String,
 }
 
-impl sqlx::FromRow<'_, sqlx::postgres::PgRow> for GenerationModelRow {
-    fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
+impl sqlx::FromRow<'_, PgRow> for GenerationModelRow {
+    fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
         use sqlx::Row;
         Ok(Self {
             id: row.try_get("id")?,

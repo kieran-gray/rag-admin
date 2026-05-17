@@ -4,7 +4,7 @@ use tracing::{error, info, warn};
 
 use tokio::sync::{broadcast, Mutex};
 
-use crate::server::application::InternalLogEvent;
+use crate::server::application::{InternalLogEvent, InternalLogLevel};
 
 const BROADCAST_CAPACITY: usize = 256;
 
@@ -43,19 +43,27 @@ impl Job {
             Some(serde_json::to_string(&event.metadata).unwrap_or_default())
         };
         match event.level {
-            crate::server::application::InternalLogLevel::Info
-            | crate::server::application::InternalLogLevel::Success => match &meta {
-                Some(m) => info!(metadata = %m, "{}", event.message),
-                None => info!("{}", event.message),
-            },
-            crate::server::application::InternalLogLevel::Warn => match &meta {
-                Some(m) => warn!(metadata = %m, "{}", event.message),
-                None => warn!("{}", event.message),
-            },
-            crate::server::application::InternalLogLevel::Error => match &meta {
-                Some(m) => error!(metadata = %m, "{}", event.message),
-                None => error!("{}", event.message),
-            },
+            InternalLogLevel::Info | InternalLogLevel::Success => {
+                if let Some(m) = &meta {
+                    info!(metadata = %m, "{}", event.message);
+                } else {
+                    info!("{}", event.message);
+                }
+            }
+            InternalLogLevel::Warn => {
+                if let Some(m) = &meta {
+                    warn!(metadata = %m, "{}", event.message);
+                } else {
+                    warn!("{}", event.message);
+                }
+            }
+            InternalLogLevel::Error => {
+                if let Some(m) = &meta {
+                    error!(metadata = %m, "{}", event.message);
+                } else {
+                    error!("{}", event.message);
+                }
+            }
         }
 
         let mut inner = self.inner.lock().await;
@@ -131,5 +139,5 @@ fn generate_id() -> String {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    format!("{:x}", nanos)
+    format!("{nanos:x}")
 }

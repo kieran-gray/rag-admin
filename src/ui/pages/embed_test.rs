@@ -128,7 +128,7 @@ pub fn EmbedTestPage() -> impl IntoView {
                                         <span class=format!(
                                             "text-7xl font-mono font-bold tracking-tighter {}",
                                             similarity_class(similarity),
-                                        )>{format!("{:.4}", similarity)}</span>
+                                        )>{format!("{similarity:.4}")}</span>
                                         <span class=format!(
                                             "tech-label mt-4 px-3 py-1 border border-current {}",
                                             similarity_class(similarity),
@@ -148,14 +148,14 @@ pub fn EmbedTestPage() -> impl IntoView {
                                         <div class=format!(
                                             "font-mono text-xl font-bold {}",
                                             norm_class(norm_a),
-                                        )>{format!("{:.4}", norm_a)}</div>
+                                        )>{format!("{norm_a:.4}")}</div>
                                     </div>
                                     <div class="px-6 py-6 bg-[var(--color-card-inner)]/10">
                                         <div class="tech-label opacity-40 mb-2">"L2_NORM_B"</div>
                                         <div class=format!(
                                             "font-mono text-xl font-bold {}",
                                             norm_class(norm_b),
-                                        )>{format!("{:.4}", norm_b)}</div>
+                                        )>{format!("{norm_b:.4}")}</div>
                                     </div>
                                 </div>
 

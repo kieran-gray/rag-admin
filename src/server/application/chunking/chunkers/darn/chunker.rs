@@ -106,9 +106,8 @@ fn assemble_chunks(
             continue;
         }
 
-        let slice = match text.get(safe_start..safe_end) {
-            Some(s) => s,
-            None => continue,
+        let Some(slice) = text.get(safe_start..safe_end) else {
+            continue;
         };
 
         out.push(RawChunk {

@@ -1,4 +1,6 @@
+use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::f64::consts::PI;
 
 use super::search_space::{Observation, Parameter, SearchSpace, Trial, Value};
 
@@ -118,23 +120,21 @@ impl Tpe {
         let mut params: HashMap<String, Value> = HashMap::new();
         let descriptors: Vec<Parameter> = self.space.parameters().to_vec();
         for p in descriptors {
-            match &p {
-                Parameter::Conditional {
-                    gate_parameter,
-                    gate_value,
-                    inner,
-                } => {
-                    if params.get(gate_parameter) == Some(gate_value) {
-                        let name = inner.name().to_string();
-                        let value = self.sample_param(inner);
-                        params.insert(name, value);
-                    }
-                }
-                _ => {
-                    let name = p.name().to_string();
-                    let value = self.sample_param(&p);
+            if let Parameter::Conditional {
+                gate_parameter,
+                gate_value,
+                inner,
+            } = &p
+            {
+                if params.get(gate_parameter) == Some(gate_value) {
+                    let name = inner.name().to_string();
+                    let value = self.sample_param(inner);
                     params.insert(name, value);
                 }
+            } else {
+                let name = p.name().to_string();
+                let value = self.sample_param(&p);
+                params.insert(name, value);
             }
         }
         params
@@ -156,24 +156,22 @@ impl Tpe {
 
         let mut out: HashMap<String, Value> = HashMap::new();
         for p in descriptors {
-            match p {
-                Parameter::Conditional {
-                    gate_parameter,
-                    gate_value,
-                    inner,
-                } => {
-                    if out.get(gate_parameter) != Some(gate_value) {
-                        continue;
-                    }
-                    let name = inner.name().to_string();
-                    let value = self.perturb_or_sample(inner, pivot.get(&name));
-                    out.insert(name, value);
+            if let Parameter::Conditional {
+                gate_parameter,
+                gate_value,
+                inner,
+            } = p
+            {
+                if out.get(gate_parameter) != Some(gate_value) {
+                    continue;
                 }
-                _ => {
-                    let name = p.name().to_string();
-                    let value = self.perturb_or_sample(p, pivot.get(&name));
-                    out.insert(name, value);
-                }
+                let name = inner.name().to_string();
+                let value = self.perturb_or_sample(inner, pivot.get(&name));
+                out.insert(name, value);
+            } else {
+                let name = p.name().to_string();
+                let value = self.perturb_or_sample(p, pivot.get(&name));
+                out.insert(name, value);
             }
         }
         out
@@ -201,7 +199,7 @@ impl Tpe {
                 ..
             } => {
                 let pivot_n = pivot_value
-                    .and_then(|v| v.as_int())
+                    .and_then(super::search_space::Value::as_int)
                     .unwrap_or((*low + *high) / 2);
                 Value::Int(self.perturb_int(pivot_n, *low, *high, *log_scale))
             }
@@ -212,7 +210,7 @@ impl Tpe {
                 ..
             } => {
                 let pivot_f = pivot_value
-                    .and_then(|v| v.as_float())
+                    .and_then(super::search_space::Value::as_float)
                     .unwrap_or((*low + *high) / 2.0);
                 Value::Float(self.perturb_float(pivot_f, *low, *high, *log_scale))
             }
@@ -324,7 +322,7 @@ impl Tpe {
     fn next_gaussian(&mut self) -> f64 {
         let u1 = self.next_f64().max(1e-300);
         let u2 = self.next_f64();
-        (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos()
+        (-2.0 * u1.ln()).sqrt() * (2.0 * PI * u2).cos()
     }
 }
 
@@ -340,7 +338,7 @@ pub fn partition_by_fitness(
         b.fitness
             .composite
             .partial_cmp(&a.fitness.composite)
-            .unwrap_or(std::cmp::Ordering::Equal)
+            .unwrap_or(Ordering::Equal)
     });
     let n_good = ((sorted.len() as f32) * gamma).ceil() as usize;
     let n_good = n_good.clamp(1, sorted.len().saturating_sub(1).max(1));
@@ -355,8 +353,8 @@ fn density_of(subset: &[Observation], param: &Parameter, value: &Value) -> f64 {
         }
         Parameter::IntRange {
             name, log_scale, ..
-        } => density_numeric(subset, name, value, *log_scale),
-        Parameter::Float {
+        }
+        | Parameter::Float {
             name, log_scale, ..
         } => density_numeric(subset, name, value, *log_scale),
         Parameter::Conditional { inner, .. } => density_of(subset, inner, value),
@@ -388,14 +386,16 @@ fn density_categorical(
 }
 
 fn density_numeric(subset: &[Observation], name: &str, value: &Value, log_scale: bool) -> f64 {
-    let query = match value.as_float() {
-        Some(f) => f,
-        None => return 1e-9,
+    let Some(query) = value.as_float() else {
+        return 1e-9;
     };
     let xs: Vec<f64> = subset
         .iter()
         .filter_map(|o| {
-            let raw = o.params.get(name).and_then(|v| v.as_float())?;
+            let raw = o
+                .params
+                .get(name)
+                .and_then(super::search_space::Value::as_float)?;
             if log_scale {
                 if raw > 0.0 {
                     Some(raw.ln())
@@ -425,7 +425,7 @@ fn density_numeric(subset: &[Observation], name: &str, value: &Value, log_scale:
 
     let h = (1.06_f64 * stddev * n.powf(-0.2)).max(1e-6);
 
-    let coeff = 1.0 / (n * h * (2.0 * std::f64::consts::PI).sqrt());
+    let coeff = 1.0 / (n * h * (2.0 * PI).sqrt());
     let sum: f64 = xs
         .iter()
         .map(|x| {

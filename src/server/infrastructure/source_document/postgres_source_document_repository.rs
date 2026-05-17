@@ -27,13 +27,13 @@ impl SourceDocumentRepository for PostgresSourceDocumentRepository {
         document_id: Uuid,
     ) -> Result<Option<SourceDocumentReadModel>, SourceDocumentRepositoryError> {
         let row: Option<SourceDocumentRow> = sqlx::query_as(
-            r#"
+            "
             SELECT
                 document_id, document_type, source_ref, latest_version_number,
                 latest_content_hash, latest_metadata, latest_version_occurred_at, deleted
             FROM source_documents
             WHERE document_id = $1
-            "#,
+            ",
         )
         .bind(document_id)
         .fetch_optional(&self.pool)
@@ -59,7 +59,7 @@ impl SourceDocumentRepository for PostgresSourceDocumentRepository {
         })?;
 
         sqlx::query(
-            r#"
+            "
             INSERT INTO source_documents (
                 document_id, document_type, source_ref, latest_version_number,
                 latest_content_hash, latest_metadata, latest_version_occurred_at,
@@ -75,7 +75,7 @@ impl SourceDocumentRepository for PostgresSourceDocumentRepository {
                 latest_version_occurred_at = EXCLUDED.latest_version_occurred_at,
                 deleted = EXCLUDED.deleted,
                 updated_at = NOW()
-            "#,
+            ",
         )
         .bind(read_model.document_id)
         .bind(&document_type)
@@ -94,13 +94,13 @@ impl SourceDocumentRepository for PostgresSourceDocumentRepository {
 
     async fn list(&self) -> Result<Vec<SourceDocumentReadModel>, SourceDocumentRepositoryError> {
         let rows: Vec<SourceDocumentRow> = sqlx::query_as(
-            r#"
+            "
             SELECT
                 document_id, document_type, source_ref, latest_version_number,
                 latest_content_hash, latest_metadata, latest_version_occurred_at, deleted
             FROM source_documents
             ORDER BY updated_at DESC
-            "#,
+            ",
         )
         .fetch_all(&self.pool)
         .await
@@ -120,14 +120,14 @@ impl SourceDocumentRepository for PostgresSourceDocumentRepository {
         })?;
 
         let row: Option<SourceDocumentRow> = sqlx::query_as(
-            r#"
+            "
             SELECT
                 document_id, document_type, source_ref, latest_version_number,
                 latest_content_hash, latest_metadata, latest_version_occurred_at, deleted
             FROM source_documents
             WHERE source_ref = $1
             LIMIT 1
-            "#,
+            ",
         )
         .bind(&source_ref_json)
         .fetch_optional(&self.pool)

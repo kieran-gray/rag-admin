@@ -1,3 +1,5 @@
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -8,8 +10,8 @@ pub enum IngestStage {
     Indexing,
 }
 
-impl std::fmt::Display for IngestStage {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for IngestStage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             IngestStage::Fetching => write!(f, "fetching"),
             IngestStage::Chunking => write!(f, "chunking"),

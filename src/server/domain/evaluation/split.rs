@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use uuid::Uuid;
 
 pub struct DatasetSplit {
@@ -123,8 +125,7 @@ pub fn k_fold(seed_source: Uuid, total: usize, k: u32) -> Vec<KFoldEntry> {
             .to_vec();
         cursor += size;
 
-        let validate_set: std::collections::HashSet<usize> =
-            validate_slice.iter().copied().collect();
+        let validate_set: HashSet<usize> = validate_slice.iter().copied().collect();
         let mut train: Vec<usize> = (0..total).filter(|i| !validate_set.contains(i)).collect();
         let mut validate = validate_slice;
         train.sort_unstable();

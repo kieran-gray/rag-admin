@@ -26,14 +26,14 @@ impl IndexingRepository for PostgresIndexingRepository {
         indexing_id: Uuid,
     ) -> Result<Option<IndexingReadModel>, IndexingRepositoryError> {
         let row: Option<IndexingRow> = sqlx::query_as(
-            r#"
+            "
             SELECT
                 indexing_id, document_id, pipeline_configuration_id, document_version,
                 chunking_config, chunk_set_id, embedding_set_id, status, failure_stage,
                 attempts, removed, auto_advance
             FROM indexings
             WHERE indexing_id = $1
-            "#,
+            ",
         )
         .bind(indexing_id)
         .fetch_optional(&self.pool)
@@ -50,7 +50,7 @@ impl IndexingRepository for PostgresIndexingRepository {
         let (status, failure_stage) = encode_status(&read_model.status);
 
         sqlx::query(
-            r#"
+            "
             INSERT INTO indexings (
                 indexing_id, document_id, pipeline_configuration_id, document_version,
                 chunking_config, chunk_set_id, embedding_set_id, status, failure_stage,
@@ -70,7 +70,7 @@ impl IndexingRepository for PostgresIndexingRepository {
                 removed = EXCLUDED.removed,
                 auto_advance = EXCLUDED.auto_advance,
                 updated_at = NOW()
-            "#,
+            ",
         )
         .bind(read_model.indexing_id)
         .bind(read_model.document_id)
@@ -96,7 +96,7 @@ impl IndexingRepository for PostgresIndexingRepository {
         document_id: Uuid,
     ) -> Result<Vec<IndexingReadModel>, IndexingRepositoryError> {
         let rows: Vec<IndexingRow> = sqlx::query_as(
-            r#"
+            "
             SELECT
                 indexing_id, document_id, pipeline_configuration_id, document_version,
                 chunking_config, chunk_set_id, embedding_set_id, status, failure_stage,
@@ -104,7 +104,7 @@ impl IndexingRepository for PostgresIndexingRepository {
             FROM indexings
             WHERE document_id = $1
             ORDER BY updated_at DESC
-            "#,
+            ",
         )
         .bind(document_id)
         .fetch_all(&self.pool)
@@ -123,7 +123,7 @@ impl IndexingRepository for PostgresIndexingRepository {
         }
 
         let rows: Vec<IndexingRow> = sqlx::query_as(
-            r#"
+            "
             SELECT
                 indexing_id, document_id, pipeline_configuration_id, document_version,
                 chunking_config, chunk_set_id, embedding_set_id, status, failure_stage,
@@ -131,7 +131,7 @@ impl IndexingRepository for PostgresIndexingRepository {
             FROM indexings
             WHERE document_id = ANY($1)
             ORDER BY updated_at DESC
-            "#,
+            ",
         )
         .bind(document_ids)
         .fetch_all(&self.pool)

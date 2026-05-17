@@ -1,3 +1,4 @@
+use std::slice;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -5,6 +6,9 @@ use uuid::Uuid;
 
 use crate::contracts::EvaluationQuestionDto;
 use crate::core::plain_f32_vec;
+use crate::event_sourcing::aggregate_repository::AggregateRepository;
+use crate::event_sourcing::command_processor::CommandProcessor;
+use crate::event_sourcing::process_manager::{EffectError, EffectExecutor};
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::evaluation::generator::{
     build_paraphrase_prompt, build_question_prompt_for, GenerationPlan, PARAPHRASE_MIN_COSINE,
@@ -28,9 +32,6 @@ use crate::server::domain::evaluation::question::{
     EvaluationQuestion, EvaluationReference, GrammarVariant, QuestionCategory,
 };
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
-use crate::server::event_sourcing::aggregate_repository::AggregateRepository;
-use crate::server::event_sourcing::command_processor::CommandProcessor;
-use crate::server::event_sourcing::process_manager::{EffectError, EffectExecutor};
 
 use crate::server::application::ports::Clock;
 
@@ -82,9 +83,8 @@ impl EvaluationDatasetEffectExecutor {
     }
 
     async fn execute_attempt(&self, effect: &GenerateQuestionEffect) -> Result<(), AppError> {
-        let state = match self.load_active(effect.dataset_id).await? {
-            Some(s) => s,
-            None => return Ok(()),
+        let Some(state) = self.load_active(effect.dataset_id).await? else {
+            return Ok(());
         };
         let job = self.open_job(state.dataset_id).await;
 
@@ -231,9 +231,8 @@ impl EvaluationDatasetEffectExecutor {
     }
 
     async fn execute_paraphrase(&self, effect: &GenerateParaphraseEffect) -> Result<(), AppError> {
-        let state = match self.load_active(effect.dataset_id).await? {
-            Some(s) => s,
-            None => return Ok(()),
+        let Some(state) = self.load_active(effect.dataset_id).await? else {
+            return Ok(());
         };
         let job = self.open_job(state.dataset_id).await;
 
@@ -247,16 +246,13 @@ impl EvaluationDatasetEffectExecutor {
             .await
             .map_err(|e| AppError::Internal(format!("load questions: {e}")))?;
         let clean_display = effect.clean_sequence + 1;
-        let clean = match existing_questions
+        let Some(clean) = existing_questions
             .iter()
             .find(|q| q.sequence == effect.clean_sequence)
-        {
-            Some(q) => q,
-            None => {
-                job.warn(&format!("Paraphrase skipped: Q{clean_display} not found"))
-                    .await;
-                return Ok(());
-            }
+        else {
+            job.warn(&format!("Paraphrase skipped: Q{clean_display} not found"))
+                .await;
+            return Ok(());
         };
 
         let embedding_model = self
@@ -279,7 +275,7 @@ impl EvaluationDatasetEffectExecutor {
 
         let mut embeddings = self
             .embedding_service
-            .embed_with_resolved(&embedding_model, std::slice::from_ref(&paraphrase))
+            .embed_with_resolved(&embedding_model, slice::from_ref(&paraphrase))
             .await?;
         let Some(paraphrase_embedding) = embeddings.pop() else {
             return Ok(());
@@ -378,9 +374,8 @@ impl EvaluationDatasetEffectExecutor {
     }
 
     async fn maybe_terminate(&self, dataset_id: Uuid, job: &Arc<Job>) -> Result<(), AppError> {
-        let loaded = match self.aggregate_repository.load(dataset_id).await? {
-            Some(l) => l,
-            None => return Ok(()),
+        let Some(loaded) = self.aggregate_repository.load(dataset_id).await? else {
+            return Ok(());
         };
         let state = loaded.aggregate;
         if !matches!(state.status, DatasetGenerationStatus::Generating) {

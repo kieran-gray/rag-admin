@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use reqwest::Method;
 
 use crate::server::application::AppError;
@@ -19,7 +19,7 @@ impl OllamaApi {
     fn headers(content_type: &str) -> Result<HeaderMap, AppError> {
         let mut headers = HeaderMap::new();
         headers.insert(
-            reqwest::header::CONTENT_TYPE,
+            CONTENT_TYPE,
             HeaderValue::from_str(content_type)
                 .map_err(|e| AppError::Internal(format!("content-type header: {e}")))?,
         );

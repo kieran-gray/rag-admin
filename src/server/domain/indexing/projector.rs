@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::server::event_sourcing::envelope::EventEnvelope;
-use crate::server::event_sourcing::error::ProjectionError;
-use crate::server::event_sourcing::projector::Projector;
+use crate::event_sourcing::envelope::EventEnvelope;
+use crate::event_sourcing::error::ProjectionError;
+use crate::event_sourcing::projector::Projector;
 
 use super::events::IndexingEvent;
 use super::read_model::IndexingReadModel;

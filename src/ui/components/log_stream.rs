@@ -14,7 +14,7 @@ pub fn LogStream(#[prop(into)] url: Signal<Option<String>>) -> impl IntoView {
             if let Some(url) = url.get() {
                 set_events.set(Vec::new());
                 set_running.set(true);
-                handle.set_value(self::hydrate::open(url, set_events, set_running));
+                handle.set_value(self::hydrate::open(&url, set_events, set_running));
             } else {
                 handle.set_value(None);
                 set_events.set(Vec::new());
@@ -30,7 +30,7 @@ pub fn LogStream(#[prop(into)] url: Signal<Option<String>>) -> impl IntoView {
 
     view! {
         <div class="log-stream">
-            {move || (running.get() && events.with(|e| e.is_empty())).then(|| view! {
+            {move || (running.get() && events.with(Vec::is_empty)).then(|| view! {
                 <div class="faint text-xs italic px-3 py-2">"Streaming…"</div>
             })}
             {move || {
@@ -82,18 +82,18 @@ mod hydrate {
     }
 
     pub fn open(
-        url: String,
+        url: &str,
         set_events: WriteSignal<Vec<LogEvent>>,
         set_running: WriteSignal<bool>,
     ) -> Option<StreamHandle> {
-        let source = match EventSource::new(&url) {
+        let source = match EventSource::new(url) {
             Ok(s) => s,
             Err(err) => {
                 set_events.update(|evs| {
                     evs.push(LogEvent {
                         level: LogLevel::Error,
                         message: format!("failed to open stream: {err:?}"),
-                    })
+                    });
                 });
                 set_running.set(false);
                 return None;
@@ -114,7 +114,7 @@ mod hydrate {
                     evs.push(LogEvent {
                         level: LogLevel::Error,
                         message: format!("malformed log event: {err}"),
-                    })
+                    });
                 }),
             }
         });

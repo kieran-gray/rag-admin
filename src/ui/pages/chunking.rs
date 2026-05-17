@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use leptos::prelude::*;
 use uuid::Uuid;
 
@@ -163,7 +165,7 @@ pub fn ChunkingPage() -> impl IntoView {
                         }
                         None => return ().into_any(),
                     };
-                    let chunking_configs = configurations.get().and_then(|r| r.ok()).unwrap_or_default();
+                    let chunking_configs = configurations.get().and_then(Result::ok).unwrap_or_default();
 
                     view! {
                         <SweepTemplateList
@@ -813,7 +815,7 @@ fn SweepTemplateList(
         .into_any();
     }
 
-    let lookup: std::collections::HashMap<Uuid, String> = chunking_configs
+    let lookup: HashMap<Uuid, String> = chunking_configs
         .into_iter()
         .map(|cc| (cc.chunking_configuration_id, cc.name))
         .collect();
@@ -840,7 +842,7 @@ fn SweepTemplateList(
 #[component]
 fn SweepTemplateCard(
     template: SweepTemplateDto,
-    lookup: StoredValue<std::collections::HashMap<Uuid, String>>,
+    lookup: StoredValue<HashMap<Uuid, String>>,
     on_edit: Callback<SweepTemplateDto>,
     on_delete: Callback<SweepTemplateDto>,
     on_set_default: Callback<SweepTemplateDto>,

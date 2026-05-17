@@ -3,6 +3,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::contracts::EvaluationJobInfo;
+use crate::event_sourcing::CommandProcessor;
 use crate::server::application::configuration::PipelineResolver;
 use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::source_document::SourceDocumentQueryService;
@@ -12,7 +13,6 @@ use crate::server::domain::evaluation::dataset::commands::{
     CancelDatasetGeneration, DeleteDataset, EvaluationDatasetCommand, RenameDataset,
     RequestDatasetGeneration,
 };
-use crate::server::event_sourcing::CommandProcessor;
 
 pub struct StartDatasetGenerationRequest {
     pub document_id: Uuid,

@@ -1,3 +1,6 @@
+use std::error::Error as StdError;
+use std::fmt;
+
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -32,8 +35,7 @@ pub enum ProjectionError {
 impl From<ProjectionError> for EsError {
     fn from(value: ProjectionError) -> Self {
         match value {
-            ProjectionError::Storage(s) => EsError::Storage(s),
-            ProjectionError::InvalidState(s) => EsError::Storage(s),
+            ProjectionError::Storage(s) | ProjectionError::InvalidState(s) => EsError::Storage(s),
         }
     }
 }
@@ -44,8 +46,8 @@ pub enum CommandError<E> {
     EventStore(EsError),
 }
 
-impl<E: std::fmt::Display> std::fmt::Display for CommandError<E> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<E: fmt::Display> fmt::Display for CommandError<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Aggregate(e) => write!(f, "{e}"),
             Self::EventStore(e) => write!(f, "{e}"),
@@ -53,8 +55,8 @@ impl<E: std::fmt::Display> std::fmt::Display for CommandError<E> {
     }
 }
 
-impl<E: std::error::Error + 'static> std::error::Error for CommandError<E> {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl<E: StdError + 'static> StdError for CommandError<E> {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
             Self::Aggregate(e) => Some(e),
             Self::EventStore(e) => Some(e),

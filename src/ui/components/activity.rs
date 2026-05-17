@@ -1,3 +1,6 @@
+use std::cmp::Ordering;
+
+use gloo_timers::future::TimeoutFuture;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use uuid::Uuid;
@@ -53,8 +56,8 @@ impl ActivityState {
                 (ActivityStatus::Running, ActivityStatus::Running) => {
                     a.started_at.cmp(&b.started_at)
                 }
-                (ActivityStatus::Running, _) => std::cmp::Ordering::Less,
-                (_, ActivityStatus::Running) => std::cmp::Ordering::Greater,
+                (ActivityStatus::Running, _) => Ordering::Less,
+                (_, ActivityStatus::Running) => Ordering::Greater,
                 _ => b
                     .finished_at
                     .cmp(&a.finished_at)
@@ -108,7 +111,7 @@ pub fn provide_activity_state() {
                 set_rows.update(|rows| apply_delta(rows, delta));
                 if needs_url_refresh {
                     spawn_local(async move {
-                        gloo_timers::future::TimeoutFuture::new(150).await;
+                        TimeoutFuture::new(150).await;
                         if let Ok(snapshot) = list_active_jobs().await {
                             set_rows.set(snapshot);
                         }

@@ -1,3 +1,6 @@
+use std::error::Error;
+use std::fmt;
+
 #[derive(Debug, Clone)]
 pub enum EvaluationRunError {
     AlreadyExists,
@@ -8,8 +11,8 @@ pub enum EvaluationRunError {
     InvalidCommand(String),
 }
 
-impl std::fmt::Display for EvaluationRunError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for EvaluationRunError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             EvaluationRunError::AlreadyExists => write!(f, "evaluation run already exists"),
             EvaluationRunError::NotFound => write!(f, "evaluation run not found"),
@@ -25,4 +28,4 @@ impl std::fmt::Display for EvaluationRunError {
     }
 }
 
-impl std::error::Error for EvaluationRunError {}
+impl Error for EvaluationRunError {}

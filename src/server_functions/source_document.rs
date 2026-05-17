@@ -15,6 +15,8 @@ use crate::server::domain::source_document::{document_type::DocumentType, source
 #[cfg(feature = "ssr")]
 use crate::server_functions::error::{ctx, map_app_error};
 #[cfg(feature = "ssr")]
+use std::collections::HashMap;
+#[cfg(feature = "ssr")]
 use std::sync::Arc;
 
 #[server(name = GetChunks, prefix = "/api", endpoint = "get_chunks")]
@@ -22,7 +24,7 @@ pub async fn get_chunks(chunk_set_id: uuid::Uuid) -> Result<Vec<ChunkDto>, Serve
     ctx::<Arc<SourceDocumentQueryService>>()?
         .get_chunks(chunk_set_id)
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -45,7 +47,7 @@ pub async fn start_source_document_ingest(
             DocumentType::BlogPost,
         )
         .await
-        .map_err(map_app_error)?;
+        .map_err(|e| map_app_error(&e))?;
 
     ingest
         .request_indexing(
@@ -57,7 +59,7 @@ pub async fn start_source_document_ingest(
             true,
         )
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -80,11 +82,11 @@ pub async fn start_indexing_with_defaults(
     let pipeline = pipeline_query
         .list()
         .await
-        .map_err(map_app_error)?
+        .map_err(|e| map_app_error(&e))?
         .into_iter()
         .find(|p| p.is_default)
         .ok_or_else(|| {
-            map_app_error(AppError::Validation(
+            map_app_error(&AppError::Validation(
                 "no default pipeline configured".into(),
             ))
         })?;
@@ -92,11 +94,11 @@ pub async fn start_indexing_with_defaults(
     let chunking = chunking_query
         .list()
         .await
-        .map_err(map_app_error)?
+        .map_err(|e| map_app_error(&e))?
         .into_iter()
         .find(|c| c.is_default)
         .ok_or_else(|| {
-            map_app_error(AppError::Validation(
+            map_app_error(&AppError::Validation(
                 "no default chunking configuration".into(),
             ))
         })?;
@@ -109,7 +111,7 @@ pub async fn start_indexing_with_defaults(
             true,
         )
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -128,7 +130,7 @@ pub async fn import_source_document(
             DocumentType::BlogPost,
         )
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -142,7 +144,7 @@ pub async fn import_source_document_from_url(
     ctx::<Arc<SourceDocumentIngestService>>()?
         .import_url(url)
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -166,7 +168,7 @@ pub async fn request_indexing(
             auto_advance,
         )
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(name = RequeueChunking, prefix = "/api", endpoint = "requeue_chunking")]
@@ -174,7 +176,7 @@ pub async fn requeue_chunking(indexing_id: uuid::Uuid) -> Result<(), ServerFnErr
     ctx::<Arc<SourceDocumentIngestService>>()?
         .requeue_chunking(indexing_id)
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(name = RequeueEmbedding, prefix = "/api", endpoint = "requeue_embedding")]
@@ -182,7 +184,7 @@ pub async fn requeue_embedding(indexing_id: uuid::Uuid) -> Result<(), ServerFnEr
     ctx::<Arc<SourceDocumentIngestService>>()?
         .requeue_embedding(indexing_id)
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(name = RequeueIndexing, prefix = "/api", endpoint = "requeue_indexing")]
@@ -190,7 +192,7 @@ pub async fn requeue_indexing(indexing_id: uuid::Uuid) -> Result<(), ServerFnErr
     ctx::<Arc<SourceDocumentIngestService>>()?
         .requeue_indexing(indexing_id)
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -202,7 +204,7 @@ pub async fn list_documents() -> Result<Vec<DocumentListItemDto>, ServerFnError>
     ctx::<Arc<SourceDocumentQueryService>>()?
         .list_documents()
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -214,11 +216,11 @@ pub async fn list_adapter_documents() -> Result<Vec<DocumentListItemDto>, Server
     let adapters = ctx::<Arc<SourceAdapterRegistry>>()?;
     let query = ctx::<Arc<SourceDocumentQueryService>>()?;
 
-    let available = adapters.list_all().await.map_err(map_app_error)?;
+    let available = adapters.list_all().await.map_err(|e| map_app_error(&e))?;
 
-    let existing: Vec<SourceDocumentDto> = query.list().await.map_err(map_app_error)?;
+    let existing: Vec<SourceDocumentDto> = query.list().await.map_err(|e| map_app_error(&e))?;
 
-    let existing_map: std::collections::HashMap<String, SourceDocumentDto> = existing
+    let existing_map: HashMap<String, SourceDocumentDto> = existing
         .into_iter()
         .map(|d| (d.source_ref_key.clone(), d))
         .collect();
@@ -236,7 +238,7 @@ pub async fn list_adapter_documents() -> Result<Vec<DocumentListItemDto>, Server
                 latest_version: None,
                 latest_content_hash: None,
                 indexings: vec![],
-            })
+            });
         }
     }
 
@@ -254,7 +256,7 @@ pub async fn get_document_detail_by_source_ref(
     ctx::<Arc<SourceDocumentQueryService>>()?
         .get_detail_by_source_ref(&SourceRef::parse_route_key(&source_ref_slug))
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -268,7 +270,7 @@ pub async fn get_document_detail_by_id(
     ctx::<Arc<SourceDocumentQueryService>>()?
         .get_detail(document_id)
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -282,7 +284,7 @@ pub async fn get_document_source(
     ctx::<Arc<SourceDocumentQueryService>>()?
         .get_source_markdown(&SourceRef::parse_route_key(&source_ref_slug))
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -294,7 +296,7 @@ pub async fn list_source_documents() -> Result<Vec<SourceDocumentDto>, ServerFnE
     ctx::<Arc<SourceDocumentQueryService>>()?
         .list()
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -308,5 +310,5 @@ pub async fn get_source_document_detail(
     ctx::<Arc<SourceDocumentQueryService>>()?
         .get_detail(document_id)
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }

@@ -1,6 +1,7 @@
-use crate::server::event_sourcing::envelope::EventEnvelope;
-use crate::server::event_sourcing::job_queue::{IdempotencyKey, NewJob};
-use crate::server::event_sourcing::policy::PolicyContext;
+use crate::event_sourcing::envelope::EventEnvelope;
+use crate::event_sourcing::job_queue::{IdempotencyKey, NewJob};
+use crate::event_sourcing::policy::PolicyContext;
+use crate::server::domain::evaluation::question::QuestionCategory;
 
 use super::aggregate::{DatasetGenerationStatus, EvaluationDataset};
 use super::effects::{EvaluationDatasetEffect, GenerateParaphraseEffect, GenerateQuestionEffect};
@@ -73,7 +74,7 @@ fn attempt_effect(
 fn paraphrase_effect(
     ctx: &PolicyContext<'_, EvaluationDataset, EvaluationDatasetEvent>,
     clean_sequence: u32,
-    category: crate::server::domain::evaluation::question::QuestionCategory,
+    category: QuestionCategory,
 ) -> NewJob<EvaluationDatasetEffect> {
     let stream_id = ctx.envelope.metadata.stream_id;
     let log_position = ctx.envelope.metadata.log_position;

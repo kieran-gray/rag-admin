@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::error::Error;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;
@@ -6,6 +7,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use tokio::task::JoinHandle;
+use tokio::time::{interval as tokio_interval, MissedTickBehavior};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -19,7 +21,7 @@ use super::policy::PolicyContext;
 pub(crate) const LEASE: Duration = Duration::from_secs(30);
 pub(crate) const HEARTBEAT: Duration = Duration::from_secs(10);
 
-pub type EffectError = Box<dyn std::error::Error + Send + Sync + 'static>;
+pub type EffectError = Box<dyn Error + Send + Sync + 'static>;
 
 #[async_trait]
 pub trait EffectExecutor<R>: Send + Sync
@@ -203,8 +205,8 @@ impl HeartbeatGuard {
         R: Serialize + DeserializeOwned + Send + Sync + 'static,
     {
         let handle = tokio::spawn(async move {
-            let mut ticker = tokio::time::interval(interval);
-            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            let mut ticker = tokio_interval(interval);
+            ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
             ticker.tick().await;
             loop {
                 ticker.tick().await;

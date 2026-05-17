@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use uuid::Uuid;
@@ -13,6 +14,7 @@ use crate::server::application::AppError;
 use crate::server::domain::chunk_set::repository::ChunkSetRepository;
 use crate::server::domain::indexing::read_model::IndexingReadModel;
 use crate::server::domain::indexing::repository::IndexingRepository;
+use crate::server::domain::source_document::read_model::SourceDocumentReadModel;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::server::domain::source_document::source_ref::SourceRef;
 
@@ -43,7 +45,7 @@ impl SourceDocumentQueryService {
 
     pub async fn list(&self) -> Result<Vec<SourceDocumentDto>, AppError> {
         let docs = self.source_document_repository.list().await?;
-        Ok(docs.into_iter().map(map_doc_to_dto).collect())
+        Ok(docs.iter().map(map_doc_to_dto).collect())
     }
 
     pub async fn list_documents(&self) -> Result<Vec<DocumentListItemDto>, AppError> {
@@ -55,9 +57,8 @@ impl SourceDocumentQueryService {
             .list_for_documents(&document_ids)
             .await?;
 
-        let mut indexings_by_doc: std::collections::HashMap<Uuid, Vec<IndexingDto>> =
-            std::collections::HashMap::new();
-        for indexing in indexings {
+        let mut indexings_by_doc: HashMap<Uuid, Vec<IndexingDto>> = HashMap::new();
+        for indexing in &indexings {
             indexings_by_doc
                 .entry(indexing.document_id)
                 .or_default()
@@ -65,7 +66,7 @@ impl SourceDocumentQueryService {
         }
 
         Ok(docs
-            .into_iter()
+            .iter()
             .map(|doc| {
                 let indexings = indexings_by_doc
                     .remove(&doc.document_id)
@@ -86,7 +87,7 @@ impl SourceDocumentQueryService {
 
     pub async fn get_detail_by_source_ref(
         &self,
-        source_ref: &crate::server::domain::source_document::source_ref::SourceRef,
+        source_ref: &SourceRef,
     ) -> Result<Option<SourceDocumentDetailDto>, AppError> {
         let doc = self
             .source_document_repository
@@ -113,8 +114,8 @@ impl SourceDocumentQueryService {
                     .await?;
 
                 Ok(Some(SourceDocumentDetailDto {
-                    document: map_doc_to_dto(doc),
-                    indexings: indexings.into_iter().map(map_indexing_to_dto).collect(),
+                    document: map_doc_to_dto(&doc),
+                    indexings: indexings.iter().map(map_indexing_to_dto).collect(),
                 }))
             }
         }
@@ -124,13 +125,12 @@ impl SourceDocumentQueryService {
         &self,
         source_ref: &SourceRef,
     ) -> Result<Option<SourceDocumentMarkdownDto>, AppError> {
-        let doc = match self
+        let Some(doc) = self
             .source_document_repository
             .find_by_source_ref(source_ref)
             .await?
-        {
-            Some(d) => d,
-            None => return Ok(None),
+        else {
+            return Ok(None);
         };
 
         let bytes = self.blob_store.get(&doc.latest_content_hash).await?;
@@ -190,7 +190,7 @@ fn block_to_dto(block: &Block) -> MarkdownBlockDto {
     }
 }
 
-fn map_indexing_to_dto(i: IndexingReadModel) -> IndexingDto {
+fn map_indexing_to_dto(i: &IndexingReadModel) -> IndexingDto {
     IndexingDto {
         indexing_id: i.indexing_id,
         pipeline_configuration_id: i.pipeline_configuration_id,
@@ -203,9 +203,7 @@ fn map_indexing_to_dto(i: IndexingReadModel) -> IndexingDto {
     }
 }
 
-fn map_doc_to_dto(
-    doc: crate::server::domain::source_document::read_model::SourceDocumentReadModel,
-) -> SourceDocumentDto {
+fn map_doc_to_dto(doc: &SourceDocumentReadModel) -> SourceDocumentDto {
     let title = doc.latest_metadata.title().to_string();
     SourceDocumentDto {
         document_id: doc.document_id,

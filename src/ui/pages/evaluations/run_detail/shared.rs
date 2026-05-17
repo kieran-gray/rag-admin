@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use leptos::prelude::*;
 
 use crate::core::{evaluation_score, EvaluationResultSplit, EvaluationVariantResult};
@@ -97,7 +99,7 @@ pub(super) fn primary_leader(
         .max_by(|a, b| {
             evaluation_score(&a.metrics)
                 .partial_cmp(&evaluation_score(&b.metrics))
-                .unwrap_or(std::cmp::Ordering::Equal)
+                .unwrap_or(Ordering::Equal)
         })
 }
 

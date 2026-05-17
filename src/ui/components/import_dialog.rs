@@ -332,10 +332,9 @@ fn AdapterRow(doc: DocumentListItemDto) -> impl IntoView {
 async fn upload_file(file: web_sys::File) -> Result<SourceDocumentDto, String> {
     use gloo_net::http::Request;
 
-    let form =
-        web_sys::FormData::new().map_err(|e| format!("could not build FormData: {:#?}", e))?;
+    let form = web_sys::FormData::new().map_err(|e| format!("could not build FormData: {e:#?}"))?;
     form.append_with_blob_and_filename("file", &file, &file.name())
-        .map_err(|e| format!("could not append file to FormData: {:#?}", e))?;
+        .map_err(|e| format!("could not append file to FormData: {e:#?}"))?;
 
     let response = Request::post("/api/source_documents/upload")
         .body(form)

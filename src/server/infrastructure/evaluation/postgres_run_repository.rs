@@ -8,6 +8,7 @@ use crate::core::{
     OptimizationConfig,
 };
 use crate::server::domain::evaluation::run::aggregate::EvaluationRunStatus;
+use crate::server::domain::evaluation::run::events::RetrievalTraceEntry;
 use crate::server::domain::evaluation::run::read_model::{
     EvaluationRunReadModel, EvaluationVariantResultDto, NewRunSummary,
 };
@@ -35,7 +36,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         run_id: Uuid,
     ) -> Result<Option<EvaluationRunReadModel>, EvaluationRunRepositoryError> {
         let row: Option<RunRow> = sqlx::query_as(
-            r#"
+            "
             SELECT
                 run_id, dataset_id, pipeline_configuration_id, document_id, document_version,
                 variants, options, autotune_request, optimization,
@@ -44,7 +45,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
                 scoring_precision_omega_weight, created_at
             FROM evaluation_runs
             WHERE run_id = $1
-            "#,
+            ",
         )
         .bind(run_id)
         .fetch_optional(&self.pool)
@@ -66,7 +67,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         document_id: Uuid,
     ) -> Result<Vec<EvaluationRunReadModel>, EvaluationRunRepositoryError> {
         let rows: Vec<RunRow> = sqlx::query_as(
-            r#"
+            "
             SELECT
                 run_id, dataset_id, pipeline_configuration_id, document_id, document_version,
                 variants, options, autotune_request, optimization,
@@ -76,7 +77,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             FROM evaluation_runs
             WHERE document_id = $1
             ORDER BY created_at DESC
-            "#,
+            ",
         )
         .bind(document_id)
         .fetch_all(&self.pool)
@@ -93,7 +94,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         dataset_id: Uuid,
     ) -> Result<Vec<EvaluationRunReadModel>, EvaluationRunRepositoryError> {
         let rows: Vec<RunRow> = sqlx::query_as(
-            r#"
+            "
             SELECT
                 run_id, dataset_id, pipeline_configuration_id, document_id, document_version,
                 variants, options, autotune_request, optimization,
@@ -103,7 +104,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             FROM evaluation_runs
             WHERE dataset_id = $1
             ORDER BY created_at DESC
-            "#,
+            ",
         )
         .bind(dataset_id)
         .fetch_all(&self.pool)
@@ -120,7 +121,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         limit: u32,
     ) -> Result<Vec<EvaluationRunReadModel>, EvaluationRunRepositoryError> {
         let rows: Vec<RunRow> = sqlx::query_as(
-            r#"
+            "
             SELECT
                 run_id, dataset_id, pipeline_configuration_id, document_id, document_version,
                 variants, options, autotune_request, optimization,
@@ -130,7 +131,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             FROM evaluation_runs
             ORDER BY created_at DESC
             LIMIT $1
-            "#,
+            ",
         )
         .bind(limit as i64)
         .fetch_all(&self.pool)
@@ -147,7 +148,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         run_id: Uuid,
     ) -> Result<Vec<EvaluationVariantResultDto>, EvaluationRunRepositoryError> {
         let rows: Vec<VariantResultRow> = sqlx::query_as(
-            r#"
+            "
             SELECT
                 run_id, variant_label, split, variant_config, options,
                 top_k, min_score_milli,
@@ -166,7 +167,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             FROM evaluation_variant_results
             WHERE run_id = $1
             ORDER BY variant_label, top_k, min_score_milli
-            "#,
+            ",
         )
         .bind(run_id)
         .fetch_all(&self.pool)
@@ -178,14 +179,14 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         let mut results = Vec::new();
         for row in rows {
             let trace_rows: Vec<RetrievalTraceRow> = sqlx::query_as(
-                r#"
+                "
                 SELECT
                     question_sequence, retrieved_chunk_ids, scores, recall, precision, iou, category
                 FROM retrieval_traces
                 WHERE run_id = $1 AND variant_label = $2 AND split = $3
                   AND top_k = $4 AND min_score_milli = $5
                 ORDER BY question_sequence ASC
-                "#,
+                ",
             )
             .bind(run_id)
             .bind(&row.variant_label)
@@ -271,7 +272,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         })?;
 
         sqlx::query(
-            r#"
+            "
             INSERT INTO evaluation_runs (
                 run_id, dataset_id, pipeline_configuration_id, document_id, document_version,
                 variants, options, autotune_request, optimization,
@@ -281,7 +282,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, 0, 0, NULL, $11, $12, $13, $14, $15, NOW())
             ON CONFLICT (run_id) DO NOTHING
-            "#,
+            ",
         )
         .bind(summary.run_id)
         .bind(summary.dataset_id)
@@ -335,7 +336,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         })?;
 
         let inserted: (bool,) = sqlx::query_as(
-            r#"
+            "
             INSERT INTO evaluation_variant_results (
                 run_id, variant_label, split, variant_config, options,
                 top_k, min_score_milli,
@@ -381,7 +382,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
                 composite_ci_high = EXCLUDED.composite_ci_high,
                 judge_score = EXCLUDED.judge_score
             RETURNING (xmax = 0) AS is_new
-            "#,
+            ",
         )
         .bind(result.run_id)
         .bind(&result.variant_label)
@@ -431,7 +432,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             })?;
 
             sqlx::query(
-                r#"
+                "
                 INSERT INTO retrieval_traces (
                     run_id, variant_label, split, top_k, min_score_milli, question_sequence,
                     retrieved_chunk_ids, scores, recall, precision, iou, category
@@ -444,7 +445,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
                     precision = EXCLUDED.precision,
                     iou = EXCLUDED.iou,
                     category = EXCLUDED.category
-                "#,
+                ",
             )
             .bind(result.run_id)
             .bind(&result.variant_label)
@@ -632,9 +633,7 @@ struct RetrievalTraceRow {
     category: String,
 }
 
-impl TryFrom<RetrievalTraceRow>
-    for crate::server::domain::evaluation::run::events::RetrievalTraceEntry
-{
+impl TryFrom<RetrievalTraceRow> for RetrievalTraceEntry {
     type Error = EvaluationRunRepositoryError;
 
     fn try_from(row: RetrievalTraceRow) -> Result<Self, Self::Error> {

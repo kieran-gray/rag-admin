@@ -455,10 +455,10 @@ fn RegistryFormDialog(
         };
         let command = match build_command(
             active,
-            name.get_untracked(),
+            &name.get_untracked(),
             ai_kind.get_untracked(),
             vector_kind.get_untracked(),
-            model_id.get_untracked(),
+            &model_id.get_untracked(),
             dims.get_untracked(),
         ) {
             Ok(c) => c,
@@ -481,8 +481,8 @@ fn RegistryFormDialog(
     view! {
         <Dialog
             open=Signal::derive(move || form.get().is_some())
-            title=Signal::derive(move || form_title(form.get())).get()
-            subtitle=Signal::derive(move || form_subtitle(form.get())).get()
+            title=Signal::derive(move || form_title(form.get().as_ref())).get()
+            subtitle=Signal::derive(move || form_subtitle(form.get().as_ref())).get()
             on_close=close
         >
             <form on:submit=submit class="space-y-4">
@@ -492,7 +492,7 @@ fn RegistryFormDialog(
 
                 {move || match form.get() {
                     None => ().into_any(),
-                    Some(RegistryForm::AddEmbeddingModel) | Some(RegistryForm::EditEmbeddingModel(_)) => view! {
+                    Some(RegistryForm::AddEmbeddingModel | RegistryForm::EditEmbeddingModel(_)) => view! {
                         <AiKindSelect value=ai_kind set_value=set_ai_kind />
                         <LabelledInput
                             label="Model ID".to_string()
@@ -508,7 +508,7 @@ fn RegistryFormDialog(
                             min=1
                         />
                     }.into_any(),
-                    Some(RegistryForm::AddGenerationModel) | Some(RegistryForm::EditGenerationModel(_)) => view! {
+                    Some(RegistryForm::AddGenerationModel | RegistryForm::EditGenerationModel(_)) => view! {
                         <AiKindSelect value=ai_kind set_value=set_ai_kind />
                         <LabelledInput
                             label="Model ID".to_string()
@@ -517,7 +517,7 @@ fn RegistryFormDialog(
                             set_value=set_model_id
                         />
                     }.into_any(),
-                    Some(RegistryForm::AddVectorIndex) | Some(RegistryForm::EditVectorIndex(_)) => view! {
+                    Some(RegistryForm::AddVectorIndex | RegistryForm::EditVectorIndex(_)) => view! {
                         <VectorKindSelect value=vector_kind set_value=set_vector_kind />
                         <LabelledInput
                             label="Index name".to_string()
@@ -727,10 +727,10 @@ fn LabelledNum(
 
 fn build_command(
     form: RegistryForm,
-    name: String,
+    name: &str,
     ai_kind: AiProviderKind,
     vector_kind: VectorStoreKind,
-    model_id: String,
+    model_id: &str,
     dims: u32,
 ) -> Result<CatalogCommand, String> {
     let name = name.trim().to_string();
@@ -812,7 +812,7 @@ fn build_command(
     }
 }
 
-fn form_title(form: Option<RegistryForm>) -> String {
+fn form_title(form: Option<&RegistryForm>) -> String {
     match form {
         None => String::new(),
         Some(RegistryForm::AddEmbeddingModel) => "Add embedding model".into(),
@@ -824,16 +824,16 @@ fn form_title(form: Option<RegistryForm>) -> String {
     }
 }
 
-fn form_subtitle(form: Option<RegistryForm>) -> String {
+fn form_subtitle(form: Option<&RegistryForm>) -> String {
     match form {
         None => String::new(),
-        Some(RegistryForm::AddEmbeddingModel) | Some(RegistryForm::EditEmbeddingModel(_)) => {
+        Some(RegistryForm::AddEmbeddingModel | RegistryForm::EditEmbeddingModel(_)) => {
             "Dimensions must match the target vector index.".into()
         }
-        Some(RegistryForm::AddGenerationModel) | Some(RegistryForm::EditGenerationModel(_)) => {
+        Some(RegistryForm::AddGenerationModel | RegistryForm::EditGenerationModel(_)) => {
             "Used by LLM-driven chunking and synthetic dataset generation.".into()
         }
-        Some(RegistryForm::AddVectorIndex) | Some(RegistryForm::EditVectorIndex(_)) => {
+        Some(RegistryForm::AddVectorIndex | RegistryForm::EditVectorIndex(_)) => {
             "Dimensions must match the embedding model that writes into it.".into()
         }
     }

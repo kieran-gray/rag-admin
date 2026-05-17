@@ -1,3 +1,6 @@
+use std::cmp::Ordering;
+use std::collections::HashSet;
+
 use leptos::prelude::*;
 
 use crate::core::{
@@ -10,25 +13,22 @@ pub(super) fn ParetoPanel(
     variants: Vec<EvaluationVariantResult>,
     bucket: Option<EvaluationResultSplit>,
 ) -> impl IntoView {
-    let bucket_label = bucket.map(|b| b.as_str()).unwrap_or("analysis");
+    let bucket_label = bucket
+        .map(EvaluationResultSplit::as_str)
+        .unwrap_or("analysis");
 
     let points: Vec<ParetoPoint> = variants
-        .iter()
+        .into_iter()
         .map(|v| ParetoPoint {
             quality: evaluation_score(&v.metrics),
             cost: v.metrics.average_retrieved_tokens as f32,
         })
         .collect();
-    let frontier_idx: std::collections::HashSet<usize> =
-        pareto_frontier(&points).into_iter().collect();
-    let champion_idx = variants
+    let frontier_idx: HashSet<usize> = pareto_frontier(&points).into_iter().collect();
+    let champion_idx = points
         .iter()
         .enumerate()
-        .max_by(|(_, a), (_, b)| {
-            evaluation_score(&a.metrics)
-                .partial_cmp(&evaluation_score(&b.metrics))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
+        .max_by(|(_, a), (_, b)| a.quality.partial_cmp(&b.quality).unwrap_or(Ordering::Equal))
         .map(|(i, _)| i);
 
     const W: f32 = 480.0;
@@ -144,7 +144,7 @@ pub(super) fn ParetoPanel(
                     fill="var(--color-text-muted)"
                     text-anchor="middle"
                 >
-                    {format!("cost → (max ≈ {:.0})", max_cost)}
+                    {format!("cost → (max ≈ {max_cost:.0})")}
                 </text>
             </svg>
         </Surface>

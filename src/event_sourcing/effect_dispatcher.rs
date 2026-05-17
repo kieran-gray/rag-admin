@@ -37,7 +37,7 @@ where
         loop {
             loop {
                 match self.process_manager.claim_and_dispatch_one().await {
-                    Ok(true) => continue,
+                    Ok(true) => {}
                     Ok(false) => break,
                     Err(e) => {
                         error!(
@@ -49,15 +49,19 @@ where
                     }
                 }
             }
-            match timeout(POLL_HEARTBEAT, self.wakeup.notified()).await {
-                Ok(()) => debug!(
+            if timeout(POLL_HEARTBEAT, self.wakeup.notified())
+                .await
+                .is_ok()
+            {
+                debug!(
                     aggregate = A::aggregate_type(),
                     "effect dispatcher woken by notify"
-                ),
-                Err(_) => debug!(
+                );
+            } else {
+                debug!(
                     aggregate = A::aggregate_type(),
                     "effect dispatcher heartbeat tick"
-                ),
+                );
             }
         }
     }

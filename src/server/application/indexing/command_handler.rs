@@ -2,12 +2,12 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
+use crate::event_sourcing::CommandProcessor;
 use crate::server::application::AppError;
 use crate::server::domain::indexing::{
     aggregate::Indexing,
     commands::{IndexingCommand, RequestIngest},
 };
-use crate::server::event_sourcing::CommandProcessor;
 
 pub struct IndexingCommandHandler {
     processor: Arc<CommandProcessor<Indexing>>,

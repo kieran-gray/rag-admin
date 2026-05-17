@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Write as _;
 
 use crate::server::application::evaluation::ports::EvaluationPrompt;
 use crate::server::domain::evaluation::question::QuestionCategory;
@@ -49,16 +50,18 @@ pub fn build_question_prompt_for(
 
     if !previous_coverage.is_empty() {
         let previous = previous_coverage.join("\n");
-        user_prompt.push_str(&format!(
+        _ = write!(
+            user_prompt,
             "Previously accepted question coverage to avoid repeating:\n{previous}\n\n"
-        ));
+        );
     };
 
-    user_prompt.push_str(&format!(
+    _ = writeln!(
+        user_prompt,
         "Category for this question: {}.\n\
-         Return only JSON.\n",
+         Return only JSON.",
         category.label(),
-    ));
+    );
 
     EvaluationPrompt {
         system: system_prompt(category).to_string(),

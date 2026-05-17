@@ -88,7 +88,7 @@ impl MdParser {
         let mut start = 0;
 
         while start < bytes.len() {
-            while bytes.get(start).is_some_and(|b| b.is_ascii_whitespace()) {
+            while bytes.get(start).is_some_and(u8::is_ascii_whitespace) {
                 start += 1;
             }
             if start >= bytes.len() {

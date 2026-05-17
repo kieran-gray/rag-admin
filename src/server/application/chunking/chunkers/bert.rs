@@ -60,12 +60,9 @@ fn pack_segments(
     let mut current: Option<SegmentBlock> = None;
 
     for seg in segments {
-        let cur = match current.take() {
-            None => {
-                current = Some(seg);
-                continue;
-            }
-            Some(c) => c,
+        let Some(cur) = current.take() else {
+            current = Some(seg);
+            continue;
         };
 
         if cur.atomic || seg.atomic || cur.heading != seg.heading {

@@ -4,6 +4,9 @@ use std::sync::Arc;
 use sqlx::PgPool;
 use tokio::sync::Notify;
 
+use crate::event_sourcing::event_bus::EventBus;
+use crate::event_sourcing::job_queue::JobQueue;
+use crate::event_sourcing::process_manager::ProcessManager;
 use crate::server::application::evaluation::effects::{
     EvaluationDatasetEffectExecutor, EvaluationRunEffectDispatcher, EvaluationRunEffectExecutor,
     OptimizeRunEffectExecutor,
@@ -44,9 +47,6 @@ use crate::server::domain::indexing::policies::derive_indexing_effects;
 use crate::server::domain::indexing::projector::IndexingProjector;
 use crate::server::domain::source_document::aggregate::SourceDocument;
 use crate::server::domain::source_document::projector::SourceDocumentProjector;
-use crate::server::event_sourcing::event_bus::EventBus;
-use crate::server::event_sourcing::job_queue::JobQueue;
-use crate::server::event_sourcing::process_manager::ProcessManager;
 use crate::server::infrastructure::evaluation::LlmJudgeAdapter;
 use crate::server::infrastructure::event_sourcing::{
     spawn_postgres_event_listener, PostgresJobQueue,

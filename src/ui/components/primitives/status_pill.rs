@@ -19,8 +19,7 @@ impl Status {
             Self::Fail => "pill pill-fail",
             Self::Stale => "pill pill-stale",
             Self::Info => "pill pill-info",
-            Self::Neutral => "pill pill-neutral",
-            Self::Cancel => "pill pill-neutral",
+            Self::Neutral | Self::Cancel => "pill pill-neutral",
         }
     }
 }

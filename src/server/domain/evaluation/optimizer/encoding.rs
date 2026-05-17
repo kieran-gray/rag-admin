@@ -60,7 +60,7 @@ pub fn params_to_run_config(
         "bert" => {
             let target_tokens = params
                 .get("bert_target_tokens")
-                .and_then(|v| v.as_int())
+                .and_then(super::search_space::Value::as_int)
                 .map(|n| n.clamp(1, 8192) as u32)
                 .unwrap_or_else(|| BertChunkingConfig::default().target_tokens);
             let defaults = BertChunkingConfig::default();
@@ -74,7 +74,7 @@ pub fn params_to_run_config(
             let defaults = LlmChunkingConfig::default();
             let micro_chunk_tokens = params
                 .get("micro_chunk_tokens")
-                .and_then(|v| v.as_int())
+                .and_then(super::search_space::Value::as_int)
                 .map(|n| n.clamp(1, 8192) as u32)
                 .unwrap_or(defaults.micro_chunk_tokens);
             ChunkingConfig::Llm(LlmChunkingConfig {
@@ -87,12 +87,12 @@ pub fn params_to_run_config(
             let defaults = DarnChunkingConfig::default();
             let max_chunk_size = params
                 .get("darn_max_chunk_size")
-                .and_then(|v| v.as_int())
+                .and_then(super::search_space::Value::as_int)
                 .map(|n| n.clamp(1, 8192) as u32)
                 .unwrap_or(defaults.max_chunk_size);
             let overlap = params
                 .get("darn_overlap")
-                .and_then(|v| v.as_int())
+                .and_then(super::search_space::Value::as_int)
                 .map(|n| n.clamp(0, 8192) as u32)
                 .unwrap_or(defaults.overlap);
             ChunkingConfig::Darn(DarnChunkingConfig {
@@ -104,7 +104,7 @@ pub fn params_to_run_config(
         _ => {
             let max_section_tokens = params
                 .get("max_section_tokens")
-                .and_then(|v| v.as_int())
+                .and_then(super::search_space::Value::as_int)
                 .map(|n| n.clamp(1, 8192) as u32)
                 .unwrap_or_else(|| SectionChunkingConfig::default().max_section_tokens);
             ChunkingConfig::Section(SectionChunkingConfig { max_section_tokens })
@@ -113,12 +113,12 @@ pub fn params_to_run_config(
 
     let top_k = params
         .get("top_k")
-        .and_then(|v| v.as_int())
+        .and_then(super::search_space::Value::as_int)
         .map(|n| n.clamp(1, 1_000) as u32)
         .unwrap_or_else(|| EvaluationRunOptions::default().top_k);
     let min_score_milli = params
         .get("min_score")
-        .and_then(|v| v.as_float())
+        .and_then(super::search_space::Value::as_float)
         .map(|f| (f.clamp(0.0, 1.0) * 1000.0).round() as u32)
         .unwrap_or(0);
     let options = EvaluationRunOptions {
@@ -130,19 +130,19 @@ pub fn params_to_run_config(
 }
 
 pub fn trial_label(trial_id: u32) -> String {
-    format!("trial-{:04}", trial_id)
+    format!("trial-{trial_id:04}")
 }
 
 pub fn trial_rung_label(trial_id: u32, rung: u32) -> String {
-    format!("trial-{:04}-r{}", trial_id, rung)
+    format!("trial-{trial_id:04}-r{rung}")
 }
 
 pub fn trial_validation_label(trial_id: u32) -> String {
-    format!("trial-{:04}-validation", trial_id)
+    format!("trial-{trial_id:04}-validation")
 }
 
 pub fn trial_holdout_label(trial_id: u32) -> String {
-    format!("trial-{:04}-holdout", trial_id)
+    format!("trial-{trial_id:04}-holdout")
 }
 
 pub fn parse_trial_rung_label(label: &str) -> Option<(u32, u32)> {

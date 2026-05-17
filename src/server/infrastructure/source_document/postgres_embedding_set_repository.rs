@@ -38,14 +38,14 @@ impl EmbeddingSetRepository for PostgresEmbeddingSetRepository {
         })?;
 
         sqlx::query(
-            r#"
+            "
             INSERT INTO embedding_sets (
                 embedding_set_id, chunk_set_id, embedding_model_id,
                 embedding_model_snapshot, dimensions, created_at
             )
             VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (chunk_set_id, embedding_model_id) DO NOTHING
-            "#,
+            ",
         )
         .bind(embedding_set.embedding_set_id)
         .bind(embedding_set.chunk_set_id)
@@ -61,11 +61,11 @@ impl EmbeddingSetRepository for PostgresEmbeddingSetRepository {
             let vec_literal = format_vector_literal(&embedding.vector);
 
             sqlx::query(
-                r#"
+                "
                 INSERT INTO chunk_embeddings (chunk_id, embedding_set_id, vec)
                 VALUES ($1, $2, $3::vector)
                 ON CONFLICT (chunk_id, embedding_set_id) DO NOTHING
-                "#,
+                ",
             )
             .bind(embedding.chunk_id)
             .bind(embedding.embedding_set_id)
@@ -89,9 +89,9 @@ impl EmbeddingSetRepository for PostgresEmbeddingSetRepository {
         embedding_set_id: Uuid,
     ) -> Result<Option<EmbeddingSet>, EmbeddingSetRepositoryError> {
         let row: Option<EmbeddingSetRow> = sqlx::query_as(
-            r#"SELECT embedding_set_id, chunk_set_id, embedding_model_id,
+            "SELECT embedding_set_id, chunk_set_id, embedding_model_id,
                       embedding_model_snapshot, dimensions, created_at
-               FROM embedding_sets WHERE embedding_set_id = $1"#,
+               FROM embedding_sets WHERE embedding_set_id = $1",
         )
         .bind(embedding_set_id)
         .fetch_optional(&self.pool)
@@ -107,10 +107,10 @@ impl EmbeddingSetRepository for PostgresEmbeddingSetRepository {
         embedding_model_id: Uuid,
     ) -> Result<Option<EmbeddingSet>, EmbeddingSetRepositoryError> {
         let row: Option<EmbeddingSetRow> = sqlx::query_as(
-            r#"SELECT embedding_set_id, chunk_set_id, embedding_model_id,
+            "SELECT embedding_set_id, chunk_set_id, embedding_model_id,
                       embedding_model_snapshot, dimensions, created_at
                FROM embedding_sets
-               WHERE chunk_set_id = $1 AND embedding_model_id = $2"#,
+               WHERE chunk_set_id = $1 AND embedding_model_id = $2",
         )
         .bind(chunk_set_id)
         .bind(embedding_model_id)

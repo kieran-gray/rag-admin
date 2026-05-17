@@ -16,10 +16,10 @@ pub fn SearchSection(
     pipelines: Vec<PipelineConfigurationDto>,
 ) -> impl IntoView {
     let pipelines_stored = StoredValue::new(pipelines);
-    let indexings_stored = StoredValue::new(indexings.clone());
     let any_indexed = indexings
         .iter()
         .any(|ix| ix.status.contains("Indexed") && !ix.removed);
+    let indexings_stored = StoredValue::new(indexings);
 
     view! {
         <section class="space-y-4">

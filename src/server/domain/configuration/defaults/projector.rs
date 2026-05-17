@@ -2,6 +2,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
+use crate::event_sourcing::envelope::EventEnvelope;
+use crate::event_sourcing::error::ProjectionError;
+use crate::event_sourcing::projector::Projector;
 use crate::server::domain::configuration::chunking_configuration::{
     ChunkingConfigurationRepository, ChunkingConfigurationRepositoryError,
 };
@@ -11,9 +14,6 @@ use crate::server::domain::configuration::pipeline_configuration::{
 use crate::server::domain::configuration::sweep_template::{
     SweepTemplateRepository, SweepTemplateRepositoryError,
 };
-use crate::server::event_sourcing::envelope::EventEnvelope;
-use crate::server::event_sourcing::error::ProjectionError;
-use crate::server::event_sourcing::projector::Projector;
 
 use super::events::ConfigurationDefaultsEvent;
 
@@ -51,19 +51,19 @@ impl Projector<ConfigurationDefaultsEvent> for ConfigurationDefaultsProjector {
                     self.chunking
                         .set_default(e.chunking_configuration_id)
                         .await
-                        .map_err(map_chunking_err)?;
+                        .map_err(|err| map_chunking_err(&err))?;
                 }
                 ConfigurationDefaultsEvent::DefaultPipelineConfigurationSet(e) => {
                     self.pipeline
                         .set_default(e.pipeline_configuration_id)
                         .await
-                        .map_err(map_pipeline_err)?;
+                        .map_err(|err| map_pipeline_err(&err))?;
                 }
                 ConfigurationDefaultsEvent::DefaultSweepTemplateSet(e) => {
                     self.sweep_template
                         .set_default(e.sweep_template_id)
                         .await
-                        .map_err(map_sweep_err)?;
+                        .map_err(|err| map_sweep_err(&err))?;
                 }
             }
         }
@@ -71,7 +71,7 @@ impl Projector<ConfigurationDefaultsEvent> for ConfigurationDefaultsProjector {
     }
 }
 
-fn map_chunking_err(err: ChunkingConfigurationRepositoryError) -> ProjectionError {
+fn map_chunking_err(err: &ChunkingConfigurationRepositoryError) -> ProjectionError {
     use ChunkingConfigurationRepositoryError::*;
     match err {
         NotFound(id) => ProjectionError::InvalidState(format!(
@@ -83,7 +83,7 @@ fn map_chunking_err(err: ChunkingConfigurationRepositoryError) -> ProjectionErro
     }
 }
 
-fn map_pipeline_err(err: PipelineConfigurationRepositoryError) -> ProjectionError {
+fn map_pipeline_err(err: &PipelineConfigurationRepositoryError) -> ProjectionError {
     use PipelineConfigurationRepositoryError::*;
     match err {
         NotFound(id) => ProjectionError::InvalidState(format!(
@@ -95,6 +95,6 @@ fn map_pipeline_err(err: PipelineConfigurationRepositoryError) -> ProjectionErro
     }
 }
 
-fn map_sweep_err(err: SweepTemplateRepositoryError) -> ProjectionError {
+fn map_sweep_err(err: &SweepTemplateRepositoryError) -> ProjectionError {
     ProjectionError::Storage(err.to_string())
 }

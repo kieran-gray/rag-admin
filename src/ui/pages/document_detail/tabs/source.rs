@@ -7,7 +7,7 @@ use crate::ui::components::primitives::{EmptyState, Surface};
 
 #[component]
 pub fn SourceTab(source_ref: String) -> impl IntoView {
-    let source_ref_stored = StoredValue::new(source_ref.clone());
+    let source_ref_stored = StoredValue::new(source_ref);
     let body = Resource::new(
         move || source_ref_stored.get_value(),
         move |slug| async move { get_document_source(slug).await.map_err(|e| e.to_string()) },
@@ -119,7 +119,7 @@ fn RenderedMarkdown(
         let range = ref_range.get();
         let mut anchor_assigned = false;
         blocks
-            .with_value(|bs| bs.clone())
+            .with_value(Clone::clone)
             .into_iter()
             .map(|block| {
                 let highlighted =
@@ -172,7 +172,9 @@ fn kind_class(kind: MarkdownBlockKindDto) -> &'static str {
 fn request_scroll_to_highlight() {
     use wasm_bindgen::JsCast;
     leptos::task::spawn_local(async move {
-        gloo_timers::future::TimeoutFuture::new(50).await;
+        use gloo_timers::future::TimeoutFuture;
+
+        TimeoutFuture::new(50).await;
         if let Some(window) = web_sys::window() {
             if let Some(document) = window.document() {
                 if let Some(el) = document.get_element_by_id("ref-anchor") {

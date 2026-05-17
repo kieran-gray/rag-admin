@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::event_sourcing::Aggregate;
 use crate::server::domain::configuration::catalog::{CatalogEntry, CatalogError, CatalogState};
-use crate::server::event_sourcing::Aggregate;
 
 use super::commands::EmbeddingModelCatalogCommand;
 use super::entity::EmbeddingModel;
@@ -75,16 +75,15 @@ impl Aggregate for EmbeddingModelCatalog {
         command: Self::Command,
     ) -> Result<Vec<Self::Event>, Self::Error> {
         let mut bootstrap = Vec::new();
-        let owned_state = match state {
-            Some(s) => s.clone(),
-            None => {
-                bootstrap.push(Self::Event::EmbeddingModelCatalogCreated(
-                    EmbeddingModelCatalogCreated {
-                        catalog_id: Self::singleton_id(),
-                    },
-                ));
-                Self::empty(Self::singleton_id())
-            }
+        let owned_state = if let Some(s) = state {
+            s.clone()
+        } else {
+            bootstrap.push(Self::Event::EmbeddingModelCatalogCreated(
+                EmbeddingModelCatalogCreated {
+                    catalog_id: Self::singleton_id(),
+                },
+            ));
+            Self::empty(Self::singleton_id())
         };
 
         let mut events = match command {
@@ -143,8 +142,7 @@ impl Aggregate for EmbeddingModelCatalog {
                 (None, Self::Event::EmbeddingModelCatalogCreated(e)) => {
                     state = Some(Self::empty(e.catalog_id));
                 }
-                (Some(_), Self::Event::EmbeddingModelCatalogCreated(_)) => return None,
-                (None, _) => return None,
+                (Some(_), Self::Event::EmbeddingModelCatalogCreated(_)) | (None, _) => return None,
                 (Some(s), event) => s.apply(event),
             }
         }

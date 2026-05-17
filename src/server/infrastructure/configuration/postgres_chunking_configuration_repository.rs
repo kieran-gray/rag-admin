@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use sqlx::postgres::PgRow;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -75,10 +76,10 @@ impl ChunkingConfigurationRepository for PostgresChunkingConfigurationRepository
         let config_json = serialize_config(&row.config)?;
         let generation_model_id = generation_model_id(&row.config);
         sqlx::query(
-            r#"
+            "
             INSERT INTO chunking_configurations (id, name, generation_model_id, config)
             VALUES ($1, $2, $3, $4)
-            "#,
+            ",
         )
         .bind(row.id)
         .bind(&row.name)
@@ -87,7 +88,7 @@ impl ChunkingConfigurationRepository for PostgresChunkingConfigurationRepository
         .execute(&self.pool)
         .await
         .map(|_| ())
-        .map_err(map_db_error)
+        .map_err(|e| map_db_error(&e))
     }
 
     async fn update(
@@ -97,14 +98,14 @@ impl ChunkingConfigurationRepository for PostgresChunkingConfigurationRepository
         let config_json = serialize_config(&row.config)?;
         let generation_model_id = generation_model_id(&row.config);
         let affected = sqlx::query(
-            r#"
+            "
             UPDATE chunking_configurations
             SET name                = $2,
                 generation_model_id = $3,
                 config              = $4,
                 updated_at          = NOW()
             WHERE id = $1
-            "#,
+            ",
         )
         .bind(row.id)
         .bind(&row.name)
@@ -112,7 +113,7 @@ impl ChunkingConfigurationRepository for PostgresChunkingConfigurationRepository
         .bind(&config_json)
         .execute(&self.pool)
         .await
-        .map_err(map_db_error)?;
+        .map_err(|e| map_db_error(&e))?;
         if affected.rows_affected() == 0 {
             return Err(ChunkingConfigurationRepositoryError::NotFound(row.id));
         }
@@ -180,10 +181,13 @@ fn generation_model_id(config: &ChunkingConfig) -> Option<Uuid> {
     }
 }
 
-fn map_db_error(error: sqlx::Error) -> ChunkingConfigurationRepositoryError {
-    match &error {
+fn map_db_error(error: &sqlx::Error) -> ChunkingConfigurationRepositoryError {
+    match error {
         sqlx::Error::Database(db) => {
-            let code = db.code().map(|c| c.into_owned()).unwrap_or_default();
+            let code = db
+                .code()
+                .map(std::borrow::Cow::into_owned)
+                .unwrap_or_default();
             match code.as_str() {
                 "23505" => ChunkingConfigurationRepositoryError::NameConflict,
                 "23503" => ChunkingConfigurationRepositoryError::ReferenceViolation(
@@ -207,8 +211,8 @@ struct ChunkingConfigurationRow {
     is_default: bool,
 }
 
-impl sqlx::FromRow<'_, sqlx::postgres::PgRow> for ChunkingConfigurationRow {
-    fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
+impl sqlx::FromRow<'_, PgRow> for ChunkingConfigurationRow {
+    fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
         use sqlx::Row;
         Ok(Self {
             id: row.try_get("id")?,

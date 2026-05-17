@@ -1,8 +1,11 @@
+use std::cmp::Ordering;
+
 use leptos::prelude::*;
 use leptos_router::components::A;
 use leptos_router::hooks::{use_params_map, use_query_map};
 use uuid::Uuid;
 
+use crate::contracts::EvaluationRunDto;
 use crate::core::{evaluation_score, EvaluationResultSplit, EvaluationVariantResult};
 use crate::server_functions::evaluation::get_run;
 use crate::ui::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
@@ -63,10 +66,7 @@ pub fn ReplicateComparePage() -> impl IntoView {
 }
 
 #[component]
-fn CompareView(
-    left: crate::contracts::EvaluationRunDto,
-    right: crate::contracts::EvaluationRunDto,
-) -> impl IntoView {
+fn CompareView(left: EvaluationRunDto, right: EvaluationRunDto) -> impl IntoView {
     let left_id = left.run_id;
     let right_id = right.run_id;
     let left_short = left_id.to_string().chars().take(8).collect::<String>();
@@ -187,7 +187,7 @@ fn champion_of(variants: &[EvaluationVariantResult]) -> Option<EvaluationVariant
             holdouts.iter().max_by(|a, b| {
                 evaluation_score(&a.metrics)
                     .partial_cmp(&evaluation_score(&b.metrics))
-                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .unwrap_or(Ordering::Equal)
             })
         })
         .map(|v| (*v).clone())

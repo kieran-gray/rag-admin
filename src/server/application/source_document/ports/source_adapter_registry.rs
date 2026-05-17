@@ -23,7 +23,7 @@ impl SourceAdapterRegistry {
     }
 
     pub fn get(&self, document_type: &DocumentType) -> Option<&Arc<dyn SourceAdapter>> {
-        let key = format!("{:?}", document_type);
+        let key = format!("{document_type:?}");
         self.adapters.get(&key)
     }
 

@@ -166,7 +166,7 @@ where
         loop {
             loop {
                 match self.tick().await {
-                    Ok(true) => continue,
+                    Ok(true) => {}
                     Ok(false) => break,
                     Err(e) => {
                         error!(aggregate = A::aggregate_type(), error = %e, "projection driver tick failed");
@@ -174,15 +174,19 @@ where
                     }
                 }
             }
-            match timeout(POLL_HEARTBEAT, self.projection_wakeup.notified()).await {
-                Ok(()) => debug!(
+            if timeout(POLL_HEARTBEAT, self.projection_wakeup.notified())
+                .await
+                .is_ok()
+            {
+                debug!(
                     aggregate = A::aggregate_type(),
                     "projection driver woken by notify"
-                ),
-                Err(_) => debug!(
+                );
+            } else {
+                debug!(
                     aggregate = A::aggregate_type(),
                     "projection driver heartbeat tick"
-                ),
+                );
             }
         }
     }

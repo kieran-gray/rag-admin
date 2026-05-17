@@ -9,7 +9,7 @@ use crate::server::domain::evaluation::{
         read_model::{EvaluationDatasetReadModel, NewDatasetSummary},
         repository::{EvaluationDatasetRepository, EvaluationDatasetRepositoryError},
     },
-    question::EvaluationQuestion,
+    question::{EvaluationQuestion, EvaluationReference},
 };
 use crate::server::domain::shared::Timestamp;
 use crate::server::infrastructure::postgres::timestamps::to_offset_datetime;
@@ -31,7 +31,7 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         dataset_id: Uuid,
     ) -> Result<Option<EvaluationDatasetReadModel>, EvaluationDatasetRepositoryError> {
         let row: Option<DatasetRow> = sqlx::query_as(
-            r#"
+            "
             SELECT
                 dataset_id, document_id, document_version, content_hash, label,
                 target_question_count, generation_model_id, generation_model,
@@ -40,7 +40,7 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
                 failure_reason, created_at
             FROM evaluation_datasets
             WHERE dataset_id = $1 AND deleted_at IS NULL
-            "#,
+            ",
         )
         .bind(dataset_id)
         .fetch_optional(&self.pool)
@@ -55,7 +55,7 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         document_id: Uuid,
     ) -> Result<Vec<EvaluationDatasetReadModel>, EvaluationDatasetRepositoryError> {
         let rows: Vec<DatasetRow> = sqlx::query_as(
-            r#"
+            "
             SELECT
                 dataset_id, document_id, document_version, content_hash, label,
                 target_question_count, generation_model_id, generation_model,
@@ -65,7 +65,7 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
             FROM evaluation_datasets
             WHERE document_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
-            "#,
+            ",
         )
         .bind(document_id)
         .fetch_all(&self.pool)
@@ -110,7 +110,7 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
             questions.push(EvaluationQuestion {
                 sequence: q_row.sequence as u32,
                 question: q_row.question,
-                references: ref_rows.into_iter().map(|r| r.into()).collect(),
+                references: ref_rows.into_iter().map(Into::into).collect(),
                 embedding: q_row.embedding.and_then(|v| serde_json::from_value(v).ok()),
                 category,
                 grammar_variant,
@@ -129,7 +129,7 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
             .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("{e}")))?;
 
         sqlx::query(
-            r#"
+            "
             INSERT INTO evaluation_datasets (
                 dataset_id, document_id, document_version, content_hash, label,
                 target_question_count, generation_model_id, generation_model,
@@ -139,7 +139,7 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'generating', 0, 0, NULL, $12, NOW())
             ON CONFLICT (dataset_id) DO NOTHING
-            "#,
+            ",
         )
         .bind(summary.dataset_id)
         .bind(summary.document_id)
@@ -174,7 +174,7 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         })?;
 
         let inserted: (bool,) = sqlx::query_as(
-            r#"
+            "
             INSERT INTO evaluation_questions (
                 dataset_id, sequence, question, embedding,
                 category, grammar_variant, paraphrase_of
@@ -187,7 +187,7 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
                 grammar_variant = EXCLUDED.grammar_variant,
                 paraphrase_of = EXCLUDED.paraphrase_of
             RETURNING (xmax = 0) AS is_new
-            "#,
+            ",
         )
         .bind(dataset_id)
         .bind(question.sequence as i32)
@@ -208,7 +208,7 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
             })?;
 
             sqlx::query(
-                r#"
+                "
                 INSERT INTO evaluation_references (
                     dataset_id, question_sequence, sequence, content, char_start, char_end, embedding
                 )
@@ -218,7 +218,7 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
                     char_start = EXCLUDED.char_start,
                     char_end = EXCLUDED.char_end,
                     embedding = EXCLUDED.embedding
-                "#,
+                ",
             )
             .bind(dataset_id)
             .bind(question.sequence as i32)
@@ -401,7 +401,7 @@ struct ReferenceRow {
     embedding: Option<serde_json::Value>,
 }
 
-impl From<ReferenceRow> for crate::server::domain::evaluation::question::EvaluationReference {
+impl From<ReferenceRow> for EvaluationReference {
     fn from(row: ReferenceRow) -> Self {
         Self {
             content: row.content,

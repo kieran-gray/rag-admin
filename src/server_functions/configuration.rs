@@ -27,7 +27,7 @@ pub async fn get_configuration() -> Result<ConfigurationDto, ServerFnError> {
     ctx::<Arc<ConfigurationQueryService>>()?
         .get()
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -39,7 +39,7 @@ pub async fn get_pipeline_configurations() -> Result<Vec<PipelineConfigurationDt
     ctx::<Arc<PipelineConfigurationQueryService>>()?
         .list()
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -51,7 +51,7 @@ pub async fn get_chunking_configurations() -> Result<Vec<ChunkingConfigurationDt
     ctx::<Arc<ChunkingConfigurationQueryService>>()?
         .list()
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -63,7 +63,7 @@ pub async fn get_sweep_templates() -> Result<Vec<SweepTemplateDto>, ServerFnErro
     ctx::<Arc<SweepTemplateQueryService>>()?
         .list()
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -77,7 +77,7 @@ pub async fn apply_embedding_model_command(
     ctx::<Arc<EmbeddingModelCatalogCommandHandler>>()?
         .handle_dto(command)
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -91,7 +91,7 @@ pub async fn apply_generation_model_command(
     ctx::<Arc<GenerationModelCatalogCommandHandler>>()?
         .handle_dto(command)
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -105,7 +105,7 @@ pub async fn apply_vector_index_command(
     ctx::<Arc<VectorIndexCatalogCommandHandler>>()?
         .handle_dto(command)
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -119,7 +119,7 @@ pub async fn apply_pipeline_configuration_command(
     ctx::<Arc<PipelineConfigurationService>>()?
         .handle_dto(command)
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -133,7 +133,7 @@ pub async fn apply_chunking_configuration_command(
     ctx::<Arc<ChunkingConfigurationService>>()?
         .handle_dto(command)
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(
@@ -147,5 +147,5 @@ pub async fn apply_sweep_template_command(
     ctx::<Arc<SweepTemplateCommandHandler>>()?
         .handle_dto(command)
         .await
-        .map_err(map_app_error)
+        .map_err(|e| map_app_error(&e))
 }

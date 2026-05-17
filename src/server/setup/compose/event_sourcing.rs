@@ -6,6 +6,16 @@ use serde::Serialize;
 use sqlx::PgPool;
 use tokio::sync::Notify;
 
+use crate::event_sourcing::aggregate_repository::AggregateRepository;
+use crate::event_sourcing::checkpoint::CheckpointRepository;
+use crate::event_sourcing::command_processor::CommandProcessor;
+use crate::event_sourcing::effect_dispatcher::EffectDispatcher;
+use crate::event_sourcing::event_bus::EventBus;
+use crate::event_sourcing::event_store::EventStore;
+use crate::event_sourcing::process_manager::ProcessManager;
+use crate::event_sourcing::projection_driver::ProjectionDriver;
+use crate::event_sourcing::projector::Projector;
+use crate::event_sourcing::Aggregate;
 use crate::server::application::AppError;
 use crate::server::domain::configuration::defaults::ConfigurationDefaults;
 use crate::server::domain::configuration::embedding_model::EmbeddingModelCatalog;
@@ -16,16 +26,6 @@ use crate::server::domain::evaluation::dataset::aggregate::EvaluationDataset;
 use crate::server::domain::evaluation::run::aggregate::EvaluationRun;
 use crate::server::domain::indexing::aggregate::Indexing;
 use crate::server::domain::source_document::aggregate::SourceDocument;
-use crate::server::event_sourcing::aggregate_repository::AggregateRepository;
-use crate::server::event_sourcing::checkpoint::CheckpointRepository;
-use crate::server::event_sourcing::command_processor::CommandProcessor;
-use crate::server::event_sourcing::effect_dispatcher::EffectDispatcher;
-use crate::server::event_sourcing::event_bus::EventBus;
-use crate::server::event_sourcing::event_store::EventStore;
-use crate::server::event_sourcing::process_manager::ProcessManager;
-use crate::server::event_sourcing::projection_driver::ProjectionDriver;
-use crate::server::event_sourcing::projector::Projector;
-use crate::server::event_sourcing::Aggregate;
 use crate::server::infrastructure::event_sourcing::{
     PostgresAggregateSnapshotStore, PostgresEventStore,
 };

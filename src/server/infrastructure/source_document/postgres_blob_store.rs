@@ -26,11 +26,11 @@ impl BlobStore for PostgresBlobStore {
     async fn put(&self, content: &[u8]) -> Result<ContentHash, AppError> {
         let hash = Self::compute_hash(content);
         sqlx::query(
-            r#"
+            "
             INSERT INTO source_document_blobs (content_hash, bytes, created_at)
             VALUES ($1, $2, NOW())
             ON CONFLICT (content_hash) DO NOTHING
-            "#,
+            ",
         )
         .bind(hash.as_hex())
         .bind(content)

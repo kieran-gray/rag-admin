@@ -31,6 +31,7 @@ use crate::server::application::source_document::{
     SourceDocumentCommandHandler, SourceDocumentQueryService,
 };
 use crate::server::application::{ActivityRegistry, JobRegistry};
+use crate::server::domain::configuration::generation_model::GenerationModelRepository;
 use crate::server::infrastructure::clients::{CloudflareApi, OllamaApi};
 use crate::server::infrastructure::embedding::{OllamaEmbedder, WorkersAiEmbedder};
 use crate::server::infrastructure::evaluation::{LlmEvaluationGenerator, PgvectorRetriever};
@@ -294,9 +295,7 @@ fn build_chunking_engine(
     tokenizer: Arc<dyn Tokenizer>,
     markdown_parser: Arc<dyn MarkdownParser>,
     generation_client: Arc<dyn GenerationClient>,
-    generation_models: Arc<
-        dyn crate::server::domain::configuration::generation_model::GenerationModelRepository,
-    >,
+    generation_models: Arc<dyn GenerationModelRepository>,
 ) -> Arc<ChunkerRegistry> {
     let mut chunking_engine = ChunkerRegistry::new(tokenizer, markdown_parser);
     register_builtin_chunkers(

@@ -1,3 +1,4 @@
+use std::slice;
 use std::sync::Arc;
 
 use uuid::Uuid;
@@ -53,7 +54,7 @@ impl QueryService {
 
         let embeddings = self
             .embedding_service
-            .embed_with_resolved(&pipeline.embedding_model, std::slice::from_ref(&req.query))
+            .embed_with_resolved(&pipeline.embedding_model, slice::from_ref(&req.query))
             .await?;
         let query_vector = embeddings
             .into_iter()
@@ -94,7 +95,7 @@ impl QueryService {
             let heading = meta
                 .get("heading")
                 .and_then(|v| v.as_str())
-                .map(|s| s.to_string())
+                .map(ToString::to_string)
                 .filter(|s| !s.is_empty());
             let text = meta
                 .get("text")
@@ -103,11 +104,11 @@ impl QueryService {
                 .to_string();
             let char_start = meta
                 .get("char_start")
-                .and_then(|v| v.as_u64())
+                .and_then(serde_json::Value::as_u64)
                 .map(|n| n as u32);
             let char_end = meta
                 .get("char_end")
-                .and_then(|v| v.as_u64())
+                .and_then(serde_json::Value::as_u64)
                 .map(|n| n as u32);
 
             let (source_ref_key, document_title) = match document_id {

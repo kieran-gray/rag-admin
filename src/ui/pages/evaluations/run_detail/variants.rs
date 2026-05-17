@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use leptos::prelude::*;
 
 use crate::core::{evaluation_score, EvaluationVariantResult};
@@ -68,9 +70,9 @@ pub(super) fn VariantsSection(
         .into_any(),
         VariantsView::Table => view! {
             <VariantTable
-                variants=variants.with_value(|vs| vs.clone())
+                variants=variants.with_value(Clone::clone)
                 bests=bests
-                leader_key=leader_key.with_value(|k| k.clone())
+                leader_key=leader_key.with_value(Clone::clone)
                 promote=promote
             />
         }
@@ -234,7 +236,7 @@ fn cmp_variants(
     a: &EvaluationVariantResult,
     b: &EvaluationVariantResult,
     key: SortKey,
-) -> std::cmp::Ordering {
+) -> Ordering {
     use std::cmp::Ordering::Equal;
     match key {
         SortKey::Variant => a.variant.label.cmp(&b.variant.label),
@@ -308,7 +310,7 @@ fn VariantTable(
     let sorted = move || {
         let key = sort_key.get();
         let dir = sort_dir.get();
-        let mut rows = variants.with_value(|vs| vs.clone());
+        let mut rows = variants.with_value(Clone::clone);
         rows.sort_by(|a, b| {
             let ord = cmp_variants(a, b, key);
             match dir {

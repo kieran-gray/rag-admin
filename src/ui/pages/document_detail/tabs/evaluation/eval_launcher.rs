@@ -55,7 +55,7 @@ impl Preset {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct LauncherCallbacks {
     pub on_start: Callback<RunEvaluationRequestDto>,
 }
@@ -171,8 +171,8 @@ pub fn EvaluationLauncher(
         .map(|v| vec![v])
         .map_err(|e| format!("variant error: {e}")),
         VariantsMode::SweepTemplate => {
-            let templates = sweep_templates.with_value(|t| t.clone());
-            let configs = chunking_configurations.with_value(|c| c.clone());
+            let templates = sweep_templates.with_value(Clone::clone);
+            let configs = chunking_configurations.with_value(Clone::clone);
             if templates.is_empty() {
                 let seeded = default_sweep_variants(&configs);
                 if seeded.is_empty() {
@@ -306,7 +306,7 @@ pub fn EvaluationLauncher(
         !running.get()
             && active_dataset.get().is_some()
             && active_pipeline.get().is_some()
-            && cost_summary.with(|c| c.is_ok())
+            && cost_summary.with(Result::is_ok)
     };
 
     view! {
@@ -414,7 +414,7 @@ pub fn EvaluationLauncher(
                             "Select a dataset"
                         } else if active_pipeline.get().is_none() {
                             "Select a pipeline"
-                        } else if cost_summary.with(|c| c.is_err()) {
+                        } else if cost_summary.with(Result::is_err) {
                             "Fix errors above"
                         } else {
                             "Start tuning"
@@ -1200,7 +1200,7 @@ fn SweepTemplatePicker(
     selected: ReadSignal<Option<Uuid>>,
     set_selected: WriteSignal<Option<Uuid>>,
 ) -> impl IntoView {
-    let templates = sweep_templates.with_value(|t| t.clone());
+    let templates = sweep_templates.with_value(Clone::clone);
     if templates.is_empty() {
         return view! {
             <p class="text-sm muted">

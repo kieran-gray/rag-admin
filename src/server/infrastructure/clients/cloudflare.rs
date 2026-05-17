@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::Method;
 
 use crate::server::application::AppError;
@@ -30,12 +30,12 @@ impl CloudflareApi {
     fn auth_headers(token: &str, content_type: &str) -> Result<HeaderMap, AppError> {
         let mut headers = HeaderMap::new();
         headers.insert(
-            reqwest::header::AUTHORIZATION,
+            AUTHORIZATION,
             HeaderValue::from_str(&format!("Bearer {token}"))
                 .map_err(|e| AppError::Internal(format!("auth header: {e}")))?,
         );
         headers.insert(
-            reqwest::header::CONTENT_TYPE,
+            CONTENT_TYPE,
             HeaderValue::from_str(content_type)
                 .map_err(|e| AppError::Internal(format!("content-type header: {e}")))?,
         );

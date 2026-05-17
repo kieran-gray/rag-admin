@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::server::event_sourcing::Aggregate;
+use crate::event_sourcing::Aggregate;
 
 use super::commands::SweepTemplateCommand;
 use super::events::{
@@ -40,15 +40,14 @@ impl Aggregate for SweepTemplate {
 
     fn apply(&mut self, event: &Self::Event) {
         match event {
-            Self::Event::SweepTemplateCreated(_) => {}
             Self::Event::SweepTemplateUpdated(e) => {
-                self.name = e.name.clone();
-                self.members = e.members.clone();
+                self.name.clone_from(&e.name);
+                self.members.clone_from(&e.members);
             }
             Self::Event::SweepTemplateDeleted(_) => {
                 self.deleted = true;
             }
-            Self::Event::SweepTemplateDefaultSet(_) => {}
+            Self::Event::SweepTemplateCreated(_) | Self::Event::SweepTemplateDefaultSet(_) => {}
         }
     }
 
@@ -124,8 +123,7 @@ impl Aggregate for SweepTemplate {
                 (None, Self::Event::SweepTemplateCreated(e)) => {
                     state = Some(Self::from_created(e));
                 }
-                (Some(_), Self::Event::SweepTemplateCreated(_)) => return None,
-                (None, _) => return None,
+                (Some(_), Self::Event::SweepTemplateCreated(_)) | (None, _) => return None,
                 (Some(s), event) => s.apply(event),
             }
         }

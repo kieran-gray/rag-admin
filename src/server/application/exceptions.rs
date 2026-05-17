@@ -1,7 +1,9 @@
+use std::error::Error as StdError;
+
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::server::event_sourcing::error::{CommandError, EsError, ProjectionError};
+use crate::event_sourcing::error::{CommandError, EsError, ProjectionError};
 
 use crate::server::domain::chunk_set::repository::ChunkSetRepositoryError;
 use crate::server::domain::configuration::catalog::CatalogError;
@@ -135,10 +137,10 @@ impl From<SourceDocumentError> for AppError {
     fn from(value: SourceDocumentError) -> Self {
         match value {
             SourceDocumentError::NotFound => AppError::NotFound(value.to_string()),
-            SourceDocumentError::AlreadyExists => AppError::Validation(value.to_string()),
-            SourceDocumentError::AlreadyDeleted => AppError::Validation(value.to_string()),
-            SourceDocumentError::ValidationError(_) => AppError::Validation(value.to_string()),
-            SourceDocumentError::InvalidCommand(_) => AppError::Validation(value.to_string()),
+            SourceDocumentError::AlreadyExists
+            | SourceDocumentError::AlreadyDeleted
+            | SourceDocumentError::ValidationError(_)
+            | SourceDocumentError::InvalidCommand(_) => AppError::Validation(value.to_string()),
         }
     }
 }
@@ -153,10 +155,10 @@ impl From<IndexingError> for AppError {
     fn from(value: IndexingError) -> Self {
         match value {
             IndexingError::NotFound => AppError::NotFound(value.to_string()),
-            IndexingError::Removed => AppError::Validation(value.to_string()),
-            IndexingError::NotFailed => AppError::Validation(value.to_string()),
-            IndexingError::ValidationError(_) => AppError::Validation(value.to_string()),
-            IndexingError::InvalidCommand(_) => AppError::Validation(value.to_string()),
+            IndexingError::Removed
+            | IndexingError::NotFailed
+            | IndexingError::ValidationError(_)
+            | IndexingError::InvalidCommand(_) => AppError::Validation(value.to_string()),
         }
     }
 }
@@ -182,9 +184,9 @@ impl From<EmbeddingSetRepositoryError> for AppError {
 impl From<EvaluationDatasetError> for AppError {
     fn from(value: EvaluationDatasetError) -> Self {
         match value {
-            EvaluationDatasetError::AlreadyExists => AppError::Validation(value.to_string()),
             EvaluationDatasetError::NotFound => AppError::NotFound(value.to_string()),
-            EvaluationDatasetError::GenerationNotInProgress
+            EvaluationDatasetError::AlreadyExists
+            | EvaluationDatasetError::GenerationNotInProgress
             | EvaluationDatasetError::AlreadyCompleted
             | EvaluationDatasetError::AlreadyFailed
             | EvaluationDatasetError::AlreadyCancelled
@@ -205,9 +207,9 @@ impl From<EvaluationDatasetRepositoryError> for AppError {
 impl From<EvaluationRunError> for AppError {
     fn from(value: EvaluationRunError) -> Self {
         match value {
-            EvaluationRunError::AlreadyExists => AppError::Validation(value.to_string()),
             EvaluationRunError::NotFound => AppError::NotFound(value.to_string()),
-            EvaluationRunError::AlreadyCompleted
+            EvaluationRunError::AlreadyExists
+            | EvaluationRunError::AlreadyCompleted
             | EvaluationRunError::AlreadyFailed
             | EvaluationRunError::NotAllVariantsScored
             | EvaluationRunError::InvalidCommand(_) => AppError::Validation(value.to_string()),
@@ -225,8 +227,9 @@ impl From<EsError> for AppError {
     fn from(value: EsError) -> Self {
         match value {
             EsError::ConcurrencyConflict { .. } => AppError::Validation(value.to_string()),
-            EsError::Storage(_) => AppError::Internal(value.to_string()),
-            EsError::Serialization(_) => AppError::Internal(value.to_string()),
+            EsError::Storage(_) | EsError::Serialization(_) => {
+                AppError::Internal(value.to_string())
+            }
         }
     }
 }
@@ -234,15 +237,16 @@ impl From<EsError> for AppError {
 impl From<ProjectionError> for AppError {
     fn from(value: ProjectionError) -> Self {
         match value {
-            ProjectionError::Storage(_) => AppError::Internal(value.to_string()),
-            ProjectionError::InvalidState(_) => AppError::Internal(value.to_string()),
+            ProjectionError::Storage(_) | ProjectionError::InvalidState(_) => {
+                AppError::Internal(value.to_string())
+            }
         }
     }
 }
 
 impl<E> From<CommandError<E>> for AppError
 where
-    E: std::error::Error + 'static,
+    E: StdError + 'static,
     AppError: From<E>,
 {
     fn from(value: CommandError<E>) -> Self {

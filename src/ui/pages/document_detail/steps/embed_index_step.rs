@@ -334,7 +334,9 @@ fn embed_state(stage: Stage, busy: Option<&'static str>) -> SubStepState {
 
 fn index_state(stage: Stage, busy: Option<&'static str>, auto_finish: bool) -> SubStepState {
     match stage {
-        Stage::AwaitingChunk | Stage::ChunkReady | Stage::Embedding => SubStepState::Pending,
+        Stage::AwaitingChunk | Stage::ChunkReady | Stage::Embedding | Stage::Failed => {
+            SubStepState::Pending
+        }
         Stage::Embedded => {
             if busy == Some("index") || auto_finish {
                 SubStepState::Active
@@ -344,7 +346,6 @@ fn index_state(stage: Stage, busy: Option<&'static str>, auto_finish: bool) -> S
         }
         Stage::Indexing => SubStepState::Active,
         Stage::Indexed => SubStepState::Done,
-        Stage::Failed => SubStepState::Pending,
     }
 }
 

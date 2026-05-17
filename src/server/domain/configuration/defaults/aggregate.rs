@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::server::event_sourcing::Aggregate;
+use crate::event_sourcing::Aggregate;
 
 use super::commands::ConfigurationDefaultsCommand;
 use super::events::{
