@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::core::{
-    ChunkingConfig, ChunkingVariant, DarnGranularity, EvaluationAutotuneRequest,
-    EvaluationResultSplit, EvaluationRunOptions, OptimizationConfig, OptimizationScope,
+    ChunkingVariant, EvaluationAutotuneRequest, EvaluationResultSplit, EvaluationRunOptions,
+    OptimizationConfig,
 };
 use crate::event_sourcing::Aggregate;
 use crate::server::domain::shared::Timestamp;
@@ -22,8 +22,6 @@ use super::{
 
 use crate::core::OptimizationBudget;
 use crate::server::domain::evaluation::optimizer::SearchBudget;
-
-const EVAL_RUN_NAMESPACE: Uuid = uuid::uuid!("b2e4f6a8-c0d2-4e6f-8012-3456789abcde");
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum EvaluationRunStatus {
@@ -92,56 +90,6 @@ pub struct EvaluationRun {
 }
 
 impl EvaluationRun {
-    pub fn compute_id(
-        dataset_id: Uuid,
-        pipeline_configuration_id: Uuid,
-        variants: &[ChunkingVariant],
-        options: &[EvaluationRunOptions],
-        autotune_request: Option<&EvaluationAutotuneRequest>,
-        optimization: Option<&OptimizationConfig>,
-    ) -> Uuid {
-        use sha2::{Digest, Sha256};
-
-        let mut hasher = Sha256::new();
-        hasher.update(b"v1|");
-        hasher.update(dataset_id.as_bytes());
-        hasher.update(b"|");
-        hasher.update(pipeline_configuration_id.as_bytes());
-
-        hasher.update(b"|variants=");
-        hasher.update((variants.len() as u32).to_le_bytes());
-        for v in variants {
-            hash_str(&mut hasher, &v.label);
-            hash_chunking_config(&mut hasher, &v.config);
-        }
-
-        hasher.update(b"|options=");
-        hasher.update((options.len() as u32).to_le_bytes());
-        for o in options {
-            hash_run_options(&mut hasher, o);
-        }
-
-        hasher.update(b"|autotune=");
-        if let Some(a) = autotune_request {
-            hasher.update(b"some");
-            hasher.update(a.holdout_top_n.to_le_bytes());
-            hasher.update(a.tuning_fraction_milli.to_le_bytes());
-        } else {
-            hasher.update(b"none");
-        }
-
-        hasher.update(b"|opt=");
-        if let Some(o) = optimization {
-            hasher.update(b"some");
-            hash_optimization(&mut hasher, o);
-        } else {
-            hasher.update(b"none");
-        }
-
-        let digest = hasher.finalize();
-        Uuid::new_v5(&EVAL_RUN_NAMESPACE, &digest)
-    }
-
     fn from_requested(e: &RunRequested) -> Self {
         Self {
             run_id: e.run_id,
@@ -260,25 +208,6 @@ impl Aggregate for EvaluationRun {
                     scoring_policy: cmd.scoring_policy,
                     occurred_at: cmd.occurred_at,
                 })]),
-                Some(run) if run.status.is_terminal() => {
-                    if matches!(run.status, EvaluationRunStatus::Completed) {
-                        Ok(vec![])
-                    } else {
-                        Ok(vec![Self::Event::RunRequested(RunRequested {
-                            run_id: cmd.run_id,
-                            dataset_id: cmd.dataset_id,
-                            pipeline_configuration_id: cmd.pipeline_configuration_id,
-                            document_id: cmd.document_id,
-                            document_version: cmd.document_version,
-                            variants: cmd.variants,
-                            options: cmd.options,
-                            autotune_request: cmd.autotune_request,
-                            optimization: cmd.optimization,
-                            scoring_policy: cmd.scoring_policy,
-                            occurred_at: cmd.occurred_at,
-                        })])
-                    }
-                }
                 Some(_) => Err(EvaluationRunError::AlreadyExists),
             },
 
@@ -421,86 +350,15 @@ impl Aggregate for EvaluationRun {
 
         for event in events {
             match (&mut state, event) {
-                (None | Some(_), Self::Event::RunRequested(e)) => {
+                (None, Self::Event::RunRequested(e)) => {
                     state = Some(Self::from_requested(e));
                 }
-                (None, _) => return None,
+                (Some(_), Self::Event::RunRequested(_)) | (None, _) => return None,
                 (Some(run), event) => run.apply(event),
             }
         }
 
         state
-    }
-}
-
-fn hash_str(hasher: &mut sha2::Sha256, s: &str) {
-    use sha2::Digest;
-    hasher.update((s.len() as u32).to_le_bytes());
-    hasher.update(s.as_bytes());
-}
-
-fn hash_chunking_config(hasher: &mut sha2::Sha256, config: &ChunkingConfig) {
-    use crate::core::ChunkingConfig::*;
-    use sha2::Digest;
-    match config {
-        Bert(c) => {
-            hasher.update(b"bert|");
-            hasher.update(c.target_tokens.to_le_bytes());
-            hasher.update(c.overlap_tokens.to_le_bytes());
-            hasher.update(c.min_tokens.to_le_bytes());
-        }
-        Section(c) => {
-            hasher.update(b"section|");
-            hasher.update(c.max_section_tokens.to_le_bytes());
-        }
-        Llm(c) => {
-            hasher.update(b"llm|");
-            hasher.update(c.target_tokens.to_le_bytes());
-            hasher.update(c.micro_chunk_tokens.to_le_bytes());
-            hasher.update(c.generation_model_id.as_bytes());
-        }
-        Darn(c) => {
-            hasher.update(b"darn|");
-            hasher.update(c.max_chunk_size.to_le_bytes());
-            hasher.update(c.overlap.to_le_bytes());
-            let g: u8 = match c.granularity {
-                DarnGranularity::Characters => 0,
-                DarnGranularity::Tokens => 1,
-            };
-            hasher.update([g]);
-        }
-    }
-}
-
-fn hash_run_options(hasher: &mut sha2::Sha256, o: &EvaluationRunOptions) {
-    use sha2::Digest;
-    hasher.update(o.top_k.to_le_bytes());
-    hasher.update(o.min_score_milli.to_le_bytes());
-}
-
-fn hash_optimization(hasher: &mut sha2::Sha256, o: &OptimizationConfig) {
-    use sha2::Digest;
-    let budget: u8 = match o.budget {
-        OptimizationBudget::Quick => 0,
-        OptimizationBudget::Thorough => 1,
-        OptimizationBudget::Exhaustive => 2,
-    };
-    hasher.update([budget]);
-    let scope: u8 = match o.scope {
-        OptimizationScope::Chunking => 0,
-        OptimizationScope::Retrieval => 1,
-        OptimizationScope::Both => 2,
-    };
-    hasher.update([scope]);
-    hasher.update([o.judges_enabled as u8]);
-    match o.seed {
-        Some(s) => {
-            hasher.update(b"s");
-            hasher.update(s.to_le_bytes());
-        }
-        None => {
-            hasher.update(b"n");
-        }
     }
 }
 
@@ -580,6 +438,38 @@ mod tests {
             occurred_at: "2024-01-01T00:00:00Z".into(),
         })];
         assert!(EvaluationRun::from_events(&events).is_none());
+    }
+
+    #[test]
+    fn second_run_requested_event_returns_none() {
+        let run_id = Uuid::new_v4();
+        let dataset_id = Uuid::new_v4();
+        let events = vec![
+            make_run_requested_event(run_id, dataset_id),
+            make_run_requested_event(run_id, dataset_id),
+        ];
+
+        assert!(EvaluationRun::from_events(&events).is_none());
+    }
+
+    #[test]
+    fn request_run_on_failed_existing_run_fails() {
+        let run_id = Uuid::new_v4();
+        let dataset_id = Uuid::new_v4();
+        let events = vec![
+            make_run_requested_event(run_id, dataset_id),
+            EvaluationRunEvent::RunFailed(RunFailed {
+                run_id,
+                reason: "embedding timeout".to_string(),
+                occurred_at: "2024-01-01T00:02:00Z".into(),
+            }),
+        ];
+        let run = EvaluationRun::from_events(&events).unwrap();
+
+        let err = EvaluationRun::handle_command(Some(&run), make_request_cmd(run_id, dataset_id))
+            .unwrap_err();
+
+        assert!(matches!(err, EvaluationRunError::AlreadyExists));
     }
 
     #[test]
@@ -851,121 +741,5 @@ mod tests {
         )
         .unwrap();
         assert!(no_op.is_empty());
-    }
-
-    #[test]
-    fn compute_id_golden_value_is_locked() {
-        let dataset_id = uuid::uuid!("00000000-0000-0000-0000-000000000001");
-        let pipeline_id = uuid::uuid!("00000000-0000-0000-0000-000000000002");
-        let variants = vec![ChunkingVariant {
-            label: "section-512".to_string(),
-            config: section_config(),
-        }];
-        let options = vec![EvaluationRunOptions::default()];
-
-        let id =
-            EvaluationRun::compute_id(dataset_id, pipeline_id, &variants, &options, None, None);
-        let expected = uuid::uuid!("71536527-21ed-52b7-aeb7-2be97f45516f");
-        assert_eq!(
-            id, expected,
-            "compute_id algorithm changed — existing run IDs will fork. \
-             Update this expected UUID only if that is intentional."
-        );
-    }
-
-    #[test]
-    fn compute_id_is_deterministic() {
-        let dataset_id = Uuid::new_v4();
-        let pipeline_id = Uuid::new_v4();
-        let variants = vec![ChunkingVariant {
-            label: "section-512".to_string(),
-            config: section_config(),
-        }];
-        let options = vec![EvaluationRunOptions::default()];
-
-        let id1 =
-            EvaluationRun::compute_id(dataset_id, pipeline_id, &variants, &options, None, None);
-        let id2 =
-            EvaluationRun::compute_id(dataset_id, pipeline_id, &variants, &options, None, None);
-        assert_eq!(id1, id2);
-    }
-
-    #[test]
-    fn compute_id_differs_for_different_params() {
-        let dataset_id = Uuid::new_v4();
-        let pipeline_id = Uuid::new_v4();
-        let variants_a = vec![ChunkingVariant {
-            label: "section-512".to_string(),
-            config: section_config(),
-        }];
-        let variants_b = vec![ChunkingVariant {
-            label: "section-256".to_string(),
-            config: ChunkingConfig::Section(crate::core::SectionChunkingConfig {
-                max_section_tokens: 256,
-            }),
-        }];
-        let options = vec![EvaluationRunOptions::default()];
-
-        let id_a =
-            EvaluationRun::compute_id(dataset_id, pipeline_id, &variants_a, &options, None, None);
-        let id_b =
-            EvaluationRun::compute_id(dataset_id, pipeline_id, &variants_b, &options, None, None);
-        assert_ne!(id_a, id_b);
-    }
-
-    #[test]
-    fn compute_id_differs_for_different_optimization_configs() {
-        use crate::core::{OptimizationBudget, OptimizationConfig, OptimizationScope};
-
-        let dataset_id = Uuid::new_v4();
-        let pipeline_id = Uuid::new_v4();
-        let variants: Vec<ChunkingVariant> = Vec::new();
-        let options: Vec<EvaluationRunOptions> = Vec::new();
-
-        let cfg_a = OptimizationConfig {
-            budget: OptimizationBudget::Quick,
-            scope: OptimizationScope::Both,
-            judges_enabled: false,
-            seed: Some(1),
-        };
-        let cfg_b = OptimizationConfig {
-            budget: OptimizationBudget::Thorough,
-            scope: OptimizationScope::Both,
-            judges_enabled: false,
-            seed: Some(1),
-        };
-        let cfg_c = OptimizationConfig {
-            budget: OptimizationBudget::Quick,
-            scope: OptimizationScope::Both,
-            judges_enabled: false,
-            seed: Some(2),
-        };
-
-        let id_a = EvaluationRun::compute_id(
-            dataset_id,
-            pipeline_id,
-            &variants,
-            &options,
-            None,
-            Some(&cfg_a),
-        );
-        let id_b = EvaluationRun::compute_id(
-            dataset_id,
-            pipeline_id,
-            &variants,
-            &options,
-            None,
-            Some(&cfg_b),
-        );
-        let id_c = EvaluationRun::compute_id(
-            dataset_id,
-            pipeline_id,
-            &variants,
-            &options,
-            None,
-            Some(&cfg_c),
-        );
-        assert_ne!(id_a, id_b, "different budgets must produce different ids");
-        assert_ne!(id_a, id_c, "different seeds must produce different ids");
     }
 }
