@@ -3,7 +3,7 @@ use std::error::Error as StdError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::event_sourcing::error::{CommandError, EsError, ProjectionError};
+use event_sourcing::error::{CommandError, EsError, ProjectionError};
 
 use crate::server::domain::chunk_set::repository::ChunkSetRepositoryError;
 use crate::server::domain::configuration::catalog::CatalogError;

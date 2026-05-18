@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::server::domain::evaluation::question::EvaluationQuestion;
 
 use super::read_model::{EvaluationDatasetReadModel, NewDatasetSummary};
-use crate::event_sourcing::error::ProjectionError;
+use event_sourcing::error::ProjectionError;
 
 #[derive(Debug, Error)]
 pub enum EvaluationDatasetRepositoryError {

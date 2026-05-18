@@ -1,14 +1,7 @@
-pub mod effects;
-pub mod evaluation_dataset_command_handler;
-pub mod evaluation_run_command_handler;
-pub mod generator;
+pub mod dataset;
 pub mod ports;
 pub mod query_service;
-pub mod question_filter;
-pub mod reference_locator;
-pub mod scoring;
+pub mod run;
 
-pub use evaluation_dataset_command_handler::{
-    EvaluationDatasetCommandHandler, StartDatasetGenerationRequest,
-};
-pub use evaluation_run_command_handler::EvaluationRunCommandHandler;
+pub use dataset::{EvaluationDatasetCommandHandler, StartDatasetGenerationRequest};
+pub use run::EvaluationRunCommandHandler;

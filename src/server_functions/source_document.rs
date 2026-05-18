@@ -1,14 +1,14 @@
 use leptos::prelude::*;
 
-use crate::contracts::{
+use crate::shared::contracts::{
     ChunkDto, DocumentListItemDto, SourceDocumentDetailDto, SourceDocumentDto,
     SourceDocumentMarkdownDto,
 };
-use crate::core::ChunkingConfig;
+use crate::shared::ChunkingConfig;
 
 #[cfg(feature = "ssr")]
 use crate::server::application::source_document::{
-    ports::SourceAdapterRegistry, SourceDocumentIngestService, SourceDocumentQueryService,
+    SourceAdapterRegistry, SourceDocumentIngestService, SourceDocumentQueryService,
 };
 #[cfg(feature = "ssr")]
 use crate::server::domain::source_document::{document_type::DocumentType, source_ref::SourceRef};
@@ -160,9 +160,7 @@ pub async fn request_indexing(
 ) -> Result<uuid::Uuid, ServerFnError> {
     ctx::<Arc<SourceDocumentIngestService>>()?
         .request_indexing(
-            SourceRef::UpstreamSlug {
-                slug: source_ref_slug,
-            },
+            SourceRef::parse_route_key(&source_ref_slug),
             pipeline_configuration_id,
             chunking_config,
             auto_advance,

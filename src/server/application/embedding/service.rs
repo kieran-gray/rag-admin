@@ -3,11 +3,11 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
-use crate::catalog::AiProviderKind;
-use crate::core::EmbedResult;
 use crate::server::application::embedding::ports::Embedder;
 use crate::server::application::AppError;
 use crate::server::domain::configuration::embedding_model::EmbeddingModelRepository;
+use crate::shared::reference_data::AiProviderKind;
+use crate::shared::EmbedResult;
 
 #[derive(Debug, Clone)]
 pub struct ResolvedEmbeddingModel {

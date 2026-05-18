@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::catalog::{AiProviderKind, VectorStoreKind};
 use crate::server::application::chat::ChatService;
 use crate::server::application::chunking::chunkers::{
     register_builtin_chunkers, BuiltinChunkerDeps,
@@ -23,10 +22,11 @@ use crate::server::application::evaluation::{
 };
 use crate::server::application::indexing::IndexingCommandHandler;
 use crate::server::application::indexing::VectorIndexResolver;
+use crate::server::application::llm::ports::GenerationClient;
 use crate::server::application::llm::GenerationService;
 use crate::server::application::ports::Tokenizer;
-use crate::server::application::ports::{Clock, GenerationClient, IdGenerator, MarkdownParser};
-use crate::server::application::query::QueryService;
+use crate::server::application::ports::{Clock, IdGenerator, MarkdownParser};
+use crate::server::application::retrieval::RetrievalService;
 use crate::server::application::source_document::ports::VectorIndexProvider;
 use crate::server::application::source_document::{
     SourceDocumentCommandHandler, SourceDocumentQueryService,
@@ -36,17 +36,18 @@ use crate::server::domain::configuration::generation_model::GenerationModelRepos
 use crate::server::infrastructure::clients::{CloudflareApi, OllamaApi};
 use crate::server::infrastructure::embedding::{OllamaEmbedder, WorkersAiEmbedder};
 use crate::server::infrastructure::evaluation::{LlmEvaluationGenerator, PgvectorRetriever};
-use crate::server::infrastructure::http_client::ReqwestHttpClient;
+use crate::server::infrastructure::http::ReqwestHttpClient;
 use crate::server::infrastructure::llm::{OllamaGenerationClient, WorkersAiGenerationClient};
 use crate::server::infrastructure::markdown::MarkdownRsParser;
 use crate::server::infrastructure::tokenizer::{TiktokenTokenizer, DEFAULT_TIKTOKEN_MODEL};
 use crate::server::infrastructure::vector::{
     CloudflareVectorIndexProvider, PostgresVectorIndexProvider,
 };
-use crate::server::setup::compose::event_sourcing::AggregateWirings;
+use crate::server::setup::compose::aggregates::AggregateWirings;
 use crate::server::setup::compose::repositories::Repositories;
 use crate::server::setup::config::Config;
 use crate::server::setup::exceptions::SetupError;
+use crate::shared::reference_data::{AiProviderKind, VectorStoreKind};
 
 use sqlx::PgPool;
 
@@ -70,7 +71,7 @@ pub struct Services {
     pub sweep_template_query_service: Arc<SweepTemplateQueryService>,
     pub evaluation_query_service: Arc<EvaluationQueryService>,
     pub source_document_query_service: Arc<SourceDocumentQueryService>,
-    pub query_service: Arc<QueryService>,
+    pub retrieval_service: Arc<RetrievalService>,
     pub chat_service: Arc<ChatService>,
 
     pub embedding_service: Arc<EmbeddingService>,
@@ -240,7 +241,7 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         Arc::clone(&repos.blob_store),
         Arc::clone(&markdown_parser),
     );
-    let query_service = QueryService::new(
+    let retrieval_service = RetrievalService::new(
         Arc::clone(&pipeline_resolver),
         Arc::clone(&embedding_service),
         Arc::clone(&vector_index_resolver),
@@ -264,6 +265,8 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
     let evaluation_run_command_handler = EvaluationRunCommandHandler::new(
         Arc::clone(&wirings.run.command_processor),
         Arc::clone(&evaluation_query_service),
+        Arc::clone(&repos.source_document),
+        Arc::clone(&pipeline_resolver),
         Arc::clone(&clock),
         Arc::clone(&id_generator),
     );
@@ -286,7 +289,7 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         sweep_template_query_service,
         evaluation_query_service,
         source_document_query_service,
-        query_service,
+        retrieval_service,
         chat_service,
         embedding_service,
         generation_service,

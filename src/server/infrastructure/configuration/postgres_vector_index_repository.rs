@@ -3,12 +3,12 @@ use sqlx::postgres::PgRow;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::catalog::VectorStoreKind;
-use crate::event_sourcing::error::ProjectionError;
 use crate::server::domain::configuration::catalog::CatalogRepository;
 use crate::server::domain::configuration::vector_index::{
     VectorIndex, VectorIndexRepository, VectorIndexRepositoryError,
 };
+use crate::shared::reference_data::VectorStoreKind;
+use event_sourcing::error::ProjectionError;
 
 pub struct PostgresVectorIndexRepository {
     pool: PgPool,

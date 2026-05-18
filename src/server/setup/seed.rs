@@ -2,23 +2,23 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
-use crate::catalog::{AiProviderKind, VectorStoreKind};
-use crate::contracts::{
+use crate::server::application::configuration::{
+    ChunkingConfigurationQueryService, ChunkingConfigurationService, ConfigurationQueryService,
+    EmbeddingModelCatalogCommandHandler, GenerationModelCatalogCommandHandler,
+    PipelineConfigurationQueryService, PipelineConfigurationService, SweepTemplateCommandHandler,
+    SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
+};
+use crate::shared::contracts::{
     AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto,
     ChunkingConfigurationCommandDto, CreateChunkingConfigurationDto,
     CreatePipelineConfigurationDto, CreateSweepTemplateDto, EmbeddingModelCommandDto,
     GenerationModelCommandDto, PipelineConfigurationCommandDto, SetDefaultSweepTemplateDto,
     SweepTemplateCommandDto, VectorIndexCommandDto,
 };
-use crate::core::{
+use crate::shared::reference_data::{AiProviderKind, VectorStoreKind};
+use crate::shared::{
     BertChunkingConfig, ChunkingConfig, DarnChunkingConfig, DarnGranularity, LlmChunkingConfig,
     SectionChunkingConfig,
-};
-use crate::server::application::configuration::{
-    ChunkingConfigurationQueryService, ChunkingConfigurationService, ConfigurationQueryService,
-    EmbeddingModelCatalogCommandHandler, GenerationModelCatalogCommandHandler,
-    PipelineConfigurationQueryService, PipelineConfigurationService, SweepTemplateCommandHandler,
-    SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
 };
 
 const DEFAULT_SWEEP_NAME: &str = "default-sweep";

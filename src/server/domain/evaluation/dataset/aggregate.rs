@@ -3,12 +3,10 @@ use std::collections::{BTreeSet, HashMap};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{
-    event_sourcing::Aggregate,
-    server::domain::{
-        evaluation::{dataset::events::DatasetGenerationCancelled, question::QuestionCategory},
-        shared::Timestamp,
-    },
+use event_sourcing::Aggregate;
+
+use crate::server::domain::evaluation::{
+    dataset::events::DatasetGenerationCancelled, question::QuestionCategory,
 };
 
 use super::{
@@ -60,7 +58,6 @@ pub struct EvaluationDataset {
     pub target_question_count: u32,
     pub status: DatasetGenerationStatus,
     pub accepted_sequences: BTreeSet<u32>,
-    pub created_at: Timestamp,
     pub deleted: bool,
     pub generation_model_id: Uuid,
     pub embedding_model_id: Uuid,
@@ -81,7 +78,6 @@ impl EvaluationDataset {
             target_question_count: e.target_question_count,
             status: DatasetGenerationStatus::Generating,
             accepted_sequences: BTreeSet::new(),
-            created_at: e.occurred_at.clone(),
             deleted: false,
             generation_model_id: e.generation_model_id,
             embedding_model_id: e.embedding_model_id,

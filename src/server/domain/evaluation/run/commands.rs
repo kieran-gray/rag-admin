@@ -1,12 +1,14 @@
 use uuid::Uuid;
 
-use crate::core::{
+use crate::server::domain::shared::Timestamp;
+use crate::shared::{
     ChunkingConfig, ChunkingVariant, EvaluationAutotuneRequest, EvaluationMetrics,
     EvaluationResultSplit, EvaluationRunOptions, OptimizationConfig,
 };
-use crate::server::domain::shared::Timestamp;
 
-use super::{events::RetrievalTraceEntry, scoring_policy::ScoringPolicy};
+use super::{
+    events::RetrievalTraceEntry, fingerprint::RunFingerprint, scoring_policy::ScoringPolicy,
+};
 
 pub struct RequestRun {
     pub run_id: Uuid,
@@ -19,6 +21,7 @@ pub struct RequestRun {
     pub autotune_request: Option<EvaluationAutotuneRequest>,
     pub optimization: Option<OptimizationConfig>,
     pub scoring_policy: ScoringPolicy,
+    pub fingerprint: RunFingerprint,
     pub occurred_at: Timestamp,
 }
 

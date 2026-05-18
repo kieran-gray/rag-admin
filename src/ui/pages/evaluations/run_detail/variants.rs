@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use leptos::prelude::*;
 
-use crate::core::{evaluation_score, EvaluationVariantResult};
+use crate::shared::{evaluation_score, EvaluationVariantResult};
 use crate::ui::components::primitives::{MetricBar, MetricKind, Surface};
 
 use super::promote::{PromoteHandle, VariantSaveButton};

@@ -21,6 +21,7 @@
     --status-fail: #f87171;
     --status-stale: #94a3b8;
     --status-info: #60a5fa;
+    --status-winner: #FFD700;
 
     --color-code-bg: #0e1115;
     --color-danger: var(--status-fail);
@@ -158,10 +159,21 @@ a:hover {
     padding: 1rem;
 }
 
-.collapsible-card .when-open { display: none; }
-.collapsible-card .when-closed { display: inline; }
-.collapsible-card[open] .when-open { display: inline; }
-.collapsible-card[open] .when-closed { display: none; }
+.collapsible-card .when-open {
+    display: none;
+}
+
+.collapsible-card .when-closed {
+    display: inline;
+}
+
+.collapsible-card[open] .when-open {
+    display: inline;
+}
+
+.collapsible-card[open] .when-closed {
+    display: none;
+}
 
 /* Legacy classes — preserved during migration. New code uses .surface. */
 .card-outer {
@@ -340,6 +352,8 @@ a:hover {
     letter-spacing: 0.02em;
     text-transform: uppercase;
     line-height: 1.6;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .pill::before {
@@ -381,6 +395,11 @@ a:hover {
     border-color: color-mix(in srgb, var(--status-info) 25%, var(--color-border));
 }
 
+.pill-winner {
+    color: var(--status-winner);
+    border-color: color-mix(in srgb, var(--status-winner) 25%, var(--color-border));
+}
+
 .pill-neutral {
     color: var(--color-text-muted);
     border-color: var(--color-border);
@@ -397,8 +416,15 @@ a:hover {
 }
 
 @keyframes pill-pulse {
-    0%, 100% { opacity: 0.4; }
-    50% { opacity: 1; }
+
+    0%,
+    100% {
+        opacity: 0.4;
+    }
+
+    50% {
+        opacity: 1;
+    }
 }
 
 /* ── Tables ────────────────────────────────────────────────────────────── */
@@ -610,9 +636,17 @@ a:hover {
 }
 
 @keyframes activity-pulse {
-    0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 60%, transparent); }
-    70%  { box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-accent) 0%, transparent); }
-    100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 0%, transparent); }
+    0% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 60%, transparent);
+    }
+
+    70% {
+        box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-accent) 0%, transparent);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 0%, transparent);
+    }
 }
 
 /* ── Log viewer (used by Activity drawer / job feeds) ──────────────────── */
@@ -632,10 +666,21 @@ a:hover {
     overflow: auto;
 }
 
-.log-line-info { color: var(--color-text); }
-.log-line-warn { color: var(--status-pending); }
-.log-line-error { color: var(--status-fail); }
-.log-line-success { color: var(--status-ok); }
+.log-line-info {
+    color: var(--color-text);
+}
+
+.log-line-warn {
+    color: var(--status-pending);
+}
+
+.log-line-error {
+    color: var(--status-fail);
+}
+
+.log-line-success {
+    color: var(--status-ok);
+}
 
 /* ── Legacy aliases retained until full page migration ─────────────────── */
 
@@ -716,8 +761,14 @@ header::before {
     border-radius: var(--radius-1);
 }
 
-.grid-cell { background-color: var(--color-page-bg); }
-.grid-cell-alt { background-color: var(--color-surface-2); opacity: 0.5; }
+.grid-cell {
+    background-color: var(--color-page-bg);
+}
+
+.grid-cell-alt {
+    background-color: var(--color-surface-2);
+    opacity: 0.5;
+}
 
 /* ── Metric bar (run-detail visualization) ─────────────────────────────── */
 
@@ -820,8 +871,13 @@ header::before {
     white-space: nowrap;
 }
 
-.metric-bar-axis-scale span:first-child { transform: none; }
-.metric-bar-axis-scale span:last-child { transform: translateX(-100%); }
+.metric-bar-axis-scale span:first-child {
+    transform: none;
+}
+
+.metric-bar-axis-scale span:last-child {
+    transform: translateX(-100%);
+}
 
 /* ── Segmented toggle (Bars / Table view switch) ───────────────────────── */
 
@@ -1422,12 +1478,24 @@ header::before {
     margin: 1.5rem 0 0.5rem 0;
 }
 
-.md-document .md-heading h1 { font-size: 1.5rem; letter-spacing: -0.01em; }
-.md-document .md-heading h2 { font-size: 1.25rem; }
-.md-document .md-heading h3 { font-size: 1.0625rem; }
+.md-document .md-heading h1 {
+    font-size: 1.5rem;
+    letter-spacing: -0.01em;
+}
+
+.md-document .md-heading h2 {
+    font-size: 1.25rem;
+}
+
+.md-document .md-heading h3 {
+    font-size: 1.0625rem;
+}
+
 .md-document .md-heading h4,
 .md-document .md-heading h5,
-.md-document .md-heading h6 { font-size: 0.9375rem; }
+.md-document .md-heading h6 {
+    font-size: 0.9375rem;
+}
 
 .md-document .md-paragraph p {
     margin: 0;
@@ -1443,7 +1511,7 @@ header::before {
     margin: 0.25rem 0;
 }
 
-.md-document .md-list li > p {
+.md-document .md-list li>p {
     margin: 0;
 }
 
@@ -1466,7 +1534,7 @@ header::before {
     font-size: inherit;
 }
 
-.md-document :not(pre) > code {
+.md-document :not(pre)>code {
     background-color: var(--color-code-bg);
     padding: 0.1rem 0.35rem;
     border-radius: 3px;
@@ -1601,7 +1669,9 @@ header::before {
     width: 5rem;
 }
 
-.playground-control-spacer { flex: 1; }
+.playground-control-spacer {
+    flex: 1;
+}
 
 .embed-sources {
     display: grid;
@@ -1718,7 +1788,9 @@ header::before {
     cursor: pointer;
 }
 
-.playground-hit-reveal:hover { color: var(--color-text); }
+.playground-hit-reveal:hover {
+    color: var(--color-text);
+}
 
 .playground-hit-details {
     display: grid;
@@ -1728,8 +1800,14 @@ header::before {
     font-size: 0.75rem;
 }
 
-.playground-hit-details dt { color: var(--color-text-muted); }
-.playground-hit-details dd { margin: 0; word-break: break-all; }
+.playground-hit-details dt {
+    color: var(--color-text-muted);
+}
+
+.playground-hit-details dd {
+    margin: 0;
+    word-break: break-all;
+}
 
 .playground-history-row {
     display: flex;
@@ -1877,4 +1955,137 @@ header::before {
     font-size: 0.75rem;
     line-height: 1.5;
     margin: 0;
+}
+
+/* ── Upload dropzone ───────────────────────────────────────────────────── */
+
+.upload-dropzone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 12rem;
+    padding: 2.5rem 1.5rem;
+    border: 1.5px dashed var(--color-border);
+    border-radius: var(--radius-1);
+    background-color: var(--color-surface-1);
+    cursor: pointer;
+    text-align: center;
+    transition: background-color 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+}
+
+.upload-dropzone:hover {
+    background-color: var(--color-surface-2);
+    border-color: var(--color-text-muted);
+}
+
+.upload-dropzone.is-dragging {
+    background-color: color-mix(in srgb, var(--color-accent) 10%, transparent);
+    border-color: var(--color-accent);
+    transform: scale(1.01);
+}
+
+.upload-dropzone-icon {
+    font-size: 2rem;
+    line-height: 1;
+    color: var(--color-text-muted);
+}
+
+.upload-dropzone.is-dragging .upload-dropzone-icon {
+    color: var(--color-accent);
+}
+
+.upload-dropzone-primary {
+    font-size: 0.95rem;
+    color: var(--color-text);
+}
+
+.upload-dropzone-secondary {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+}
+
+.upload-dropzone-selected {
+    font-size: 0.8125rem;
+    color: var(--color-text);
+    margin-top: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-1);
+    background-color: var(--color-surface-2);
+}
+
+/* ── Help icon ─────────────────────────────────────────────────────────── */
+
+.help-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.125rem;
+    height: 1.125rem;
+    margin-left: 0.375rem;
+    padding: 0;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: 0.6875rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: color 0.12s ease, border-color 0.12s ease, background-color 0.12s ease;
+    vertical-align: middle;
+}
+
+.help-icon:hover {
+    color: var(--color-text);
+    border-color: var(--color-text-muted);
+    background-color: var(--color-surface-2);
+}
+
+/* ── Step advance footer ───────────────────────────────────────────────── */
+
+.step-advance {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding-top: 0.5rem;
+}
+
+.step-advance-eyebrow {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.125rem;
+    color: var(--color-text-muted);
+    font-size: 0.6875rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.step-advance-eyebrow-label {
+    color: var(--color-text);
+    font-size: 0.8125rem;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+/* ── Done screen forward CTAs ──────────────────────────────────────────── */
+
+.done-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-1);
+    border: 1px solid color-mix(in srgb, var(--color-accent) 35%, var(--color-border));
+    background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+}
+
+.done-banner-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
 }

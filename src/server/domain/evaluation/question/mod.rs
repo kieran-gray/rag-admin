@@ -6,8 +6,8 @@ pub use variant::GrammarVariant;
 
 use serde::{Deserialize, Serialize};
 
-use crate::contracts::{EvaluationQuestionDto, EvaluationReferenceDto};
-use crate::core::ordered_f32_vec;
+use crate::shared::contracts::{EvaluationQuestionDto, EvaluationReferenceDto};
+use crate::shared::ordered_f32_vec;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EvaluationReference {

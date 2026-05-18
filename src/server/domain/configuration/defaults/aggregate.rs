@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::event_sourcing::policy::HasPolicies;
-use crate::event_sourcing::Aggregate;
+use event_sourcing::policy::HasPolicies;
+use event_sourcing::Aggregate;
 
 use super::commands::ConfigurationDefaultsCommand;
 use super::events::{

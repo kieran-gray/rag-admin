@@ -2,9 +2,9 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use uuid::Uuid;
 
-use crate::contracts::{ChatRequest, ChatResponse, PipelineConfigurationDto, QueryHit};
 use crate::server_functions::chat::chat_query;
 use crate::server_functions::configuration::get_pipeline_configurations;
+use crate::shared::contracts::{ChatRequest, ChatResponse, PipelineConfigurationDto, QueryHit};
 use crate::ui::components::primitives::{EmptyState, PageHeader, Surface};
 
 #[derive(Clone)]

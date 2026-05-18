@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use leptos::prelude::*;
 
-use crate::core::{evaluation_score, EvaluationResultSplit, EvaluationVariantResult};
+use crate::shared::{evaluation_score, EvaluationResultSplit, EvaluationVariantResult};
 
 #[derive(Clone, Copy)]
 pub(super) struct MetricDef {

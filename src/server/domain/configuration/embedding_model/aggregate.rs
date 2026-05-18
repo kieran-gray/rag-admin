@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::event_sourcing::policy::HasPolicies;
-use crate::event_sourcing::Aggregate;
 use crate::server::domain::configuration::catalog::{CatalogEntry, CatalogError, CatalogState};
+use event_sourcing::policy::HasPolicies;
+use event_sourcing::Aggregate;
 
 use super::commands::EmbeddingModelCatalogCommand;
 use super::entity::EmbeddingModel;
@@ -157,7 +157,7 @@ impl HasPolicies<EmbeddingModelCatalog, ()> for EmbeddingModelCatalogEvent {}
 mod tests {
     use super::super::commands::AddEmbeddingModel;
     use super::*;
-    use crate::catalog::AiProviderKind;
+    use crate::shared::reference_data::AiProviderKind;
 
     fn add_cmd(model: &str, dim: u32) -> EmbeddingModelCatalogCommand {
         EmbeddingModelCatalogCommand::AddEmbeddingModel(AddEmbeddingModel {

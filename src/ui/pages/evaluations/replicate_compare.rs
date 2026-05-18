@@ -5,9 +5,9 @@ use leptos_router::components::A;
 use leptos_router::hooks::{use_params_map, use_query_map};
 use uuid::Uuid;
 
-use crate::contracts::EvaluationRunDto;
-use crate::core::{evaluation_score, EvaluationResultSplit, EvaluationVariantResult};
 use crate::server_functions::evaluation::get_run;
+use crate::shared::contracts::EvaluationRunDto;
+use crate::shared::{evaluation_score, EvaluationResultSplit, EvaluationVariantResult};
 use crate::ui::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
 
 #[component]

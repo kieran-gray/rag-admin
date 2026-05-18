@@ -5,10 +5,10 @@ use leptos_router::components::A;
 use leptos_router::hooks::use_params_map;
 use uuid::Uuid;
 
-use crate::contracts::{aggregate_type, EvaluationRunDto};
-use crate::core::{evaluation_score, EvaluationResultSplit, EvaluationVariantResult};
 use crate::server_functions::evaluation::get_run;
-use crate::ui::components::event_bus::use_invalidator;
+use crate::shared::contracts::{aggregate_type, EvaluationRunDto};
+use crate::shared::{evaluation_score, EvaluationResultSplit, EvaluationVariantResult};
+use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
 
 mod advisor;

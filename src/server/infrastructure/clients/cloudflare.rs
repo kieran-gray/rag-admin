@@ -4,7 +4,7 @@ use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::Method;
 
 use crate::server::application::AppError;
-use crate::server::infrastructure::http_client::ReqwestHttpClient;
+use crate::server::infrastructure::http::ReqwestHttpClient;
 use crate::server::setup::config::CloudflareConfig;
 
 pub const CLOUDFLARE_API_BASE: &str = "https://api.cloudflare.com/client/v4";

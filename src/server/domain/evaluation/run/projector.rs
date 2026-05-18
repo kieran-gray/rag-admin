@@ -2,14 +2,14 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::event_sourcing::envelope::EventEnvelope;
-use crate::event_sourcing::error::ProjectionError;
-use crate::event_sourcing::projector::Projector;
 use crate::server::domain::evaluation::run::events::EvaluationRunEvent;
 use crate::server::domain::evaluation::run::read_model::{
     EvaluationVariantResultDto, NewRunSummary,
 };
 use crate::server::domain::evaluation::run::repository::EvaluationRunRepository;
+use event_sourcing::envelope::EventEnvelope;
+use event_sourcing::error::ProjectionError;
+use event_sourcing::projector::Projector;
 
 pub struct EvaluationRunProjector {
     repository: Arc<dyn EvaluationRunRepository>,
@@ -36,6 +36,7 @@ impl Projector<EvaluationRunEvent> for EvaluationRunProjector {
         for envelope in events {
             match &envelope.event {
                 EvaluationRunEvent::RunRequested(e) => {
+                    let variants_count = e.variants.len() as u32;
                     self.repository
                         .insert_summary(NewRunSummary {
                             run_id: e.run_id,
@@ -43,12 +44,13 @@ impl Projector<EvaluationRunEvent> for EvaluationRunProjector {
                             pipeline_configuration_id: e.pipeline_configuration_id,
                             document_id: e.document_id,
                             document_version: e.document_version,
-                            variants: e.variants.clone(),
-                            options: e.options.clone(),
-                            autotune_request: e.autotune_request.clone(),
-                            optimization: e.optimization.clone(),
-                            variants_count: e.variants.len() as u32,
+                            variants: e.variants.iter().cloned().map(Into::into).collect(),
+                            options: e.options.iter().cloned().map(Into::into).collect(),
+                            autotune_request: e.autotune_request.clone().map(Into::into),
+                            optimization: e.optimization.clone().map(Into::into),
+                            variants_count,
                             scoring_policy: e.scoring_policy,
+                            fingerprint: e.fingerprint.clone().into(),
                             created_at: e.occurred_at.clone(),
                         })
                         .await?;
@@ -61,9 +63,9 @@ impl Projector<EvaluationRunEvent> for EvaluationRunProjector {
                         .save_variant_result(EvaluationVariantResultDto {
                             run_id: e.run_id,
                             variant_label: e.variant_label.clone(),
-                            variant_config: e.variant_config,
-                            options: e.options.clone(),
-                            split: e.split,
+                            variant_config: e.variant_config.into(),
+                            options: e.options.clone().into(),
+                            split: e.split.into(),
                             recall_mean: e.metrics.recall_mean,
                             recall_std: e.metrics.recall_std,
                             precision_mean: e.metrics.precision_mean,

@@ -3,10 +3,6 @@ use sqlx::PgPool;
 use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
 
-use crate::core::{
-    ChunkingVariant, EvaluationAutotuneRequest, EvaluationResultSplit, EvaluationRunOptions,
-    OptimizationConfig,
-};
 use crate::server::domain::evaluation::run::aggregate::EvaluationRunStatus;
 use crate::server::domain::evaluation::run::events::RetrievalTraceEntry;
 use crate::server::domain::evaluation::run::read_model::{
@@ -17,7 +13,11 @@ use crate::server::domain::evaluation::run::repository::{
 };
 use crate::server::domain::evaluation::run::scoring_policy::{ScoringPolicy, ScoringWeights};
 use crate::server::domain::shared::Timestamp;
-use crate::server::infrastructure::postgres::timestamps::to_offset_datetime;
+use crate::server::infrastructure::sql::timestamps::to_offset_datetime;
+use crate::shared::{
+    ChunkingVariant, EvaluationAutotuneRequest, EvaluationResultSplit, EvaluationRunOptions,
+    OptimizationConfig,
+};
 
 pub struct PostgresEvaluationRunRepository {
     pool: PgPool,
@@ -42,7 +42,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
                 variants, options, autotune_request, optimization,
                 status, variants_count, variants_prepared, variants_scored, failure_reason,
                 scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
-                scoring_precision_omega_weight, created_at
+                scoring_precision_omega_weight, fingerprint, created_at
             FROM evaluation_runs
             WHERE run_id = $1
             ",
@@ -73,7 +73,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
                 variants, options, autotune_request, optimization,
                 status, variants_count, variants_prepared, variants_scored, failure_reason,
                 scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
-                scoring_precision_omega_weight, created_at
+                scoring_precision_omega_weight, fingerprint, created_at
             FROM evaluation_runs
             WHERE document_id = $1
             ORDER BY created_at DESC
@@ -100,7 +100,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
                 variants, options, autotune_request, optimization,
                 status, variants_count, variants_prepared, variants_scored, failure_reason,
                 scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
-                scoring_precision_omega_weight, created_at
+                scoring_precision_omega_weight, fingerprint, created_at
             FROM evaluation_runs
             WHERE dataset_id = $1
             ORDER BY created_at DESC
@@ -127,7 +127,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
                 variants, options, autotune_request, optimization,
                 status, variants_count, variants_prepared, variants_scored, failure_reason,
                 scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
-                scoring_precision_omega_weight, created_at
+                scoring_precision_omega_weight, fingerprint, created_at
             FROM evaluation_runs
             ORDER BY created_at DESC
             LIMIT $1
@@ -270,6 +270,9 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         let optimization = serde_json::to_value(&summary.optimization).map_err(|e| {
             EvaluationRunRepositoryError::Internal(format!("serialize optimization: {e}"))
         })?;
+        let fingerprint = serde_json::to_value(&summary.fingerprint).map_err(|e| {
+            EvaluationRunRepositoryError::Internal(format!("serialize fingerprint: {e}"))
+        })?;
 
         sqlx::query(
             "
@@ -278,9 +281,9 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
                 variants, options, autotune_request, optimization,
                 status, variants_count, variants_prepared, variants_scored, failure_reason,
                 scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
-                scoring_precision_omega_weight, created_at, updated_at
+                scoring_precision_omega_weight, fingerprint, created_at, updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, 0, 0, NULL, $11, $12, $13, $14, $15, NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, 0, 0, NULL, $11, $12, $13, $14, $15, $16, NOW())
             ON CONFLICT (run_id) DO NOTHING
             ",
         )
@@ -298,6 +301,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         .bind(summary.scoring_policy.weights.iou)
         .bind(summary.scoring_policy.weights.precision)
         .bind(summary.scoring_policy.weights.precision_omega)
+        .bind(&fingerprint)
         .bind(created_at)
         .execute(&self.pool)
         .await
@@ -531,6 +535,7 @@ struct RunRow {
     scoring_iou_weight: f32,
     scoring_precision_weight: f32,
     scoring_precision_omega_weight: f32,
+    fingerprint: serde_json::Value,
     created_at: time::OffsetDateTime,
 }
 
@@ -551,6 +556,9 @@ impl TryFrom<RunRow> for EvaluationRunReadModel {
         let optimization: Option<OptimizationConfig> = row
             .optimization
             .and_then(|v| serde_json::from_value(v).ok());
+        let fingerprint = serde_json::from_value(row.fingerprint).map_err(|e| {
+            EvaluationRunRepositoryError::Internal(format!("deserialize fingerprint: {e}"))
+        })?;
 
         Ok(Self {
             run_id: row.run_id,
@@ -580,6 +588,7 @@ impl TryFrom<RunRow> for EvaluationRunReadModel {
                     precision_omega: row.scoring_precision_omega_weight,
                 },
             },
+            fingerprint,
             created_at: Timestamp::from(row.created_at.format(&Rfc3339).unwrap_or_default()),
             variant_results: Vec::new(),
         })

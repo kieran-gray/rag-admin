@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use sqlx::PgPool;
 
-use crate::event_sourcing::checkpoint::CheckpointRepository;
 use crate::server::application::indexing::ports::KvStore;
 use crate::server::application::source_document::ports::BlobStore;
 use crate::server::domain::chunk_set::repository::ChunkSetRepository;
@@ -35,6 +34,7 @@ use crate::server::infrastructure::source_document::{
 };
 use crate::server::setup::config::{Config, KvBackend};
 use crate::server::setup::exceptions::SetupError;
+use event_sourcing::checkpoint::CheckpointRepository;
 
 pub struct Repositories {
     pub embedding_model: Arc<dyn EmbeddingModelRepository>,

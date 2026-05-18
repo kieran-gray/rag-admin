@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use crate::contracts::{ChatRequest, ChatResponse};
+use crate::shared::contracts::{ChatRequest, ChatResponse};
 
 #[cfg(feature = "ssr")]
 use crate::server::application::chat::ChatService;

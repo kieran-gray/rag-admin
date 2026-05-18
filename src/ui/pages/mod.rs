@@ -1,9 +1,6 @@
-pub mod catalog;
-pub mod chunking;
 pub mod configuration;
 pub mod document_detail;
-pub mod documents_list;
+pub mod documents;
 pub mod evaluations;
-pub mod pipelines;
 pub mod playground;
 pub(crate) mod shared;

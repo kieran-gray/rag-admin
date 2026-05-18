@@ -6,8 +6,8 @@ use serde::{de::DeserializeOwned, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::event_sourcing::error::EsError;
-use crate::event_sourcing::job_queue::{ClaimedJob, IdempotencyKey, JobQueue, NewJob};
+use event_sourcing::error::EsError;
+use event_sourcing::job_queue::{ClaimedJob, IdempotencyKey, JobQueue, NewJob};
 
 pub struct PostgresJobQueue<R> {
     pool: PgPool,

@@ -22,8 +22,6 @@ services:
       - "host.docker.internal:host-gateway"
     ports:
       - "3000:3000"
-    volumes:
-      - ./data:/app/data
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:3000/api/health" ]
       interval: 30s

@@ -489,6 +489,35 @@ mod tests {
     }
 
     #[test]
+    fn identical_seed_yields_identical_proposals() {
+        let mut a = Tpe::new(space(), 0xCAFE);
+        let mut b = Tpe::new(space(), 0xCAFE);
+        let pa = a.propose(8);
+        let pb = b.propose(8);
+        assert_eq!(pa.len(), pb.len());
+        for (x, y) in pa.iter().zip(pb.iter()) {
+            assert_eq!(x.params, y.params);
+            assert_eq!(x.trial_id, y.trial_id);
+        }
+    }
+
+    #[test]
+    fn different_seeds_diverge() {
+        let mut a = Tpe::new(space(), 1);
+        let mut b = Tpe::new(space(), 2);
+        let pa = a.propose(8);
+        let pb = b.propose(8);
+        let mut same = true;
+        for (x, y) in pa.iter().zip(pb.iter()) {
+            if x.params != y.params {
+                same = false;
+                break;
+            }
+        }
+        assert!(!same, "two different seeds produced identical proposals");
+    }
+
+    #[test]
     fn trial_ids_are_sequential() {
         let mut tpe = Tpe::new(space(), 1234);
         let trials = tpe.propose(3);

@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use crate::core::{EvaluationResultSplit, EvaluationScoreWeights, EvaluationVariantResult};
+use crate::shared::{EvaluationResultSplit, EvaluationScoreWeights, EvaluationVariantResult};
 use crate::ui::components::primitives::Surface;
 
 use super::shared::METRIC_DEFS;

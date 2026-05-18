@@ -1,4 +1,4 @@
-pub mod event_sourcing;
+pub mod aggregates;
 pub mod repositories;
 pub mod services;
 pub mod workflows;
@@ -11,7 +11,6 @@ use leptos::context::provide_context;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 
-use crate::event_sourcing::event_bus::EventBus;
 use crate::server::application::chat::ChatService;
 use crate::server::application::configuration::{
     ChunkingConfigurationQueryService, ChunkingConfigurationService, ConfigurationQueryService,
@@ -27,21 +26,21 @@ use crate::server::application::evaluation::{
 use crate::server::application::indexing::VectorIndexResolver;
 use crate::server::application::llm::GenerationService;
 use crate::server::application::ports::{Clock, IdGenerator};
-use crate::server::application::query::QueryService;
-use crate::server::application::source_document::ports::SourceAdapterRegistry;
+use crate::server::application::retrieval::RetrievalService;
 use crate::server::application::source_document::{
-    SourceDocumentIngestService, SourceDocumentQueryService,
+    SourceAdapterRegistry, SourceDocumentIngestService, SourceDocumentQueryService,
 };
 use crate::server::application::{ActivityRegistry, JobRegistry};
 use crate::server::infrastructure::clients::{CloudflareApi, OllamaApi};
-use crate::server::infrastructure::http_client::ReqwestHttpClient;
+use crate::server::infrastructure::http::ReqwestHttpClient;
 use crate::server::infrastructure::id::UuidGenerator;
 use crate::server::infrastructure::time::SystemClock;
 use crate::server::setup::config::Config;
 use crate::server::setup::exceptions::SetupError;
 use crate::server::setup::seed::seed_if_empty;
+use event_sourcing::event_bus::EventBus;
 
-use self::event_sourcing::build_aggregate_wirings;
+use self::aggregates::build_aggregate_wirings;
 use self::repositories::build_repositories;
 use self::services::{build_services, ServicesDeps};
 use self::workflows::{launch_workflows, WorkflowsDeps};
@@ -68,7 +67,7 @@ pub struct App {
     pub activity_registry: Arc<ActivityRegistry>,
     pub source_document_ingest_service: Arc<SourceDocumentIngestService>,
     pub source_document_query_service: Arc<SourceDocumentQueryService>,
-    pub query_service: Arc<QueryService>,
+    pub retrieval_service: Arc<RetrievalService>,
     pub chat_service: Arc<ChatService>,
     pub source_adapter_registry: Arc<SourceAdapterRegistry>,
     pub event_bus: Arc<EventBus>,
@@ -144,7 +143,7 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         activity_registry: services.activity_registry,
         source_document_ingest_service: workflows.source_document_ingest_service,
         source_document_query_service: services.source_document_query_service,
-        query_service: services.query_service,
+        retrieval_service: services.retrieval_service,
         chat_service: services.chat_service,
         source_adapter_registry: workflows.source_adapter_registry,
         event_bus,
@@ -177,7 +176,7 @@ impl App {
         provide_context(Arc::clone(&self.activity_registry));
         provide_context(Arc::clone(&self.source_document_ingest_service));
         provide_context(Arc::clone(&self.source_document_query_service));
-        provide_context(Arc::clone(&self.query_service));
+        provide_context(Arc::clone(&self.retrieval_service));
         provide_context(Arc::clone(&self.chat_service));
         provide_context(Arc::clone(&self.source_adapter_registry));
     }

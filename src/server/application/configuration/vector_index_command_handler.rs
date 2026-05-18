@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
-use crate::contracts::VectorIndexCommandDto;
-use crate::event_sourcing::CommandProcessor;
 use crate::server::application::AppError;
 use crate::server::domain::configuration::vector_index::{
     AddVectorIndex, RemoveVectorIndex, UpdateVectorIndex, VectorIndexCatalog,
     VectorIndexCatalogCommand,
 };
+use crate::shared::contracts::VectorIndexCommandDto;
+use event_sourcing::CommandProcessor;
 
 pub struct VectorIndexCatalogCommandHandler {
     processor: Arc<CommandProcessor<VectorIndexCatalog>>,

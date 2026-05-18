@@ -3,8 +3,6 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
-use crate::contracts::SourceDocumentDto;
-use crate::core::ChunkingConfig;
 use crate::server::application::configuration::PipelineResolver;
 use crate::server::application::ports::{Clock, HtmlToMarkdown, HttpClient, IdGenerator};
 use crate::server::application::AppError;
@@ -20,10 +18,12 @@ use crate::server::domain::source_document::source_ref::SourceRef;
 use crate::server::domain::source_document::version::{
     ContentHash, DocumentMetadata, PlainMetadata, WebPageMetadata,
 };
+use crate::shared::contracts::SourceDocumentDto;
+use crate::shared::ChunkingConfig;
 
 use super::{
-    command_handler::SourceDocumentCommandHandler,
-    ports::{BlobStore, SourceAdapterRegistry},
+    command_handler::SourceDocumentCommandHandler, ports::BlobStore,
+    source_adapter_registry::SourceAdapterRegistry,
 };
 use crate::server::application::indexing::command_handler::IndexingCommandHandler;
 

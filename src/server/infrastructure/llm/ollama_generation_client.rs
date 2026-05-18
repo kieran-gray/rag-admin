@@ -6,11 +6,11 @@ use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 
-use crate::server::application::ports::{
+use crate::server::application::llm::ports::{
     GenerationClient, GenerationRequest, GenerationResponse, GenerationResponseFormat,
 };
 use crate::server::application::AppError;
-use crate::server::infrastructure::http_client::ReqwestHttpClient;
+use crate::server::infrastructure::http::ReqwestHttpClient;
 
 pub struct OllamaGenerationClient {
     http: Arc<ReqwestHttpClient>,

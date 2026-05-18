@@ -4,21 +4,17 @@ use std::sync::Arc;
 use sqlx::PgPool;
 use tokio::sync::Notify;
 
-use crate::event_sourcing::event_bus::EventBus;
-use crate::event_sourcing::job_queue::JobQueue;
-use crate::event_sourcing::process_manager::ProcessManager;
-use crate::server::application::evaluation::effects::{
-    EvaluationDatasetEffectExecutor, EvaluationRunEffectDispatcher, EvaluationRunEffectExecutor,
-    OptimizeRunEffectExecutor,
-};
+use crate::server::application::evaluation::dataset::EvaluationDatasetEffectExecutor;
 use crate::server::application::evaluation::ports::LlmJudge;
-use crate::server::application::evaluation::scoring::TrialScorer;
+use crate::server::application::evaluation::run::{
+    EvaluationRunEffectDispatcher, ExecuteVariantEffectExecutor, FinalizeRunEffectExecutor,
+    OptimizeRunEffectExecutor, TrialScorer,
+};
 use crate::server::application::indexing::{IndexingEffect, IndexingEffectExecutor};
 use crate::server::application::ports::HtmlToMarkdown;
 use crate::server::application::ports::{Clock, HttpClient, IdGenerator};
-use crate::server::application::source_document::ports::SourceAdapterRegistry;
 use crate::server::application::source_document::{
-    SourceDocumentIngestService, SourceDocumentIngestServiceDeps,
+    SourceAdapterRegistry, SourceDocumentIngestService, SourceDocumentIngestServiceDeps,
 };
 use crate::server::application::spawn_activity_projection;
 use crate::server::domain::configuration::defaults::{
@@ -49,13 +45,16 @@ use crate::server::infrastructure::event_sourcing::{
     spawn_postgres_event_listener, PostgresJobQueue,
 };
 use crate::server::infrastructure::html::HtmdConverter;
-use crate::server::infrastructure::http_client::ReqwestHttpClient;
+use crate::server::infrastructure::http::ReqwestHttpClient;
 use crate::server::infrastructure::source_document::HttpBlogAdapter;
-use crate::server::setup::compose::event_sourcing::{spawn_driver, AggregateWirings};
+use crate::server::setup::compose::aggregates::{spawn_driver, AggregateWirings};
 use crate::server::setup::compose::repositories::Repositories;
 use crate::server::setup::compose::services::Services;
 use crate::server::setup::config::Config;
 use crate::server::setup::exceptions::SetupError;
+use event_sourcing::event_bus::EventBus;
+use event_sourcing::job_queue::JobQueue;
+use event_sourcing::process_manager::ProcessManager;
 
 pub struct Workflows {
     pub source_document_ingest_service: Arc<SourceDocumentIngestService>,
@@ -229,9 +228,19 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
         Arc::clone(&id_generator),
     );
 
-    let run_effect_executor = EvaluationRunEffectExecutor::new(
+    let execute_variant_executor = ExecuteVariantEffectExecutor::new(
         Arc::clone(&trial_scorer),
         Arc::clone(&wirings.run.command_processor),
+        Arc::clone(&wirings.run.aggregate_repository),
+        Arc::clone(&services.job_registry),
+        Arc::clone(&services.activity_registry),
+        Arc::clone(&clock),
+    );
+
+    let finalize_run_executor = FinalizeRunEffectExecutor::new(
+        Arc::clone(&trial_scorer),
+        Arc::clone(&wirings.run.command_processor),
+        Arc::clone(&repos.evaluation_run),
         Arc::clone(&services.job_registry),
         Arc::clone(&services.activity_registry),
         Arc::clone(&clock),
@@ -250,8 +259,11 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
         Some(judge_adapter),
     );
 
-    let run_effect_dispatcher =
-        EvaluationRunEffectDispatcher::new(run_effect_executor, optimize_effect_executor);
+    let run_effect_dispatcher = EvaluationRunEffectDispatcher::new(
+        execute_variant_executor,
+        finalize_run_executor,
+        optimize_effect_executor,
+    );
 
     let dataset_process_manager = Arc::new(ProcessManager::new(
         Arc::clone(&wirings.dataset.aggregate_repository),

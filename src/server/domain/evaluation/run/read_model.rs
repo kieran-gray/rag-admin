@@ -1,15 +1,16 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::core::{
+use crate::server::domain::shared::Timestamp;
+use crate::shared::{
     ChunkingConfig, ChunkingVariant, EvaluationAutotuneRequest, EvaluationMetrics,
     EvaluationQuestionResult, EvaluationResultSplit, EvaluationRunOptions, EvaluationVariantResult,
     OptimizationConfig,
 };
-use crate::server::domain::shared::Timestamp;
 
 use super::{
-    aggregate::EvaluationRunStatus, events::RetrievalTraceEntry, scoring_policy::ScoringPolicy,
+    aggregate::EvaluationRunStatus, events::RetrievalTraceEntry, fingerprint::RunFingerprint,
+    scoring_policy::ScoringPolicy,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,6 +94,7 @@ pub struct EvaluationRunReadModel {
     pub variants_scored: u32,
     pub failure_reason: Option<String>,
     pub scoring_policy: ScoringPolicy,
+    pub fingerprint: RunFingerprint,
     pub created_at: Timestamp,
     pub variant_results: Vec<EvaluationVariantResultDto>,
 }
@@ -110,6 +112,7 @@ pub struct NewRunSummary {
     pub optimization: Option<OptimizationConfig>,
     pub variants_count: u32,
     pub scoring_policy: ScoringPolicy,
+    pub fingerprint: RunFingerprint,
     pub created_at: Timestamp,
 }
 

@@ -6,18 +6,16 @@ use leptos_router::{
     NavigateOptions, ParamSegment, StaticSegment,
 };
 
-use crate::ui::components::event_bus::provide_event_bus;
+use crate::ui::components::app::event_bus::provide_event_bus;
 use crate::ui::components::shell::AppShell;
 use crate::ui::pages::{
-    catalog::CatalogPage,
-    chunking::ChunkingPage,
-    document_detail::{DocumentByIdRedirect, DocumentDetailPage},
-    documents_list::DocumentsPage,
+    configuration::{catalog::CatalogPage, chunking::ChunkingPage, pipelines::PipelinesPage},
+    document_detail::DocumentDetailPage,
+    documents::{DocumentByIdRedirect, DocumentsPage},
     evaluations::{
         DatasetDetailPage, EvaluationsPage, OptimizeProgressPage, ReplicateComparePage,
         RunDetailPage,
     },
-    pipelines::PipelinesPage,
     playground::{chat::ChatPage, embed::EmbedPage, retrieve::RetrievePage},
 };
 

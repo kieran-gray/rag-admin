@@ -3,12 +3,11 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::core::{
+use crate::shared::{
     ChunkingVariant, EvaluationAutotuneRequest, EvaluationResultSplit, EvaluationRunOptions,
     OptimizationConfig,
 };
-use crate::event_sourcing::Aggregate;
-use crate::server::domain::shared::Timestamp;
+use event_sourcing::Aggregate;
 
 use super::{
     commands::EvaluationRunCommand,
@@ -20,8 +19,8 @@ use super::{
     scoring_policy::ScoringPolicy,
 };
 
-use crate::core::OptimizationBudget;
 use crate::server::domain::evaluation::optimizer::SearchBudget;
+use crate::shared::OptimizationBudget;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum EvaluationRunStatus {
@@ -86,7 +85,6 @@ pub struct EvaluationRun {
     pub proposed_trials: BTreeSet<u32>,
     pub champion_trial_id: Option<u32>,
     pub status: EvaluationRunStatus,
-    pub created_at: Timestamp,
 }
 
 impl EvaluationRun {
@@ -97,17 +95,16 @@ impl EvaluationRun {
             pipeline_configuration_id: e.pipeline_configuration_id,
             document_id: e.document_id,
             document_version: e.document_version,
-            variants: e.variants.clone(),
-            options: e.options.clone(),
-            autotune_request: e.autotune_request.clone(),
-            optimization: e.optimization.clone(),
+            variants: e.variants.iter().cloned().map(Into::into).collect(),
+            options: e.options.iter().cloned().map(Into::into).collect(),
+            autotune_request: e.autotune_request.clone().map(Into::into),
+            optimization: e.optimization.clone().map(Into::into),
             scoring_policy: e.scoring_policy,
             prepared_labels: BTreeSet::new(),
             scored_keys: BTreeSet::new(),
             proposed_trials: BTreeSet::new(),
             champion_trial_id: None,
             status: EvaluationRunStatus::Pending,
-            created_at: e.occurred_at.clone(),
         }
     }
 
@@ -164,8 +161,8 @@ impl Aggregate for EvaluationRun {
             Self::Event::VariantScored(e) => {
                 self.scored_keys.insert(ScoredVariantKey {
                     variant_label: e.variant_label.clone(),
-                    options: e.options.clone(),
-                    split: e.split,
+                    options: e.options.clone().into(),
+                    split: e.split.into(),
                 });
                 self.status = EvaluationRunStatus::Running {
                     variants_completed: self.scored_keys.len() as u32,
@@ -201,11 +198,12 @@ impl Aggregate for EvaluationRun {
                     pipeline_configuration_id: cmd.pipeline_configuration_id,
                     document_id: cmd.document_id,
                     document_version: cmd.document_version,
-                    variants: cmd.variants,
-                    options: cmd.options,
-                    autotune_request: cmd.autotune_request,
-                    optimization: cmd.optimization,
+                    variants: cmd.variants.into_iter().map(Into::into).collect(),
+                    options: cmd.options.into_iter().map(Into::into).collect(),
+                    autotune_request: cmd.autotune_request.map(Into::into),
+                    optimization: cmd.optimization.map(Into::into),
                     scoring_policy: cmd.scoring_policy,
+                    fingerprint: cmd.fingerprint.into(),
                     occurred_at: cmd.occurred_at,
                 })]),
                 Some(_) => Err(EvaluationRunError::AlreadyExists),
@@ -238,12 +236,12 @@ impl Aggregate for EvaluationRun {
                 Ok(vec![Self::Event::VariantScored(VariantScored {
                     run_id: run.run_id,
                     variant_label: cmd.variant_label,
-                    variant_config: cmd.variant_config,
-                    options: cmd.options,
-                    split: cmd.split,
+                    variant_config: cmd.variant_config.into(),
+                    options: cmd.options.into(),
+                    split: cmd.split.into(),
                     chunk_set_id: cmd.chunk_set_id,
                     embedding_set_id: cmd.embedding_set_id,
-                    metrics: cmd.metrics,
+                    metrics: cmd.metrics.into(),
                     retrieval_traces: cmd.retrieval_traces,
                     selected: cmd.selected,
                     occurred_at: cmd.occurred_at,
@@ -283,7 +281,7 @@ impl Aggregate for EvaluationRun {
                 Ok(vec![Self::Event::ChampionSelected(ChampionSelected {
                     run_id: run.run_id,
                     trial_id: cmd.trial_id,
-                    holdout_metrics: cmd.holdout_metrics,
+                    holdout_metrics: cmd.holdout_metrics.into(),
                     occurred_at: cmd.occurred_at,
                 })])
             }
@@ -365,14 +363,23 @@ impl Aggregate for EvaluationRun {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::{ChunkingConfig, ChunkingVariant, EvaluationRunOptions};
+    use crate::shared::{ChunkingConfig, ChunkingVariant, EvaluationRunOptions};
     use uuid::Uuid;
 
     fn section_config() -> ChunkingConfig {
-        use crate::core::SectionChunkingConfig;
+        use crate::shared::SectionChunkingConfig;
         ChunkingConfig::Section(SectionChunkingConfig {
             max_section_tokens: 512,
         })
+    }
+
+    fn test_fingerprint() -> super::super::fingerprint::RunFingerprint {
+        super::super::fingerprint::RunFingerprint {
+            document_content_hash: "abc123".to_string(),
+            dataset_content_hash: "abc123".to_string(),
+            embedding_model_snapshot: serde_json::Value::Null,
+            generation_model_snapshot: serde_json::Value::Null,
+        }
     }
 
     fn make_request_cmd(run_id: Uuid, dataset_id: Uuid) -> EvaluationRunCommand {
@@ -391,6 +398,7 @@ mod tests {
             autotune_request: None,
             optimization: None,
             scoring_policy: ScoringPolicy::default(),
+            fingerprint: test_fingerprint(),
             occurred_at: "2024-01-01T00:00:00Z".into(),
         })
     }
@@ -405,11 +413,13 @@ mod tests {
             variants: vec![ChunkingVariant {
                 label: "section-512".to_string(),
                 config: section_config(),
-            }],
-            options: vec![EvaluationRunOptions::default()],
+            }
+            .into()],
+            options: vec![EvaluationRunOptions::default().into()],
             autotune_request: None,
             optimization: None,
             scoring_policy: ScoringPolicy::default(),
+            fingerprint: test_fingerprint().into(),
             occurred_at: "2024-01-01T00:00:00Z".into(),
         })
     }
@@ -422,11 +432,13 @@ mod tests {
             EvaluationRun::handle_command(None, make_request_cmd(run_id, dataset_id)).unwrap();
 
         assert_eq!(events.len(), 1);
-        assert!(matches!(events[0], EvaluationRunEvent::RunRequested(_)));
+        let EvaluationRunEvent::RunRequested(event) = &events[0] else {
+            panic!("expected RunRequested");
+        };
+        assert_eq!(event.dataset_id, dataset_id);
 
         let run = EvaluationRun::from_events(&events).unwrap();
         assert_eq!(run.run_id, run_id);
-        assert_eq!(run.dataset_id, dataset_id);
         assert!(matches!(run.status, EvaluationRunStatus::Pending));
     }
 
@@ -507,7 +519,7 @@ mod tests {
     #[test]
     fn score_variant_is_idempotent() {
         use super::super::commands::{MarkVariantPrepared, ScoreVariant};
-        use crate::core::{EvaluationMetrics, EvaluationResultSplit};
+        use crate::shared::{EvaluationMetrics, EvaluationResultSplit};
 
         let run_id = Uuid::new_v4();
         let dataset_id = Uuid::new_v4();
@@ -618,7 +630,7 @@ mod tests {
     #[test]
     fn complete_after_all_scored_succeeds_and_is_idempotent() {
         use super::super::commands::{CompleteRun, MarkVariantPrepared, ScoreVariant};
-        use crate::core::{EvaluationMetrics, EvaluationResultSplit};
+        use crate::shared::{EvaluationMetrics, EvaluationResultSplit};
 
         let run_id = Uuid::new_v4();
         let dataset_id = Uuid::new_v4();

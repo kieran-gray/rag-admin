@@ -4,10 +4,10 @@ use tracing::error;
 
 use uuid::Uuid;
 
-use crate::event_sourcing::command_processor::CommandProcessor;
-use crate::event_sourcing::Aggregate;
 use crate::server::application::ports::Clock;
 use crate::server::application::{ActivityRegistry, AppError, Job, JobRegistry};
+use event_sourcing::command_processor::CommandProcessor;
+use event_sourcing::Aggregate;
 
 pub struct JobSession<A>
 where

@@ -5,8 +5,6 @@ use async_trait::async_trait;
 use serde_json::json;
 use uuid::Uuid;
 
-use crate::event_sourcing::command_processor::CommandProcessor;
-use crate::event_sourcing::process_manager::{EffectError, EffectExecutor};
 use crate::server::application::chunking::ChunkerRegistry;
 use crate::server::application::configuration::{PipelineResolver, ResolvedPipeline};
 use crate::server::application::embedding::EmbeddingService;
@@ -31,6 +29,8 @@ use crate::server::domain::indexing::repository::IndexingRepository;
 use crate::server::domain::indexing::status::IngestStage;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::server::domain::VectorRecord;
+use event_sourcing::command_processor::CommandProcessor;
+use event_sourcing::process_manager::{EffectError, EffectExecutor};
 
 use super::indexing::{
     ExecuteChunkingEffect, ExecuteEmbeddingEffect, ExecuteIndexingEffect, IndexingEffect,

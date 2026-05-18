@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::event_sourcing::error::ProjectionError;
+use event_sourcing::error::ProjectionError;
 
 use super::read_model::IndexingReadModel;
 

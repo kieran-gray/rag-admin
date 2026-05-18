@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Write as _;
 
 use leptos::prelude::*;
@@ -7,10 +7,10 @@ use leptos_router::components::A;
 use leptos_router::hooks::use_params_map;
 use uuid::Uuid;
 
-use crate::contracts::{aggregate_type, EvaluationRunDto};
-use crate::core::{evaluation_score, EvaluationVariantResult};
 use crate::server_functions::evaluation::get_run;
-use crate::ui::components::event_bus::use_invalidator;
+use crate::shared::contracts::{aggregate_type, EvaluationRunDto};
+use crate::shared::{evaluation_score, EvaluationVariantResult};
+use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
 
 #[component]
@@ -68,6 +68,9 @@ fn ProgressView(run: EvaluationRunDto) -> impl IntoView {
     let run_id = run.run_id.to_string();
     let status_label = run.status.clone();
     let status_label_header = status_label.clone();
+    let is_completed = run.status == "completed";
+    let run_detail_href = format!("/runs/{run_id}");
+    let run_detail_href_banner = run_detail_href.clone();
 
     view! {
         <div>
@@ -80,72 +83,87 @@ fn ProgressView(run: EvaluationRunDto) -> impl IntoView {
                 }.into_any())
             />
 
-            <div class="mb-4 flex items-center gap-3">
+            <div class="mb-4">
                 <A href="/evaluations" attr:class="muted text-sm">"← Back to evaluations"</A>
-                <span class="muted">"·"</span>
-                <A href=format!("/runs/{run_id}") attr:class="muted text-sm">"Full run detail"</A>
             </div>
 
-            <Surface flush=true>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-px bg-[var(--color-border)]">
-                    <div class="bg-[var(--color-surface-1)] p-4">
-                        <div class="eyebrow">"Trials evaluated"</div>
-                        <div class="text-lg mt-1 font-mono">{trial_count}</div>
-                    </div>
-                    <div class="bg-[var(--color-surface-1)] p-4">
-                        <div class="eyebrow">"Best so far · tuning"</div>
-                        <div class="text-lg mt-1 font-mono text-[var(--color-accent)]">
-                            {best_so_far
-                                .map(|s| format!("{:.1}%", s * 100.0))
-                                .unwrap_or_else(|| "—".into())}
+            <div class="space-y-6">
+                {is_completed.then(move || view! {
+                    <div class="done-banner">
+                        <div class="flex items-center gap-3">
+                            <span class="text-sm">
+                                "Optimization finished. Open the full run detail to compare variants, inspect categories, and promote a champion."
+                            </span>
                         </div>
-                        <div class="text-xs muted mt-1">
-                            "Preliminary, on the optimizer's tuning split. Not the deployment number."
+                        <div class="done-banner-actions">
+                            <A href=run_detail_href_banner attr:class="btn btn-primary btn-sm flex-shrink-0">
+                                "Open full run detail →"
+                            </A>
                         </div>
                     </div>
-                    <div class="bg-[var(--color-surface-1)] p-4">
-                        <div class="eyebrow">"Status"</div>
-                        <div class="text-lg mt-1 font-mono">{status_label}</div>
+                })}
+
+                <Surface flush=true>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-px bg-[var(--color-border)]">
+                        <div class="bg-[var(--color-surface-1)] p-4">
+                            <div class="eyebrow">"Trials evaluated"</div>
+                            <div class="text-lg mt-1 font-mono">{trial_count}</div>
+                        </div>
+                        <div class="bg-[var(--color-surface-1)] p-4">
+                            <div class="eyebrow">"Best so far · tuning"</div>
+                            <div class="text-lg mt-1 font-mono text-[var(--color-accent)]">
+                                {best_so_far
+                                    .map(|s| format!("{:.1}%", s * 100.0))
+                                    .unwrap_or_else(|| "—".into())}
+                            </div>
+                            <div class="text-xs muted mt-1">
+                                "Preliminary, on the optimizer's tuning split. Not the deployment number."
+                            </div>
+                        </div>
+                        <div class="bg-[var(--color-surface-1)] p-4">
+                            <div class="eyebrow">"Status"</div>
+                            <div class="text-lg mt-1 font-mono">{status_label}</div>
+                        </div>
                     </div>
-                </div>
-            </Surface>
+                </Surface>
 
-            {{
-                let variants_for_chart = run.variants.clone();
-                let variants_for_rungs = run.variants.clone();
-                let variants_for_retired = run.variants.clone();
-                let variants_for_table = run.variants;
-                view! {
-                    {(!variants_for_chart.is_empty()).then(move || view! {
-                        <Surface title="Best-so-far".to_string()>
-                            <BestSoFarChart trials=variants_for_chart />
-                        </Surface>
-                    })}
+                {{
+                    let variants_for_chart = run.variants.clone();
+                    let variants_for_rungs = run.variants.clone();
+                    let variants_for_table = run.variants;
+                    view! {
+                        {(!variants_for_chart.is_empty()).then(move || view! {
+                            <Surface title="Best-so-far".to_string()>
+                                <BestSoFarChart trials=variants_for_chart />
+                            </Surface>
+                        })}
 
-                    {{
-                        let rungs = rung_summary(&variants_for_rungs);
-                        (!rungs.is_empty()).then(|| view! { <RungSummaryPanel rows=rungs /> })
-                    }}
-
-                    {{
-                        let retired = retired_trials(&variants_for_retired);
-                        (!retired.is_empty()).then(|| view! { <RetiredBranchesPanel rows=retired /> })
-                    }}
-
-                    <Surface title="Trials".to_string()>
-                        {if variants_for_table.is_empty() {
-                            view! {
-                                <EmptyState
-                                    title="No trials yet"
-                                    body="The optimizer is warming up; trials will appear here as they're scored.".to_string()
-                                />
-                            }.into_any()
-                        } else {
-                            view! { <TrialList trials=variants_for_table /> }.into_any()
+                        {{
+                            let rungs = rung_summary(&variants_for_rungs);
+                            (!rungs.is_empty()).then(|| view! { <RungSummaryPanel rows=rungs /> })
                         }}
-                    </Surface>
-                }
-            }}
+
+                        <Surface title="Trials".to_string()>
+                            {if variants_for_table.is_empty() {
+                                view! {
+                                    <EmptyState
+                                        title="No trials yet"
+                                        body="The optimizer is warming up; trials will appear here as they're scored.".to_string()
+                                    />
+                                }.into_any()
+                            } else {
+                                view! { <TrialList trials=variants_for_table /> }.into_any()
+                            }}
+                        </Surface>
+
+                        {(!is_completed).then(move || view! {
+                            <div class="text-xs muted text-center">
+                                <A href=run_detail_href attr:class="muted">"Open full run detail →"</A>
+                            </div>
+                        })}
+                    }
+                }}
+            </div>
         </div>
     }
 }
@@ -298,6 +316,30 @@ fn parse_trial_rung(label: &str) -> Option<(u32, u32)> {
     Some((trial_id, rung))
 }
 
+#[derive(Clone, Copy)]
+enum TrialSplit {
+    Rung(u32),
+    Validation,
+    Holdout,
+}
+
+fn parse_trial_split(label: &str) -> Option<(u32, TrialSplit)> {
+    let rest = label.strip_prefix("trial-")?;
+    if let Some(trial_str) = rest.strip_suffix("-holdout") {
+        return trial_str.parse().ok().map(|id| (id, TrialSplit::Holdout));
+    }
+    if let Some(trial_str) = rest.strip_suffix("-validation") {
+        return trial_str
+            .parse()
+            .ok()
+            .map(|id| (id, TrialSplit::Validation));
+    }
+    let (trial_str, rung_str) = rest.split_once("-r")?;
+    let trial_id: u32 = trial_str.parse().ok()?;
+    let rung: u32 = rung_str.parse().ok()?;
+    Some((trial_id, TrialSplit::Rung(rung)))
+}
+
 #[derive(Clone)]
 struct RungRow {
     rung: u32,
@@ -307,7 +349,6 @@ struct RungRow {
 }
 
 fn rung_summary(variants: &[EvaluationVariantResult]) -> Vec<RungRow> {
-    use std::collections::BTreeMap;
     let mut by_rung: BTreeMap<u32, (Vec<f32>, HashSet<u32>)> = BTreeMap::new();
     let mut max_rung_by_trial: HashMap<u32, u32> = HashMap::new();
 
@@ -353,50 +394,6 @@ fn rung_summary(variants: &[EvaluationVariantResult]) -> Vec<RungRow> {
         .collect()
 }
 
-#[derive(Clone)]
-struct RetiredRow {
-    trial_id: u32,
-    last_composite: f32,
-    retired_at_rung: u32,
-    variant_label: String,
-}
-
-fn retired_trials(variants: &[EvaluationVariantResult]) -> Vec<RetiredRow> {
-    use std::collections::HashMap;
-    let mut max_rung_by_trial: HashMap<u32, (u32, f32, String)> = HashMap::new();
-    let mut overall_max_rung = 0u32;
-    for v in variants {
-        let Some((trial_id, rung)) = parse_trial_rung(&v.variant.label) else {
-            continue;
-        };
-        if rung > overall_max_rung {
-            overall_max_rung = rung;
-        }
-        let entry = max_rung_by_trial
-            .entry(trial_id)
-            .or_insert((0, 0.0, v.variant.label.clone()));
-        if rung > entry.0 {
-            *entry = (rung, evaluation_score(&v.metrics), v.variant.label.clone());
-        }
-    }
-    let mut out: Vec<RetiredRow> = max_rung_by_trial
-        .into_iter()
-        .filter(|(_, (rung, _, _))| *rung < overall_max_rung)
-        .map(|(trial_id, (rung, composite, label))| RetiredRow {
-            trial_id,
-            last_composite: composite,
-            retired_at_rung: rung,
-            variant_label: label,
-        })
-        .collect();
-    out.sort_by(|a, b| {
-        b.last_composite
-            .partial_cmp(&a.last_composite)
-            .unwrap_or(Ordering::Equal)
-    });
-    out
-}
-
 #[component]
 fn RungSummaryPanel(rows: Vec<RungRow>) -> impl IntoView {
     view! {
@@ -432,38 +429,6 @@ fn RungSummaryPanel(rows: Vec<RungRow>) -> impl IntoView {
     }
 }
 
-#[component]
-fn RetiredBranchesPanel(rows: Vec<RetiredRow>) -> impl IntoView {
-    let count = rows.len();
-    view! {
-        <Surface title=format!("Retired branches · {count} trials") >
-            <div class="text-xs muted mb-3">
-                "Trials that didn't survive their rung. Look here if you suspect the optimizer pruned an interesting config too early."
-            </div>
-            <table class="variants-table">
-                <thead>
-                    <tr>
-                        <th class="num">"Trial"</th>
-                        <th>"Label"</th>
-                        <th class="num">"Last composite"</th>
-                        <th class="num">"Retired at rung"</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows.into_iter().map(|r| view! {
-                        <tr>
-                            <td class="num">{r.trial_id}</td>
-                            <td><span class="font-mono">{r.variant_label}</span></td>
-                            <td class="num">{format!("{:.1}%", r.last_composite * 100.0)}</td>
-                            <td class="num muted">{r.retired_at_rung}</td>
-                        </tr>
-                    }).collect_view()}
-                </tbody>
-            </table>
-        </Surface>
-    }
-}
-
 fn best_so_far_score(variants: &[EvaluationVariantResult]) -> Option<f32> {
     variants
         .iter()
@@ -476,12 +441,7 @@ fn best_so_far_score(variants: &[EvaluationVariantResult]) -> Option<f32> {
 
 #[component]
 fn TrialList(trials: Vec<EvaluationVariantResult>) -> impl IntoView {
-    let mut trials = trials;
-    trials.sort_by(|a, b| {
-        evaluation_score(&b.metrics)
-            .partial_cmp(&evaluation_score(&a.metrics))
-            .unwrap_or(Ordering::Equal)
-    });
+    let (rows, show_outcome) = collapse_trials(trials);
     view! {
         <table class="variants-table">
             <thead>
@@ -492,29 +452,139 @@ fn TrialList(trials: Vec<EvaluationVariantResult>) -> impl IntoView {
                     <th class="num">"Min score"</th>
                     <th class="num">"Score"</th>
                     <th class="num" title="95% bootstrap confidence interval half-width on the composite score">"95% confidence interval"</th>
+                    {show_outcome.then(|| view! { <th>"Outcome"</th> })}
                 </tr>
             </thead>
             <tbody>
-                {trials.into_iter().enumerate().map(|(i, v)| {
-                    let score = evaluation_score(&v.metrics);
-                    let half = v.metrics.composite_ci_half_width();
+                {rows.into_iter().enumerate().map(|(i, row)| {
+                    let TrialRow { variant, outcome } = row;
+                    let score = evaluation_score(&variant.metrics);
+                    let half = variant.metrics.composite_ci_half_width();
                     let ci_label = if half > 0.0005 {
                         format!("± {:.1}", half * 100.0)
                     } else {
                         "—".into()
                     };
+                    let outcome_cell = show_outcome.then(|| match outcome {
+                        TrialOutcome::Holdout => view! {
+                            <td><StatusPill label="Holdout".to_string() kind=Status::Winner /></td>
+                        }.into_any(),
+                        TrialOutcome::Validation => view! {
+                            <td><StatusPill label="Validation".to_string() kind=Status::Info /></td>
+                        }.into_any(),
+                        TrialOutcome::TopRung => view! {
+                            <td><StatusPill label="Top rung".to_string() kind=Status::Ok /></td>
+                        }.into_any(),
+                        TrialOutcome::Retired(rung) => view! {
+                            <td><StatusPill label=format!("Retired · r{rung}") kind=Status::Stale /></td>
+                        }.into_any(),
+                        TrialOutcome::Unknown => view! {
+                            <td class="muted">"—"</td>
+                        }.into_any(),
+                    });
                     view! {
                         <tr>
                             <td class="num muted">{i + 1}</td>
-                            <td><span class="font-mono">{v.variant.label.clone()}</span></td>
-                            <td class="num">{v.options.top_k}</td>
-                            <td class="num">{format!("{:.2}", v.options.min_score())}</td>
+                            <td><span class="font-mono">{variant.variant.label.clone()}</span></td>
+                            <td class="num">{variant.options.top_k}</td>
+                            <td class="num">{format!("{:.2}", variant.options.min_score())}</td>
                             <td class="num"><strong>{format!("{:.1}%", score * 100.0)}</strong></td>
                             <td class="num muted">{ci_label}</td>
+                            {outcome_cell}
                         </tr>
                     }
                 }).collect_view()}
             </tbody>
         </table>
     }
+}
+
+struct TrialRow {
+    variant: EvaluationVariantResult,
+    outcome: TrialOutcome,
+}
+
+#[derive(Clone, Copy)]
+enum TrialOutcome {
+    Holdout,
+    Validation,
+    TopRung,
+    Retired(u32),
+    Unknown,
+}
+
+#[derive(Default)]
+struct TrialBucket {
+    best_rung: Option<(u32, EvaluationVariantResult)>,
+    validation: Option<EvaluationVariantResult>,
+    holdout: Option<EvaluationVariantResult>,
+}
+
+fn collapse_trials(variants: Vec<EvaluationVariantResult>) -> (Vec<TrialRow>, bool) {
+    let overall_max_rung = variants
+        .iter()
+        .filter_map(|v| match parse_trial_split(&v.variant.label) {
+            Some((_, TrialSplit::Rung(r))) => Some(r),
+            _ => None,
+        })
+        .max();
+
+    let mut buckets: HashMap<u32, TrialBucket> = HashMap::new();
+    let mut orphans: Vec<EvaluationVariantResult> = Vec::new();
+    for v in variants {
+        match parse_trial_split(&v.variant.label) {
+            Some((trial_id, split)) => {
+                let bucket = buckets.entry(trial_id).or_default();
+                match split {
+                    TrialSplit::Rung(rung) => match &bucket.best_rung {
+                        Some((cur, _)) if *cur >= rung => {}
+                        _ => bucket.best_rung = Some((rung, v)),
+                    },
+                    TrialSplit::Validation => bucket.validation = Some(v),
+                    TrialSplit::Holdout => bucket.holdout = Some(v),
+                }
+            }
+            None => orphans.push(v),
+        }
+    }
+
+    let has_split_info = overall_max_rung.is_some()
+        || buckets
+            .values()
+            .any(|b| b.validation.is_some() || b.holdout.is_some());
+
+    let mut rows: Vec<TrialRow> = buckets
+        .into_values()
+        .filter_map(|bucket| {
+            if let Some(variant) = bucket.holdout {
+                Some(TrialRow {
+                    variant,
+                    outcome: TrialOutcome::Holdout,
+                })
+            } else if let Some(variant) = bucket.validation {
+                Some(TrialRow {
+                    variant,
+                    outcome: TrialOutcome::Validation,
+                })
+            } else if let Some((rung, variant)) = bucket.best_rung {
+                let outcome = match overall_max_rung {
+                    Some(top) if rung < top => TrialOutcome::Retired(rung),
+                    _ => TrialOutcome::TopRung,
+                };
+                Some(TrialRow { variant, outcome })
+            } else {
+                None
+            }
+        })
+        .collect();
+    rows.extend(orphans.into_iter().map(|variant| TrialRow {
+        variant,
+        outcome: TrialOutcome::Unknown,
+    }));
+    rows.sort_by(|a, b| {
+        evaluation_score(&b.variant.metrics)
+            .partial_cmp(&evaluation_score(&a.variant.metrics))
+            .unwrap_or(Ordering::Equal)
+    });
+    (rows, has_split_info)
 }

@@ -1,11 +1,11 @@
 use leptos::prelude::*;
 use uuid::Uuid;
 
-use crate::contracts::{ActivityJobDto, ActivityKind, ActivityStatus};
-use crate::ui::components::activity::{
+use crate::shared::contracts::{ActivityJobDto, ActivityKind, ActivityStatus};
+use crate::ui::components::app::activity::{
     clamp_tray_height, dismiss_job, set_tray_open, use_activity_state,
 };
-use crate::ui::components::log_stream::LogStream;
+use crate::ui::components::app::log_stream::LogStream;
 
 #[component]
 pub fn ActivityTray() -> impl IntoView {
@@ -253,7 +253,7 @@ fn EmptyState() -> impl IntoView {
         <div class="activity-tray-empty">
             <div class="activity-tray-empty-title">"No jobs yet"</div>
             <div class="activity-tray-empty-body">
-                "Start indexing a document or generating a dataset — logs will stream here."
+                "Start indexing a document or generating a dataset. Logs will stream here."
             </div>
         </div>
     }
@@ -318,7 +318,9 @@ mod hydrate {
     use wasm_bindgen::prelude::*;
     use wasm_bindgen::JsCast;
 
-    use crate::ui::components::activity::{clamp_tray_height, set_tray_open, use_activity_state};
+    use crate::ui::components::app::activity::{
+        clamp_tray_height, set_tray_open, use_activity_state,
+    };
 
     static KEYBOARD_INSTALLED: AtomicBool = AtomicBool::new(false);
 

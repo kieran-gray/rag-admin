@@ -2,8 +2,8 @@ use leptos::prelude::*;
 use uuid::Uuid;
 
 #[cfg(feature = "ssr")]
-use crate::contracts::BestVariantDto;
-use crate::contracts::{
+use crate::shared::contracts::BestVariantDto;
+use crate::shared::contracts::{
     EvaluationDatasetDto, EvaluationDatasetSummaryDto, EvaluationJobInfo, EvaluationRunDto,
     EvaluationRunSummaryDto, RecentEvaluationRunDto, RunEvaluationRequestDto,
     RunOptimizationRequestDto,
@@ -213,8 +213,10 @@ pub async fn promote_variant_to_chunking_config(
     variant_label: String,
     name: String,
 ) -> Result<Uuid, ServerFnError> {
-    use crate::contracts::{ChunkingConfigurationCommandDto, CreateChunkingConfigurationDto};
     use crate::server::application::configuration::ChunkingConfigurationService;
+    use crate::shared::contracts::{
+        ChunkingConfigurationCommandDto, CreateChunkingConfigurationDto,
+    };
 
     let trimmed_label = variant_label.trim();
     if trimmed_label.is_empty() {

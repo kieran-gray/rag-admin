@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{core::ChunkingConfig, event_sourcing::Aggregate};
+use event_sourcing::Aggregate;
 
 use super::{
     commands::IndexingCommand,
@@ -19,14 +19,9 @@ const INDEXING_NAMESPACE: Uuid = uuid::uuid!("e3b0a3d2-f1c4-4b8a-9e7d-2a6c5f8910
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Indexing {
     pub indexing_id: Uuid,
-    pub document_id: Uuid,
-    pub pipeline_configuration_id: Uuid,
-    pub document_version: u32,
-    pub chunking_config: ChunkingConfig,
     pub chunk_set_id: Option<Uuid>,
     pub embedding_set_id: Option<Uuid>,
     pub status: IndexingStatus,
-    pub attempts: u32,
     pub last_request_id: Option<Uuid>,
     pub removed: bool,
     pub auto_advance: bool,
@@ -41,14 +36,9 @@ impl Indexing {
     fn from_requested(e: &IngestRequested) -> Self {
         Self {
             indexing_id: Self::compute_id(e.document_id, e.pipeline_configuration_id),
-            document_id: e.document_id,
-            pipeline_configuration_id: e.pipeline_configuration_id,
-            document_version: e.document_version,
-            chunking_config: e.chunking_config,
             chunk_set_id: None,
             embedding_set_id: None,
             status: IndexingStatus::Pending,
-            attempts: 1,
             last_request_id: Some(e.request_id),
             removed: false,
             auto_advance: e.auto_advance,
@@ -68,12 +58,9 @@ impl Aggregate for Indexing {
     fn apply(&mut self, event: &Self::Event) {
         match event {
             Self::Event::IngestRequested(e) => {
-                self.document_version = e.document_version;
-                self.chunking_config = e.chunking_config;
                 self.chunk_set_id = None;
                 self.embedding_set_id = None;
                 self.status = IndexingStatus::Pending;
-                self.attempts += 1;
                 self.last_request_id = Some(e.request_id);
                 self.auto_advance = e.auto_advance;
             }
@@ -125,7 +112,7 @@ impl Aggregate for Indexing {
                     document_id: cmd.document_id,
                     pipeline_configuration_id: cmd.pipeline_configuration_id,
                     document_version: cmd.document_version,
-                    chunking_config: cmd.chunking_config,
+                    chunking_config: cmd.chunking_config.into(),
                     request_id: cmd.request_id,
                     auto_advance: cmd.auto_advance,
                     occurred_at: cmd.occurred_at,
@@ -275,10 +262,10 @@ impl Aggregate for Indexing {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::SectionChunkingConfig;
     use crate::server::domain::indexing::commands::*;
     use crate::server::domain::indexing::events::*;
     use crate::server::domain::shared::Timestamp;
+    use crate::shared::{ChunkingConfig, SectionChunkingConfig};
 
     fn now() -> Timestamp {
         "2024-01-01T00:00:00Z".into()
@@ -310,12 +297,13 @@ mod tests {
         let events = Indexing::handle_command(None, base_request(doc_id, pc_id)).unwrap();
 
         assert_eq!(events.len(), 1);
-        assert!(matches!(events[0], IndexingEvent::IngestRequested(_)));
+        let IndexingEvent::IngestRequested(event) = &events[0] else {
+            panic!("expected IngestRequested");
+        };
+        assert_eq!(event.document_id, doc_id);
 
         let indexing = Indexing::from_events(&events).unwrap();
-        assert_eq!(indexing.document_id, doc_id);
         assert_eq!(indexing.status, IndexingStatus::Pending);
-        assert_eq!(indexing.attempts, 1);
         assert_eq!(indexing.indexing_id, Indexing::compute_id(doc_id, pc_id));
     }
 

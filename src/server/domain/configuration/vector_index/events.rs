@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::catalog::VectorStoreKind;
+use crate::shared::reference_data::VectorStoreKind;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct VectorIndexCatalogCreated {

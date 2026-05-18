@@ -8,7 +8,7 @@ use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
-use crate::event_sourcing::event_bus::EventBus;
+use event_sourcing::event_bus::EventBus;
 
 #[derive(Debug, Deserialize)]
 pub struct EventsWsQuery {

@@ -7,8 +7,10 @@ use tokio::sync::{broadcast::error::RecvError, Mutex};
 use tracing::warn;
 use uuid::Uuid;
 
-use crate::contracts::{classify, ActivityDelta, ActivityJobDto, ActivityStart, ActivityStatus};
-use crate::event_sourcing::event_bus::EventBus;
+use crate::shared::contracts::{
+    classify, ActivityDelta, ActivityJobDto, ActivityStart, ActivityStatus,
+};
+use event_sourcing::event_bus::EventBus;
 
 const TERMINAL_RETENTION: Duration = Duration::from_mins(15);
 

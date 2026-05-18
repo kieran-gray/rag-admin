@@ -1,9 +1,5 @@
 use std::sync::Arc;
 
-use crate::contracts::{
-    ChunkingConfigurationDto, ConfigurationDto, EmbeddingModelDto, GenerationModelDto,
-    PipelineConfigurationDto, SweepTemplateDto, VectorIndexDto,
-};
 use crate::server::application::AppError;
 use crate::server::domain::configuration::chunking_configuration::ChunkingConfigurationRepository;
 use crate::server::domain::configuration::embedding_model::EmbeddingModelRepository;
@@ -13,6 +9,10 @@ use crate::server::domain::configuration::sweep_template::{
     SweepTemplateRepository, SweepTemplateRepositoryError,
 };
 use crate::server::domain::configuration::vector_index::VectorIndexRepository;
+use crate::shared::contracts::{
+    ChunkingConfigurationDto, ConfigurationDto, EmbeddingModelDto, GenerationModelDto,
+    PipelineConfigurationDto, SweepTemplateDto, VectorIndexDto,
+};
 use uuid::Uuid;
 
 pub struct ConfigurationQueryService {

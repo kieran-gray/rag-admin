@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use crate::core::EmbedResult;
+use crate::shared::EmbedResult;
 
 #[cfg(feature = "ssr")]
 use crate::server::application::configuration::ConfigurationQueryService;

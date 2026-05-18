@@ -3,16 +3,16 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
-use crate::contracts::{ChatRequest, ChatResponse, QueryHit};
 use crate::server::application::configuration::PipelineResolver;
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::indexing::ports::vector_index::VectorQuery;
 use crate::server::application::indexing::VectorIndexResolver;
+use crate::server::application::llm::ports::GenerationResponseFormat;
 use crate::server::application::llm::service::GenerationPrompt;
 use crate::server::application::llm::GenerationService;
-use crate::server::application::ports::GenerationResponseFormat;
 use crate::server::application::AppError;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
+use crate::shared::contracts::{ChatRequest, ChatResponse, QueryHit};
 
 const SYSTEM_PROMPT: &str = include_str!("prompts/chat_system_prompt.txt");
 const SNIPPET_MAX_CHARS: usize = 320;

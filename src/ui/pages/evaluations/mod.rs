@@ -1,10 +1,17 @@
 use leptos::prelude::*;
 use leptos_router::components::A;
+use leptos_router::hooks::use_navigate;
+use leptos_router::NavigateOptions;
 
-use crate::contracts::{aggregate_type, BestVariantDto, RecentEvaluationRunDto};
 use crate::server_functions::evaluation::get_recent_runs;
-use crate::ui::components::event_bus::use_invalidator;
-use crate::ui::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
+use crate::server_functions::source_document::list_documents;
+use crate::shared::contracts::{
+    aggregate_type, BestVariantDto, DocumentListItemDto, RecentEvaluationRunDto,
+};
+use crate::ui::components::app::event_bus::use_invalidator;
+use crate::ui::components::primitives::{
+    Dialog, EmptyState, PageHeader, Status, StatusPill, Surface,
+};
 
 mod dataset_detail;
 mod optimize_progress;
@@ -26,12 +33,26 @@ pub fn EvaluationsPage() -> impl IntoView {
         |_| async move { get_recent_runs(RECENT_LIMIT).await },
     );
 
+    let (launcher_open, set_launcher_open) = signal(false);
+    let launcher_open_signal: Signal<bool> = launcher_open.into();
+    let close_launcher = Callback::new(move |_| set_launcher_open.set(false));
+    let open_launcher = move |_| set_launcher_open.set(true);
+
     view! {
         <div>
             <PageHeader
                 title="Evaluations"
                 subtitle="Recent evaluation runs and their top-scoring chunking configuration."
                     .to_string()
+                actions=Box::new(move || view! {
+                    <button
+                        type="button"
+                        class="btn btn-primary"
+                        on:click=open_launcher
+                    >
+                        "+ New evaluation"
+                    </button>
+                }.into_any())
             />
 
             <Suspense fallback=|| view! {
@@ -44,7 +65,16 @@ pub fn EvaluationsPage() -> impl IntoView {
                         <Surface>
                             <EmptyState
                                 title="No evaluation runs yet"
-                                body="Open a document, generate a dataset, and launch a run — results land here as they complete.".to_string()
+                                body="Pick a document and launch a run. Results land here as they complete.".to_string()
+                                action=Box::new(move || view! {
+                                    <button
+                                        type="button"
+                                        class="btn btn-primary"
+                                        on:click=open_launcher
+                                    >
+                                        "+ New evaluation"
+                                    </button>
+                                }.into_any())
                             />
                         </Surface>
                     }.into_any(),
@@ -56,7 +86,114 @@ pub fn EvaluationsPage() -> impl IntoView {
                     }.into_any(),
                 })}
             </Suspense>
+
+            <NewEvaluationDialog open=launcher_open_signal on_close=close_launcher />
         </div>
+    }
+}
+
+#[component]
+fn NewEvaluationDialog(#[prop(into)] open: Signal<bool>, on_close: Callback<()>) -> impl IntoView {
+    let docs_invalidator = use_invalidator(|e| {
+        e.from_any(&[aggregate_type::SOURCE_DOCUMENT, aggregate_type::INDEXING])
+    });
+    let docs = Resource::new(
+        move || (open.get(), docs_invalidator.get()),
+        |(is_open, _)| async move {
+            if !is_open {
+                return Ok(Vec::new());
+            }
+            list_documents().await
+        },
+    );
+
+    let navigate = use_navigate();
+    let go_to_doc = Callback::new(move |doc: DocumentListItemDto| {
+        let href = format!(
+            "/documents/{}/{}?tab=chunk&tune=1",
+            doc.document_type.to_lowercase(),
+            urlencoding::encode(&doc.source_ref_key),
+        );
+        on_close.run(());
+        navigate(&href, NavigateOptions::default());
+    });
+
+    view! {
+        <Dialog
+            open=open
+            title="Run a new evaluation"
+            subtitle="Pick a document. The chunk view opens with the tuning panel expanded so you can generate a dataset or kick off optimization.".to_string()
+            on_close=on_close
+        >
+            <Suspense fallback=|| view! { <p class="muted text-sm">"Loading documents…"</p> }>
+                {move || docs.get().map(|res| match res {
+                    Err(e) => view! {
+                        <div class="log-line-error text-sm">{format!("Failed to load: {e}")}</div>
+                    }.into_any(),
+                    Ok(list) => {
+                        let imported: Vec<DocumentListItemDto> = list
+                            .into_iter()
+                            .filter(|d| d.document_id.is_some())
+                            .collect();
+                        if imported.is_empty() {
+                            view! {
+                                <p class="muted text-sm">
+                                    "No imported documents yet. Import one from the Documents page first."
+                                </p>
+                            }.into_any()
+                        } else {
+                            view! {
+                                <ul class="flex flex-col gap-1">
+                                    {imported.into_iter().map(|d| view! {
+                                        <DocumentPickerRow doc=d on_pick=go_to_doc />
+                                    }).collect_view()}
+                                </ul>
+                            }.into_any()
+                        }
+                    }
+                })}
+            </Suspense>
+        </Dialog>
+    }
+}
+
+#[component]
+fn DocumentPickerRow(
+    doc: DocumentListItemDto,
+    on_pick: Callback<DocumentListItemDto>,
+) -> impl IntoView {
+    let title = doc.title.clone();
+    let source_ref = doc.source_ref_key.clone();
+    let type_label = document_type_label(&doc.document_type).to_string();
+    let doc_for_click = doc.clone();
+
+    view! {
+        <li>
+            <button
+                type="button"
+                class="w-full flex items-center justify-between gap-3 px-3 py-2 rounded text-left hover:bg-[var(--color-surface-hover)]"
+                on:click=move |_| on_pick.run(doc_for_click.clone())
+            >
+                <div class="min-w-0">
+                    <div class="text-sm truncate">{title}</div>
+                    <div class="faint text-xs truncate">{format!("./{source_ref}")}</div>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <span class="pill pill-neutral text-xs">{type_label}</span>
+                    <span class="faint">"›"</span>
+                </div>
+            </button>
+        </li>
+    }
+}
+
+fn document_type_label(doc_type: &str) -> &'static str {
+    match doc_type {
+        "BlogPost" => "Blog post",
+        "Markdown" => "Markdown",
+        "PlainText" => "Plain text",
+        "WebPage" => "Web page",
+        _ => "Document",
     }
 }
 

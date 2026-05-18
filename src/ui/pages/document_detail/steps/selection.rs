@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 use uuid::Uuid;
 
-use crate::contracts::{ChunkingConfigurationDto, IndexingDto, PipelineConfigurationDto};
+use crate::shared::contracts::{ChunkingConfigurationDto, IndexingDto, PipelineConfigurationDto};
 
 #[derive(Clone, Copy)]
 pub struct ConfigSelection {

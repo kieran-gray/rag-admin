@@ -1,14 +1,13 @@
 use async_trait::async_trait;
 
 use crate::{
-    catalog::ChunkStrategy,
-    core::ChunkingConfig,
     server::application::{
         chunking::{ChunkOutput, DocumentChunker, TokenBudget},
         markdown::{Document, SectionBlock},
         ports::Tokenizer,
         AppError,
     },
+    shared::{reference_data::ChunkStrategy, ChunkingConfig},
 };
 
 const SECTION_CUT_DEPTH: usize = 3;
@@ -117,8 +116,8 @@ fn last_double_newline(window: &[char]) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        core::SectionChunkingConfig,
         server::{application::ports::MarkdownParser, infrastructure::markdown::MarkdownRsParser},
+        shared::SectionChunkingConfig,
     };
 
     use super::*;

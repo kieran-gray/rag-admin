@@ -8,8 +8,8 @@ use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::Extension;
 use futures_util::stream::Stream;
 
-use crate::contracts::LogEvent;
 use crate::server::application::{JobMessage, JobRegistry};
+use crate::shared::contracts::LogEvent;
 
 pub async fn job_logs_handler(
     Path(job_id): Path<String>,

@@ -12,7 +12,7 @@ use crate::server::domain::evaluation::{
     question::{EvaluationQuestion, EvaluationReference},
 };
 use crate::server::domain::shared::Timestamp;
-use crate::server::infrastructure::postgres::timestamps::to_offset_datetime;
+use crate::server::infrastructure::sql::timestamps::to_offset_datetime;
 
 pub struct PostgresEvaluationDatasetRepository {
     pool: PgPool,

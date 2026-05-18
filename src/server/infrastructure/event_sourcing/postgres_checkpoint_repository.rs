@@ -1,10 +1,8 @@
 use async_trait::async_trait;
 use sqlx::PgPool;
 
-use crate::event_sourcing::checkpoint::{
-    CheckpointRepository, CheckpointStatus, ProjectionCheckpoint,
-};
-use crate::event_sourcing::error::EsError;
+use event_sourcing::checkpoint::{CheckpointRepository, CheckpointStatus, ProjectionCheckpoint};
+use event_sourcing::error::EsError;
 
 pub struct PostgresCheckpointRepository {
     pool: PgPool,

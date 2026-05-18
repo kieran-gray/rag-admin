@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::event_sourcing::envelope::EventEnvelope;
-use crate::event_sourcing::error::ProjectionError;
-use crate::event_sourcing::projector::Projector;
+use event_sourcing::envelope::EventEnvelope;
+use event_sourcing::error::ProjectionError;
+use event_sourcing::projector::Projector;
 
 use super::events::SourceDocumentEvent;
 use super::read_model::SourceDocumentReadModel;

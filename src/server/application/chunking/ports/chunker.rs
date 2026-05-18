@@ -1,9 +1,8 @@
 use async_trait::async_trait;
 
 use crate::{
-    catalog::ChunkStrategy,
-    core::ChunkingConfig,
     server::application::{markdown::Document, ports::Tokenizer, AppError},
+    shared::{reference_data::ChunkStrategy, ChunkingConfig},
 };
 
 #[derive(Debug, Clone)]

@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use crate::event_sourcing::CommandProcessor;
 use crate::server::application::AppError;
 use crate::server::domain::source_document::{
     aggregate::SourceDocument, commands::SourceDocumentCommand,
 };
+use event_sourcing::CommandProcessor;
 
 pub struct SourceDocumentCommandHandler {
     processor: Arc<CommandProcessor<SourceDocument>>,

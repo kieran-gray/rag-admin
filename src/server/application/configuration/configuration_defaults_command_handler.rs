@@ -2,12 +2,12 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
-use crate::event_sourcing::CommandProcessor;
 use crate::server::application::AppError;
 use crate::server::domain::configuration::defaults::{
     ConfigurationDefaults, ConfigurationDefaultsCommand, SetDefaultChunkingConfiguration,
     SetDefaultPipelineConfiguration, SetDefaultSweepTemplate,
 };
+use event_sourcing::CommandProcessor;
 
 pub struct ConfigurationDefaultsCommandHandler {
     processor: Arc<CommandProcessor<ConfigurationDefaults>>,

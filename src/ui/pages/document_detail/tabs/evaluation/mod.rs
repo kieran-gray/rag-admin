@@ -3,15 +3,15 @@ use leptos::task::spawn_local;
 use leptos_router::components::A;
 use uuid::Uuid;
 
-use crate::contracts::{
-    aggregate_type, ChunkingConfigurationDto, EvaluationDatasetSummaryDto, EvaluationRunSummaryDto,
-    PipelineConfigurationDto, RunEvaluationRequestDto, SourceDocumentDetailDto, SweepTemplateDto,
-};
 use crate::server_functions::evaluation::{
     get_datasets_for_document, get_runs_for_document, start_generate_synthetic_dataset,
     start_run_evaluation,
 };
-use crate::ui::components::event_bus::use_invalidator;
+use crate::shared::contracts::{
+    aggregate_type, ChunkingConfigurationDto, EvaluationDatasetSummaryDto, EvaluationRunSummaryDto,
+    PipelineConfigurationDto, RunEvaluationRequestDto, SourceDocumentDetailDto, SweepTemplateDto,
+};
+use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{EmptyState, Status, StatusPill, Surface};
 
 mod eval_launcher;

@@ -1,5 +1,5 @@
-use crate::event_sourcing::job_queue::{IdempotencyKey, NewJob};
-use crate::event_sourcing::policy::{HasPolicies, PolicyContext, PolicyFn};
+use event_sourcing::job_queue::{IdempotencyKey, NewJob};
+use event_sourcing::policy::{HasPolicies, PolicyContext, PolicyFn};
 
 use super::aggregate::Indexing;
 use super::effects::{

@@ -6,9 +6,9 @@ use axum::response::{IntoResponse, Response};
 use axum::Extension;
 use axum::Json;
 
-use crate::contracts::SourceDocumentDto;
 use crate::server::application::source_document::SourceDocumentIngestService;
 use crate::server::application::AppError;
+use crate::shared::contracts::SourceDocumentDto;
 
 pub async fn upload_document(
     Extension(ingest): Extension<Arc<SourceDocumentIngestService>>,

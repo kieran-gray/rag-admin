@@ -2,9 +2,6 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::event_sourcing::envelope::EventEnvelope;
-use crate::event_sourcing::error::ProjectionError;
-use crate::event_sourcing::projector::Projector;
 use crate::server::domain::configuration::chunking_configuration::{
     ChunkingConfigurationRepository, ChunkingConfigurationRepositoryError,
 };
@@ -14,6 +11,9 @@ use crate::server::domain::configuration::pipeline_configuration::{
 use crate::server::domain::configuration::sweep_template::{
     SweepTemplateRepository, SweepTemplateRepositoryError,
 };
+use event_sourcing::envelope::EventEnvelope;
+use event_sourcing::error::ProjectionError;
+use event_sourcing::projector::Projector;
 
 use super::events::ConfigurationDefaultsEvent;
 

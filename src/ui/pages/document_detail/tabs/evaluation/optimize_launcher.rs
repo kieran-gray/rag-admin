@@ -1,9 +1,9 @@
 use leptos::prelude::*;
 use uuid::Uuid;
 
-use crate::contracts::RunOptimizationRequestDto;
-use crate::core::{OptimizationBudget, OptimizationConfig, OptimizationScope};
 use crate::server_functions::evaluation::start_run_optimization;
+use crate::shared::contracts::RunOptimizationRequestDto;
+use crate::shared::{OptimizationBudget, OptimizationConfig, OptimizationScope};
 use crate::ui::components::primitives::{Status, StatusPill, Surface};
 
 fn describe_budget(b: OptimizationBudget) -> String {

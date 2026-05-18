@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::catalog::VectorStoreKind;
 use crate::server::domain::configuration::catalog::{CatalogEntry, CatalogError};
+use crate::shared::reference_data::VectorStoreKind;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VectorIndex {

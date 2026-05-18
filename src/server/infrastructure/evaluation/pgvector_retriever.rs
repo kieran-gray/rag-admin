@@ -6,7 +6,7 @@ use crate::server::application::{
     evaluation::ports::retriever::{RetrievalQuery, RetrievedChunk, Retriever},
     AppError,
 };
-use crate::server::infrastructure::postgres::pgvector_codec::format_vector_literal;
+use crate::server::infrastructure::sql::pgvector_codec::format_vector_literal;
 
 pub struct PgvectorRetriever {
     pool: PgPool,

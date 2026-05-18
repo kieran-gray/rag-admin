@@ -50,7 +50,7 @@ pub struct KFoldEntry {
     pub validate: Vec<usize>,
 }
 
-pub fn three_way(seed_source: Uuid, total: usize, ratios: ThreeWayRatios) -> ThreeWaySplit {
+pub fn three_way(seed: u64, total: usize, ratios: ThreeWayRatios) -> ThreeWaySplit {
     if total < 3 {
         return ThreeWaySplit {
             tuning: Vec::new(),
@@ -60,8 +60,7 @@ pub fn three_way(seed_source: Uuid, total: usize, ratios: ThreeWayRatios) -> Thr
     }
 
     let mut indices: Vec<usize> = (0..total).collect();
-    let seed = seed_from_uuid(seed_source);
-    shuffle_in_place(&mut indices, seed);
+    shuffle_in_place(&mut indices, normalise_seed(seed));
 
     let sum = (ratios.tuning_milli + ratios.validation_milli + ratios.holdout_milli).max(1) as u64;
     let t = ratios.tuning_milli as u64;
@@ -102,15 +101,14 @@ pub fn three_way(seed_source: Uuid, total: usize, ratios: ThreeWayRatios) -> Thr
     }
 }
 
-pub fn k_fold(seed_source: Uuid, total: usize, k: u32) -> Vec<KFoldEntry> {
+pub fn k_fold(seed: u64, total: usize, k: u32) -> Vec<KFoldEntry> {
     let k = k.max(1);
     if total < k as usize {
         return Vec::new();
     }
 
     let mut indices: Vec<usize> = (0..total).collect();
-    let seed = seed_from_uuid(seed_source);
-    shuffle_in_place(&mut indices, seed);
+    shuffle_in_place(&mut indices, normalise_seed(seed));
 
     let base = total / k as usize;
     let extras = total % k as usize;
@@ -140,11 +138,7 @@ pub fn k_fold(seed_source: Uuid, total: usize, k: u32) -> Vec<KFoldEntry> {
     out
 }
 
-pub fn split_questions(
-    seed_source: Uuid,
-    total: usize,
-    tuning_fraction_milli: u32,
-) -> DatasetSplit {
+pub fn split_questions(seed: u64, total: usize, tuning_fraction_milli: u32) -> DatasetSplit {
     if total == 0 {
         return DatasetSplit {
             tuning: Vec::new(),
@@ -153,8 +147,7 @@ pub fn split_questions(
     }
 
     let mut indices: Vec<usize> = (0..total).collect();
-    let seed = seed_from_uuid(seed_source);
-    shuffle_in_place(&mut indices, seed);
+    shuffle_in_place(&mut indices, normalise_seed(seed));
 
     let fraction = tuning_fraction_milli.min(1000) as u64;
     let tuning_size = ((total as u64 * fraction + 500) / 1000) as usize;
@@ -168,7 +161,7 @@ pub fn split_questions(
     DatasetSplit { tuning, holdout }
 }
 
-fn seed_from_uuid(id: Uuid) -> u64 {
+pub fn seed_from_uuid(id: Uuid) -> u64 {
     let bytes = id.as_bytes();
     let (hi_bytes, lo_bytes) = bytes.split_at(8);
     let mut hi = 0u64;
@@ -177,7 +170,10 @@ fn seed_from_uuid(id: Uuid) -> u64 {
         hi = (hi << 8) | u64::from(*b_hi);
         lo = (lo << 8) | u64::from(*b_lo);
     }
-    let seed = hi ^ lo;
+    normalise_seed(hi ^ lo)
+}
+
+fn normalise_seed(seed: u64) -> u64 {
     if seed == 0 {
         0x9E37_79B9_7F4A_7C15
     } else {
@@ -199,11 +195,15 @@ fn shuffle_in_place<T>(values: &mut [T], mut state: u64) {
 mod tests {
     use super::*;
 
+    fn seed(n: u128) -> u64 {
+        seed_from_uuid(Uuid::from_u128(n))
+    }
+
     #[test]
     fn split_70_30_is_deterministic_per_seed() {
-        let id = Uuid::from_u128(0x1234_5678_9abc_def0_1122_3344_5566_7788);
-        let a = split_questions(id, 10, 700);
-        let b = split_questions(id, 10, 700);
+        let s = seed(0x1234_5678_9abc_def0_1122_3344_5566_7788);
+        let a = split_questions(s, 10, 700);
+        let b = split_questions(s, 10, 700);
         assert_eq!(a.tuning, b.tuning);
         assert_eq!(a.holdout, b.holdout);
         assert_eq!(a.tuning.len(), 7);
@@ -215,47 +215,55 @@ mod tests {
 
     #[test]
     fn split_keeps_at_least_one_in_each_side() {
-        let id = Uuid::from_u128(42);
-        let s = split_questions(id, 2, 700);
+        let s = split_questions(seed(42), 2, 700);
         assert_eq!(s.tuning.len() + s.holdout.len(), 2);
         assert!(s.is_usable());
     }
 
     #[test]
     fn split_returns_empty_on_zero() {
-        let s = split_questions(Uuid::nil(), 0, 700);
+        let s = split_questions(0, 0, 700);
         assert!(s.tuning.is_empty() && s.holdout.is_empty());
         assert!(!s.is_usable());
     }
 
     #[test]
     fn split_4_questions_gives_3_tuning_1_holdout() {
-        let id = Uuid::from_u128(99);
-        let s = split_questions(id, 4, 700);
+        let s = split_questions(seed(99), 4, 700);
         assert_eq!(s.tuning.len(), 3);
         assert_eq!(s.holdout.len(), 1);
     }
 
     #[test]
     fn split_honours_custom_fraction() {
-        let id = Uuid::from_u128(99);
-        let s = split_questions(id, 10, 500);
+        let s = split_questions(seed(99), 10, 500);
         assert_eq!(s.tuning.len(), 5);
         assert_eq!(s.holdout.len(), 5);
     }
 
     #[test]
     fn split_clamps_fraction_above_1000() {
-        let id = Uuid::from_u128(99);
-        let s = split_questions(id, 10, 2000);
+        let s = split_questions(seed(99), 10, 2000);
         assert_eq!(s.tuning.len(), 9);
         assert_eq!(s.holdout.len(), 1);
     }
 
     #[test]
+    fn explicit_seed_overrides_uuid_derivation() {
+        let from_uuid = split_questions(seed(7), 10, 700);
+        let from_raw = split_questions(42, 10, 700);
+        let from_raw_again = split_questions(42, 10, 700);
+        assert_eq!(from_raw.tuning, from_raw_again.tuning);
+        assert_ne!(from_uuid.tuning, from_raw.tuning);
+    }
+
+    #[test]
     fn three_way_default_ratios_partition_dataset() {
-        let id = Uuid::from_u128(0xDEAD_BEEF_CAFE_F00D_1122_3344_5566_7788);
-        let s = three_way(id, 50, ThreeWayRatios::default());
+        let s = three_way(
+            seed(0xDEAD_BEEF_CAFE_F00D_1122_3344_5566_7788),
+            50,
+            ThreeWayRatios::default(),
+        );
         assert!(s.is_usable());
         assert_eq!(s.tuning.len() + s.validation.len() + s.holdout.len(), 50);
 
@@ -275,9 +283,9 @@ mod tests {
 
     #[test]
     fn three_way_is_deterministic_per_seed() {
-        let id = Uuid::from_u128(7);
-        let a = three_way(id, 25, ThreeWayRatios::default());
-        let b = three_way(id, 25, ThreeWayRatios::default());
+        let s = seed(7);
+        let a = three_way(s, 25, ThreeWayRatios::default());
+        let b = three_way(s, 25, ThreeWayRatios::default());
         assert_eq!(a.tuning, b.tuning);
         assert_eq!(a.validation, b.validation);
         assert_eq!(a.holdout, b.holdout);
@@ -285,15 +293,13 @@ mod tests {
 
     #[test]
     fn three_way_returns_empty_for_tiny_datasets() {
-        let id = Uuid::from_u128(7);
-        let s = three_way(id, 2, ThreeWayRatios::default());
+        let s = three_way(seed(7), 2, ThreeWayRatios::default());
         assert!(!s.is_usable());
     }
 
     #[test]
     fn three_way_always_reserves_one_per_partition() {
-        let id = Uuid::from_u128(7);
-        let s = three_way(id, 3, ThreeWayRatios::default());
+        let s = three_way(seed(7), 3, ThreeWayRatios::default());
         assert!(s.is_usable());
         assert_eq!(s.tuning.len(), 1);
         assert_eq!(s.validation.len(), 1);
@@ -302,9 +308,8 @@ mod tests {
 
     #[test]
     fn three_way_renormalises_unscaled_ratios() {
-        let id = Uuid::from_u128(11);
         let s = three_way(
-            id,
+            seed(11),
             20,
             ThreeWayRatios {
                 tuning_milli: 6,
@@ -319,8 +324,7 @@ mod tests {
 
     #[test]
     fn k_fold_partitions_validation_disjointly() {
-        let id = Uuid::from_u128(0xC0DE);
-        let folds = k_fold(id, 23, 5);
+        let folds = k_fold(seed(0xC0DE), 23, 5);
         assert_eq!(folds.len(), 5);
         let mut sizes: Vec<usize> = folds.iter().map(|f| f.validate.len()).collect();
         sizes.sort_unstable();
@@ -336,8 +340,7 @@ mod tests {
 
     #[test]
     fn k_fold_train_excludes_validate_per_fold() {
-        let id = Uuid::from_u128(0xC0DE);
-        for fold in k_fold(id, 20, 4) {
+        for fold in k_fold(seed(0xC0DE), 20, 4) {
             let train: std::collections::HashSet<usize> = fold.train.iter().copied().collect();
             for v in &fold.validate {
                 assert!(!train.contains(v), "fold {} leaked", fold.fold_index);
@@ -348,6 +351,6 @@ mod tests {
 
     #[test]
     fn k_fold_returns_empty_when_too_small() {
-        assert!(k_fold(Uuid::from_u128(1), 3, 5).is_empty());
+        assert!(k_fold(seed(1), 3, 5).is_empty());
     }
 }

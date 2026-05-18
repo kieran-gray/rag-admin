@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::core::ChunkingConfig;
+use crate::shared::ChunkingConfig;
 
-use super::{aggregate::Indexing, status::IndexingStatus};
+use super::status::IndexingStatus;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexingReadModel {
@@ -23,22 +23,4 @@ pub struct IndexingReadModel {
 
 fn default_true() -> bool {
     true
-}
-
-impl From<&Indexing> for IndexingReadModel {
-    fn from(indexing: &Indexing) -> Self {
-        Self {
-            indexing_id: indexing.indexing_id,
-            document_id: indexing.document_id,
-            pipeline_configuration_id: indexing.pipeline_configuration_id,
-            document_version: indexing.document_version,
-            chunking_config: indexing.chunking_config,
-            chunk_set_id: indexing.chunk_set_id,
-            embedding_set_id: indexing.embedding_set_id,
-            status: indexing.status.clone(),
-            attempts: indexing.attempts,
-            removed: indexing.removed,
-            auto_advance: indexing.auto_advance,
-        }
-    }
 }

@@ -14,7 +14,7 @@ use crate::server::domain::source_document::{
     source_ref::SourceRef,
     version::{BlogPostMetadata, DocumentMetadata},
 };
-use crate::server::infrastructure::http_client::ReqwestHttpClient;
+use crate::server::infrastructure::http::ReqwestHttpClient;
 
 pub struct HttpBlogAdapter {
     http: Arc<ReqwestHttpClient>,

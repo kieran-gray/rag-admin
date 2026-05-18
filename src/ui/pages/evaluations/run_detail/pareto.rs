@@ -3,7 +3,7 @@ use std::collections::HashSet;
 
 use leptos::prelude::*;
 
-use crate::core::{
+use crate::shared::{
     evaluation_score, pareto_frontier, EvaluationResultSplit, EvaluationVariantResult, ParetoPoint,
 };
 use crate::ui::components::primitives::Surface;

@@ -2,9 +2,9 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use uuid::Uuid;
 
-use crate::contracts::{PipelineConfigurationDto, QueryHit, QueryRequest, QueryResult};
 use crate::server_functions::configuration::get_pipeline_configurations;
 use crate::server_functions::query::query_documents;
+use crate::shared::contracts::{PipelineConfigurationDto, QueryHit, QueryRequest, QueryResult};
 use crate::ui::components::primitives::{EmptyState, PageHeader, Surface};
 
 #[derive(Clone)]

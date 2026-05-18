@@ -5,13 +5,13 @@ use leptos_router::hooks::{use_navigate, use_params_map};
 use leptos_router::NavigateOptions;
 use uuid::Uuid;
 
-use crate::contracts::{
-    aggregate_type, EvaluationDatasetDto, EvaluationQuestionDto, EvaluationReferenceDto,
-};
 use crate::server_functions::evaluation::{
     cancel_dataset_generation, delete_dataset, get_dataset, rename_dataset,
 };
-use crate::ui::components::event_bus::use_invalidator;
+use crate::shared::contracts::{
+    aggregate_type, EvaluationDatasetDto, EvaluationQuestionDto, EvaluationReferenceDto,
+};
+use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{
     ConfirmDialog, EmptyState, Kv, PageHeader, Status, StatusPill, Surface,
 };

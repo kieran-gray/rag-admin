@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 
-use crate::catalog::ChunkStrategy;
-use crate::core::ChunkingConfig;
 use crate::server::application::chunking::{ChunkOutput, DocumentChunker, TokenBudget};
 use crate::server::application::markdown::{Document, SegmentBlock};
 use crate::server::application::ports::Tokenizer;
 use crate::server::application::AppError;
+use crate::shared::reference_data::ChunkStrategy;
+use crate::shared::ChunkingConfig;
 
 pub struct BertChunker;
 
@@ -214,10 +214,10 @@ fn split_oversized(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::BertChunkingConfig;
     use crate::server::application::ports::MarkdownParser;
     use crate::server::application::test_support::MockTokenizer;
     use crate::server::infrastructure::markdown::MarkdownRsParser;
+    use crate::shared::BertChunkingConfig;
 
     fn chunker() -> BertChunker {
         BertChunker {}

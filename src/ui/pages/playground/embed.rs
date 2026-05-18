@@ -2,10 +2,10 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::hooks::use_query_map;
 
-use crate::contracts::EmbeddingModelDto;
-use crate::core::EmbedResult;
 use crate::server_functions::configuration::get_configuration;
 use crate::server_functions::embed::embed_texts;
+use crate::shared::contracts::EmbeddingModelDto;
+use crate::shared::EmbedResult;
 use crate::ui::components::primitives::{EmptyState, MetricBar, MetricKind, PageHeader, Surface};
 
 #[component]

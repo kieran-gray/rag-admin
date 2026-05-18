@@ -1,4 +1,4 @@
-use crate::contracts::ChunkDto;
+use crate::shared::contracts::ChunkDto;
 use leptos::prelude::*;
 
 #[component]

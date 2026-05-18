@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::core::ChunkingConfig;
+use crate::server::domain::shared::event_payloads::ChunkingConfigPayload;
 use crate::server::domain::shared::Timestamp;
 
 use super::status::IngestStage;
@@ -11,7 +11,7 @@ pub struct IngestRequested {
     pub document_id: Uuid,
     pub pipeline_configuration_id: Uuid,
     pub document_version: u32,
-    pub chunking_config: ChunkingConfig,
+    pub chunking_config: ChunkingConfigPayload,
     pub request_id: Uuid,
     #[serde(default = "default_auto_advance")]
     pub auto_advance: bool,

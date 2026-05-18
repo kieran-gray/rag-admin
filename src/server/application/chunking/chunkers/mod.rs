@@ -6,7 +6,7 @@ pub mod section;
 use std::sync::Arc;
 
 use crate::server::application::chunking::ChunkerRegistry;
-use crate::server::application::ports::GenerationClient;
+use crate::server::application::llm::ports::GenerationClient;
 use crate::server::domain::configuration::generation_model::GenerationModelRepository;
 
 pub use bert::BertChunker;

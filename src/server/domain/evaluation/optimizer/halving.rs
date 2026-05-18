@@ -141,7 +141,7 @@ mod tests {
 
     #[test]
     fn budget_describe_matches_optimization_budget() {
-        use crate::core::OptimizationBudget;
+        use crate::shared::OptimizationBudget;
         assert_eq!(
             SearchBudget::Quick.describe(),
             OptimizationBudget::Quick.describe()

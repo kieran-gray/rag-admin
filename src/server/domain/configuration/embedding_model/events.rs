@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::catalog::AiProviderKind;
+use crate::shared::reference_data::AiProviderKind;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct EmbeddingModelCatalogCreated {

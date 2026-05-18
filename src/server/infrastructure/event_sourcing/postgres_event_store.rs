@@ -6,10 +6,9 @@ use sqlx::PgPool;
 use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
 
-use crate::event_sourcing::envelope::{EventEnvelope, EventMetadata};
-use crate::event_sourcing::error::EsError;
-use crate::event_sourcing::event_store::{AppendedEvent, EventStore};
-use crate::server::domain::shared::Timestamp;
+use event_sourcing::envelope::{EventEnvelope, EventMetadata};
+use event_sourcing::error::EsError;
+use event_sourcing::event_store::{AppendedEvent, EventStore};
 
 pub struct PostgresEventStore<E> {
     pool: PgPool,
@@ -217,8 +216,7 @@ fn event_type_from_json(value: &serde_json::Value) -> String {
         .to_string()
 }
 
-fn format_timestamp(odt: time::OffsetDateTime) -> Result<Timestamp, EsError> {
+fn format_timestamp(odt: time::OffsetDateTime) -> Result<String, EsError> {
     odt.format(&Rfc3339)
-        .map(Timestamp::from)
         .map_err(|e| EsError::Storage(format!("format timestamp: {e}")))
 }

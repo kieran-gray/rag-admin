@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use crate::core::EvaluationVariantResult;
+use crate::shared::EvaluationVariantResult;
 use crate::ui::components::primitives::Surface;
 
 pub(super) struct CategoryRow {

@@ -1,13 +1,12 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{
-    catalog::ChunkStrategy,
-    core::ChunkingConfig,
     server::application::{
         chunking::{ports::DocumentChunker, ChunkOutput},
         ports::{MarkdownParser, Tokenizer},
         AppError,
     },
+    shared::{reference_data::ChunkStrategy, ChunkingConfig},
 };
 
 pub struct ChunkerRegistry {

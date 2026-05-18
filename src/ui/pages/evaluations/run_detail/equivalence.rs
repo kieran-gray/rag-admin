@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use crate::core::{evaluation_score, EvaluationResultSplit, EvaluationVariantResult};
+use crate::shared::{evaluation_score, EvaluationResultSplit, EvaluationVariantResult};
 use crate::ui::components::primitives::Surface;
 
 use super::shared::{composite_ci_bounds, variant_display};

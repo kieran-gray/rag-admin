@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::server::domain::configuration::catalog::CatalogRepository;
 
 use super::entity::EmbeddingModel;
-use crate::event_sourcing::error::ProjectionError;
+use event_sourcing::error::ProjectionError;
 
 #[derive(Debug, Error)]
 pub enum EmbeddingModelRepositoryError {

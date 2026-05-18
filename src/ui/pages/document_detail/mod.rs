@@ -2,29 +2,24 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::hooks::{use_params_map, use_query_map};
 
-mod redirect_by_id;
-mod search_section;
 mod steps;
 mod tabs;
 
-pub use redirect_by_id::DocumentByIdRedirect;
-
-use search_section::SearchSection;
-use steps::{ChunkStep, ConfigSelection, DocumentStep, EmbedIndexStep};
+use steps::{ChunkStep, ConfigSelection, DocumentStep, EmbedStep, IndexStep};
 
 use super::shared::short_hash;
 
-use crate::contracts::{
-    aggregate_type, ChunkingConfigurationDto, IndexingDto, PipelineConfigurationDto,
-    SourceDocumentDetailDto, SourceDocumentDto, SweepTemplateDto,
-};
 use crate::server_functions::configuration::{
     get_chunking_configurations, get_pipeline_configurations, get_sweep_templates,
 };
 use crate::server_functions::source_document::{
     get_document_detail_by_source_ref, import_source_document,
 };
-use crate::ui::components::event_bus::use_invalidator;
+use crate::shared::contracts::{
+    aggregate_type, ChunkingConfigurationDto, IndexingDto, PipelineConfigurationDto,
+    SourceDocumentDetailDto, SourceDocumentDto, SweepTemplateDto,
+};
+use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
 
 #[component]
@@ -36,6 +31,13 @@ pub fn DocumentDetailPage() -> impl IntoView {
     let query = use_query_map();
     let initial_tab =
         Memo::new(move |_| query.with(|q| q.get("tab").and_then(|t| step_from_tab(&t))));
+    let initial_tune = Memo::new(move |_| {
+        query.with(|q| {
+            q.get("tune")
+                .map(|v| matches!(v.as_str(), "1" | "true" | "yes"))
+                .unwrap_or(false)
+        })
+    });
 
     let doc_invalidator = use_invalidator(|e| {
         e.from_any(&[aggregate_type::SOURCE_DOCUMENT, aggregate_type::INDEXING])
@@ -99,6 +101,7 @@ pub fn DocumentDetailPage() -> impl IntoView {
                                 sweep_templates=sweep_templates
                                 source_ref=source_ref.get()
                                 initial_tab=initial_tab.get()
+                                initial_tune=initial_tune.get()
                             />
                         }.into_any(),
                     })
@@ -112,7 +115,8 @@ pub fn DocumentDetailPage() -> impl IntoView {
 enum WorkflowStep {
     Document,
     Chunk,
-    EmbedIndex,
+    Embed,
+    Index,
 }
 
 impl WorkflowStep {
@@ -120,7 +124,8 @@ impl WorkflowStep {
         match self {
             Self::Document => 1,
             Self::Chunk => 2,
-            Self::EmbedIndex => 3,
+            Self::Embed => 3,
+            Self::Index => 4,
         }
     }
 
@@ -128,7 +133,8 @@ impl WorkflowStep {
         match self {
             Self::Document => "Document",
             Self::Chunk => "Chunk",
-            Self::EmbedIndex => "Embed & Index",
+            Self::Embed => "Embed",
+            Self::Index => "Index",
         }
     }
 
@@ -136,9 +142,18 @@ impl WorkflowStep {
         match self {
             Self::Document => "Review markdown",
             Self::Chunk => "Split into chunks",
-            Self::EmbedIndex => "Vectorize & store",
+            Self::Embed => "Vectorize chunks",
+            Self::Index => "Upsert to vector store",
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StepState {
+    Current,
+    Done,
+    Available,
+    Locked,
 }
 
 #[component]
@@ -149,16 +164,21 @@ fn DocumentWorkspace(
     sweep_templates: Vec<SweepTemplateDto>,
     source_ref: String,
     initial_tab: Option<WorkflowStep>,
+    initial_tune: bool,
 ) -> impl IntoView {
-    let document_id = detail.document.document_id;
-
     let (header_eyebrow, header_title, header_subtitle, header_status) =
         derive_header(&detail.document, &detail.indexings);
     let (status_kind, status_label) = header_status;
 
     let selection = ConfigSelection::new(&pipelines, &chunking_configurations, &detail.indexings);
-    let (active_step, set_active_step) =
-        signal(initial_tab.unwrap_or_else(|| initial_step(&detail.indexings)));
+    let initial_step_value = initial_tab.unwrap_or_else(|| {
+        if initial_tune {
+            WorkflowStep::Chunk
+        } else {
+            initial_step(&detail.indexings)
+        }
+    });
+    let (active_step, set_active_step) = signal(initial_step_value);
 
     let pipelines_stored = StoredValue::new(pipelines.clone());
     let chunking_stored = StoredValue::new(chunking_configurations.clone());
@@ -166,13 +186,54 @@ fn DocumentWorkspace(
     let indexings_signal: Signal<Vec<IndexingDto>> =
         Signal::derive(move || indexings_stored.get_value());
 
+    let active_indexing: Signal<Option<IndexingDto>> = Signal::derive(move || {
+        let pid = selection.pipeline_id.get()?;
+        indexings_signal
+            .get()
+            .into_iter()
+            .find(|ix| ix.pipeline_configuration_id == pid && !ix.removed)
+    });
+
+    let step_state = move |step: WorkflowStep| -> StepState {
+        let active = active_step.get();
+        let ix = active_indexing.get();
+        let has_chunk = ix.as_ref().is_some_and(|i| i.chunk_set_id.is_some());
+        let has_embed = ix.as_ref().is_some_and(|i| i.embedding_set_id.is_some());
+        let is_indexed = ix.as_ref().is_some_and(|i| i.status.contains("Indexed"));
+
+        if step == active {
+            return StepState::Current;
+        }
+        let locked = match step {
+            WorkflowStep::Document | WorkflowStep::Chunk => false,
+            WorkflowStep::Embed => !has_chunk,
+            WorkflowStep::Index => !has_embed,
+        };
+        if locked {
+            return StepState::Locked;
+        }
+        let done = match step {
+            WorkflowStep::Document => true,
+            WorkflowStep::Chunk => has_chunk,
+            WorkflowStep::Embed => has_embed,
+            WorkflowStep::Index => is_indexed,
+        };
+        if done {
+            StepState::Done
+        } else {
+            StepState::Available
+        }
+    };
+
     let detail_for_step = StoredValue::new(detail);
     let source_ref_for_step = StoredValue::new(source_ref);
     let sweep_for_step = StoredValue::new(sweep_templates);
 
     let on_advance_to_chunk = Callback::new(move |_| set_active_step.set(WorkflowStep::Chunk));
-    let on_advance_to_embed = Callback::new(move |_| set_active_step.set(WorkflowStep::EmbedIndex));
+    let on_advance_to_embed = Callback::new(move |_| set_active_step.set(WorkflowStep::Embed));
+    let on_advance_to_index = Callback::new(move |_| set_active_step.set(WorkflowStep::Index));
     let on_back_to_chunk = Callback::new(move |_| set_active_step.set(WorkflowStep::Chunk));
+    let on_back_to_embed = Callback::new(move |_| set_active_step.set(WorkflowStep::Embed));
 
     let header_subtitle = header_subtitle.unwrap_or_default();
 
@@ -190,7 +251,10 @@ fn DocumentWorkspace(
             />
 
             <div class="space-y-6">
-                <Stepper active=active_step set_active=set_active_step />
+                <Stepper
+                    set_active=set_active_step
+                    step_state=step_state
+                />
 
                 {move || {
                     let step = active_step.get();
@@ -202,10 +266,6 @@ fn DocumentWorkspace(
                     match step {
                         WorkflowStep::Document => view! {
                             <DocumentStep
-                                detail=detail
-                                pipelines=pipelines
-                                chunking_configurations=chunking
-                                sweep_templates=sweep
                                 source_ref=source_ref
                                 on_advance=on_advance_to_chunk
                             />
@@ -217,33 +277,32 @@ fn DocumentWorkspace(
                                 chunking_configurations=chunking_stored
                                 indexings=indexings_signal
                                 source_ref=source_ref
+                                detail=detail
+                                pipelines_full=pipelines
+                                chunking_full=chunking
+                                sweep_templates=sweep
+                                initial_tune=initial_tune
                                 on_advance=on_advance_to_embed
                             />
                         }.into_any(),
-                        WorkflowStep::EmbedIndex => view! {
-                            <EmbedIndexStep
+                        WorkflowStep::Embed => view! {
+                            <EmbedStep
                                 selection=selection
                                 pipelines=pipelines_stored
                                 indexings=indexings_signal
                                 on_back=on_back_to_chunk
+                                on_advance=on_advance_to_index
+                            />
+                        }.into_any(),
+                        WorkflowStep::Index => view! {
+                            <IndexStep
+                                selection=selection
+                                pipelines=pipelines_stored
+                                indexings=indexings_signal
+                                on_back=on_back_to_embed
                             />
                         }.into_any(),
                     }
-                }}
-
-                {move || {
-                    let on_embed_step = matches!(active_step.get(), WorkflowStep::EmbedIndex);
-                    let any_indexed = indexings_signal.with(|ixs| {
-                        ixs.iter()
-                            .any(|ix| !ix.removed && ix.status.contains("Indexed"))
-                    });
-                    (on_embed_step && any_indexed).then(|| view! {
-                        <SearchSection
-                            document_id=document_id
-                            indexings=indexings_stored.get_value()
-                            pipelines=pipelines_stored.get_value()
-                        />
-                    })
                 }}
             </div>
         </div>
@@ -252,13 +311,14 @@ fn DocumentWorkspace(
 
 #[component]
 fn Stepper(
-    active: ReadSignal<WorkflowStep>,
     set_active: WriteSignal<WorkflowStep>,
+    step_state: impl Fn(WorkflowStep) -> StepState + Copy + Send + Sync + 'static,
 ) -> impl IntoView {
     let steps = [
         WorkflowStep::Document,
         WorkflowStep::Chunk,
-        WorkflowStep::EmbedIndex,
+        WorkflowStep::Embed,
+        WorkflowStep::Index,
     ];
 
     view! {
@@ -266,34 +326,54 @@ fn Stepper(
             {steps.iter().enumerate().map(|(idx, step)| {
                 let step = *step;
                 let is_last = idx == steps.len() - 1;
-                let is_active = move || active.get() == step;
+                let state = move || step_state(step);
+                let tooltip = move || match step {
+                    WorkflowStep::Embed => "Chunk the document first",
+                    WorkflowStep::Index => "Embed the chunks first",
+                    _ => "",
+                };
                 view! {
                     <button
                         type="button"
+                        title=tooltip
                         class=move || {
                             let base = "flex-1 flex items-center gap-3 px-4 py-3 text-left transition-colors";
-                            if is_active() {
-                                format!("{base} bg-[var(--color-surface-2)]")
-                            } else {
-                                format!("{base} hover:bg-[var(--color-surface-2)]")
+                            match state() {
+                                StepState::Current => format!("{base} bg-[var(--color-surface-2)]"),
+                                StepState::Locked => format!("{base} opacity-50 cursor-not-allowed"),
+                                _ => format!("{base} hover:bg-[var(--color-surface-2)]"),
                             }
                         }
-                        on:click=move |_| set_active.set(step)
+                        disabled=move || matches!(state(), StepState::Locked)
+                        on:click=move |_| {
+                            if !matches!(state(), StepState::Locked) {
+                                set_active.set(step);
+                            }
+                        }
                     >
                         <span class=move || format!(
                             "inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-mono shrink-0 {}",
-                            if is_active() {
-                                "bg-[var(--color-accent)] text-[var(--color-page-bg)]"
-                            } else {
-                                "bg-[var(--color-surface-3)] text-[var(--color-text-muted)] border border-[var(--color-border)]"
+                            match state() {
+                                StepState::Current => "bg-[var(--color-accent)] text-[var(--color-page-bg)]",
+                                StepState::Done => "bg-[var(--color-accent-soft)] text-[var(--color-accent)] border border-[var(--color-accent)]",
+                                StepState::Locked => "bg-transparent text-[var(--color-text-faint)] border border-[var(--color-border)]",
+                                StepState::Available => "bg-[var(--color-surface-3)] text-[var(--color-text-muted)] border border-[var(--color-border)]",
                             }
                         )>
-                            {step.ordinal()}
+                            {move || if matches!(state(), StepState::Done) {
+                                "✓".to_string()
+                            } else {
+                                step.ordinal().to_string()
+                            }}
                         </span>
                         <div class="flex flex-col min-w-0">
                             <span class=move || format!(
                                 "text-sm font-semibold {}",
-                                if is_active() { "text-[var(--color-text)]" } else { "text-[var(--color-text-muted)]" }
+                                match state() {
+                                    StepState::Current => "text-[var(--color-text)]",
+                                    StepState::Locked => "text-[var(--color-text-faint)]",
+                                    _ => "text-[var(--color-text-muted)]",
+                                }
                             )>
                                 {step.label()}
                             </span>
@@ -313,7 +393,8 @@ fn step_from_tab(tab: &str) -> Option<WorkflowStep> {
     match tab {
         "source" | "document" => Some(WorkflowStep::Document),
         "chunk" | "chunks" | "chunking" => Some(WorkflowStep::Chunk),
-        "embed" | "embed-index" | "index" => Some(WorkflowStep::EmbedIndex),
+        "embed" | "embedding" => Some(WorkflowStep::Embed),
+        "index" | "indexing" => Some(WorkflowStep::Index),
         _ => None,
     }
 }
@@ -323,11 +404,13 @@ fn initial_step(indexings: &[IndexingDto]) -> WorkflowStep {
     if live.is_empty() {
         return WorkflowStep::Document;
     }
-    let has_progress = live.iter().any(|ix| ix.chunk_set_id.is_some());
-    if has_progress {
-        WorkflowStep::EmbedIndex
-    } else {
-        WorkflowStep::Chunk
+    let most_advanced = live.iter().copied().max_by_key(|ix| milestone_rank(ix));
+    match most_advanced {
+        None => WorkflowStep::Document,
+        Some(ix) if ix.status.contains("Indexed") => WorkflowStep::Index,
+        Some(ix) if ix.embedding_set_id.is_some() => WorkflowStep::Index,
+        Some(ix) if ix.chunk_set_id.is_some() => WorkflowStep::Embed,
+        _ => WorkflowStep::Chunk,
     }
 }
 
@@ -440,12 +523,12 @@ fn UnregisteredDocument(source_ref: String) -> impl IntoView {
             <PageHeader
                 title=source_ref.clone()
                 eyebrow=format!("Documents / {source_ref}")
-                subtitle="This document is available upstream but hasn't been imported yet. Import it to inspect chunks, run experiments, or index it.".to_string()
+                subtitle="This document is available upstream but has not been imported yet. Import it to inspect chunks, run experiments, or index it.".to_string()
             />
             <Surface>
                 <EmptyState
                     title="Not imported"
-                    body="Importing fetches the upstream content and registers a versioned SourceDocument. After that you can run evaluations, chunk it with different strategies, and (optionally) index it.".to_string()
+                    body="Importing fetches the upstream content and registers a versioned source document. After that you can run evaluations, chunk it with different strategies, and optionally index it.".to_string()
                     action=Box::new(move || view! {
                         <div class="flex flex-col items-start gap-2">
                             <button

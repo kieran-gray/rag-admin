@@ -13,7 +13,7 @@ run: build
     cargo leptos serve --release
 
 test:
-    cargo test --features ssr
+    cargo test --all-features
 
 lint:
     cargo clippy --features ssr -- -D warnings

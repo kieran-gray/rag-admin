@@ -1,20 +1,30 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::core::{
-    ChunkingVariant, EvaluationAutotuneRequest, EvaluationRunOptions, OptimizationConfig,
-};
 use crate::server::domain::evaluation::run::scoring_policy::ScoringPolicy;
+use crate::shared::{
+    ChunkingConfig, EvaluationAutotuneRequest, EvaluationRunOptions, OptimizationConfig,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExecuteRunEffect {
+pub struct ExecuteVariantEffect {
     pub run_id: Uuid,
     pub dataset_id: Uuid,
     pub pipeline_configuration_id: Uuid,
     pub document_id: Uuid,
     pub document_version: u32,
-    pub variants: Vec<ChunkingVariant>,
+    pub variant_label: String,
+    pub variant_config: ChunkingConfig,
     pub options: Vec<EvaluationRunOptions>,
+    pub autotune_request: Option<EvaluationAutotuneRequest>,
+    pub scoring_policy: ScoringPolicy,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FinalizeRunEffect {
+    pub run_id: Uuid,
+    pub dataset_id: Uuid,
+    pub pipeline_configuration_id: Uuid,
     pub autotune_request: Option<EvaluationAutotuneRequest>,
     pub scoring_policy: ScoringPolicy,
 }
@@ -33,6 +43,7 @@ pub struct OptimizeRunEffect {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum EvaluationRunEffect {
-    ExecuteRun(ExecuteRunEffect),
+    ExecuteVariant(ExecuteVariantEffect),
+    FinalizeRun(FinalizeRunEffect),
     OptimizeRun(OptimizeRunEffect),
 }

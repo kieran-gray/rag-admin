@@ -8,9 +8,9 @@ use uuid::Uuid;
 use crate::server::application::evaluation::ports::{
     EvaluationGenerator, EvaluationPrompt, GeneratedEvaluationQuestion,
 };
+use crate::server::application::llm::ports::GenerationResponseFormat;
 use crate::server::application::llm::service::GenerationPrompt;
 use crate::server::application::llm::GenerationService;
-use crate::server::application::ports::GenerationResponseFormat;
 use crate::server::application::AppError;
 use crate::server::domain::evaluation::question::QuestionCategory;
 

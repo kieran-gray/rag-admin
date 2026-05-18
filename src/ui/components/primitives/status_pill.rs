@@ -9,6 +9,7 @@ pub enum Status {
     Info,
     Neutral,
     Cancel,
+    Winner,
 }
 
 impl Status {
@@ -19,6 +20,7 @@ impl Status {
             Self::Fail => "pill pill-fail",
             Self::Stale => "pill pill-stale",
             Self::Info => "pill pill-info",
+            Self::Winner => "pill pill-winner",
             Self::Neutral | Self::Cancel => "pill pill-neutral",
         }
     }

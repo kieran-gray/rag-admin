@@ -5,9 +5,9 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::server::application::evaluation::ports::{JudgeVerdict, LlmJudge};
+use crate::server::application::llm::ports::GenerationResponseFormat;
 use crate::server::application::llm::service::GenerationPrompt;
 use crate::server::application::llm::GenerationService;
-use crate::server::application::ports::GenerationResponseFormat;
 use crate::server::application::AppError;
 
 const JUDGE_SYSTEM_PROMPT: &str = "You are a strict reviewer of retrieval quality. \

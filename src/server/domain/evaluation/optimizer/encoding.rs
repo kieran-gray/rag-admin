@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde_json::{json, Map};
 use uuid::Uuid;
 
-use crate::core::{
+use crate::shared::{
     BertChunkingConfig, ChunkingConfig, DarnChunkingConfig, DarnGranularity, EvaluationRunOptions,
     LlmChunkingConfig, SectionChunkingConfig,
 };

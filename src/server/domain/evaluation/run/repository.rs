@@ -3,7 +3,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use super::read_model::{EvaluationRunReadModel, EvaluationVariantResultDto, NewRunSummary};
-use crate::event_sourcing::error::ProjectionError;
+use event_sourcing::error::ProjectionError;
 
 #[derive(Debug, Error)]
 pub enum EvaluationRunRepositoryError {

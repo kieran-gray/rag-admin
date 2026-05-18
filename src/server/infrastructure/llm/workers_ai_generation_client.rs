@@ -7,7 +7,7 @@ use serde_json::Value;
 
 use tracing::info;
 
-use crate::server::application::ports::{
+use crate::server::application::llm::ports::{
     GenerationClient, GenerationRequest, GenerationResponse, GenerationResponseFormat,
 };
 use crate::server::application::AppError;

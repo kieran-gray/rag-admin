@@ -3,12 +3,12 @@ use sqlx::postgres::PgRow;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::catalog::AiProviderKind;
-use crate::event_sourcing::error::ProjectionError;
 use crate::server::domain::configuration::catalog::CatalogRepository;
 use crate::server::domain::configuration::embedding_model::{
     EmbeddingModel, EmbeddingModelRepository, EmbeddingModelRepositoryError,
 };
+use crate::shared::reference_data::AiProviderKind;
+use event_sourcing::error::ProjectionError;
 
 pub struct PostgresEmbeddingModelRepository {
     pool: PgPool,

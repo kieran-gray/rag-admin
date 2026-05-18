@@ -2,11 +2,15 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use uuid::Uuid;
 
-use crate::contracts::{ChunkDto, ChunkingConfigurationDto, IndexingDto, PipelineConfigurationDto};
 use crate::server_functions::source_document::{get_chunks, request_indexing};
-use crate::ui::components::primitives::{EmptyState, Status, StatusPill, Surface};
+use crate::shared::contracts::{
+    ChunkDto, ChunkingConfigurationDto, IndexingDto, PipelineConfigurationDto,
+    SourceDocumentDetailDto, SweepTemplateDto,
+};
+use crate::ui::components::primitives::{EmptyState, Help, Status, StatusPill, Surface};
 use crate::ui::pages::document_detail::steps::ConfigSelection;
 use crate::ui::pages::document_detail::tabs::chunks::chunk_card::ChunkCard;
+use crate::ui::pages::document_detail::tabs::EvaluationTab;
 
 #[component]
 pub fn ChunkStep(
@@ -15,11 +19,22 @@ pub fn ChunkStep(
     chunking_configurations: StoredValue<Vec<ChunkingConfigurationDto>>,
     indexings: Signal<Vec<IndexingDto>>,
     source_ref: String,
+    detail: SourceDocumentDetailDto,
+    pipelines_full: Vec<PipelineConfigurationDto>,
+    chunking_full: Vec<ChunkingConfigurationDto>,
+    sweep_templates: Vec<SweepTemplateDto>,
+    initial_tune: bool,
     on_advance: Callback<()>,
 ) -> impl IntoView {
     let source_ref = StoredValue::new(source_ref);
     let (busy, set_busy) = signal(false);
     let (error, set_error) = signal::<Option<String>>(None);
+    let (show_tuning, set_show_tuning) = signal(initial_tune);
+
+    let detail_for_tune = StoredValue::new(detail);
+    let pipelines_for_tune = StoredValue::new(pipelines_full);
+    let chunking_for_tune = StoredValue::new(chunking_full);
+    let sweep_for_tune = StoredValue::new(sweep_templates);
 
     let active_indexing: Signal<Option<IndexingDto>> = Signal::derive(move || {
         let pid = selection.pipeline_id.get()?;
@@ -71,15 +86,34 @@ pub fn ChunkStep(
         });
     };
 
+    let advance_disabled = move || !chunk_status.get().has_chunks();
+
     view! {
         <div class="space-y-6">
-            <Surface title="Pipeline & chunking configuration".to_string()>
-                <p class="text-sm muted mb-4">
-                    "Pick the pipeline (which embedding & vector store to use) and a chunking strategy, then click "
-                    <span class="text-text font-medium">"Chunk"</span>
-                    " to split the document. You'll preview the resulting chunks before embedding."
-                </p>
-
+            <Surface
+                title="Pipeline and chunking configuration".to_string()
+                actions=Box::new(move || view! {
+                    <div class="flex items-center gap-2">
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-ghost"
+                            on:click=move |_| set_show_tuning.update(|v| *v = !*v)
+                        >
+                            {move || if show_tuning.get() { "Hide tuning".to_string() } else { "Tune chunking ↗".to_string() }}
+                        </button>
+                        <Help title="How chunking works".to_string()>
+                            <p>
+                                "The chunking step splits the document's markdown into smaller, retrievable pieces. Pick a pipeline (which embedding model and vector store to use) and a chunking strategy, then run chunking. Once chunks exist you can preview them below before embedding."
+                            </p>
+                            <p class="mt-3">
+                                "Different strategies trade off chunk size, overlap, and boundary detection. If you are unsure which to use, click "
+                                <span class="font-medium">"Tune chunking"</span>
+                                " to generate a synthetic Q&A set and score strategies against this document."
+                            </p>
+                        </Help>
+                    </div>
+                }.into_any())
+            >
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <PipelineSelect selection=selection pipelines=pipelines />
                     <ChunkingSelect selection=selection chunking_configurations=chunking_configurations />
@@ -97,13 +131,12 @@ pub fn ChunkStep(
                     >
                         {move || if busy.get() {
                             "Submitting…".to_string()
+                        } else if chunk_status.get().has_chunks() {
+                            "Re-run chunking".to_string()
+                        } else if matches!(chunk_status.get(), ChunkStatus::Failed) {
+                            "Retry chunking".to_string()
                         } else {
-                            match chunk_status.get() {
-                                ChunkStatus::None => "Chunk this document".to_string(),
-                                ChunkStatus::InFlight => "Chunking…".to_string(),
-                                ChunkStatus::Failed => "Retry chunking".to_string(),
-                                _ => "Re-chunk".to_string(),
-                            }
+                            "Run chunking".to_string()
                         }}
                     </button>
                 </div>
@@ -112,31 +145,42 @@ pub fn ChunkStep(
                 })}
             </Surface>
 
+            {move || show_tuning.get().then(|| view! {
+                <Surface title="Tune chunking".to_string()>
+                    <EvaluationTab
+                        detail=Some(detail_for_tune.get_value())
+                        pipelines=pipelines_for_tune.get_value()
+                        chunking_configurations=chunking_for_tune.get_value()
+                        sweep_templates=sweep_for_tune.get_value()
+                    />
+                </Surface>
+            })}
+
             <details class="surface collapsible-card" open>
                 <summary class="collapsible-card-summary">
                     <span class="section-title">"Chunk inspector"</span>
-                    <span class="muted text-xs collapsible-card-hint">
-                        <span class="when-open">"Click to collapse"</span>
-                        <span class="when-closed">"Click to expand"</span>
-                        <span class="collapsible-card-chevron">"▾"</span>
-                    </span>
+                    <span class="collapsible-card-chevron">"▾"</span>
                 </summary>
                 <div class="collapsible-card-body">
                     <ChunkPreview active_indexing=active_indexing />
                 </div>
             </details>
 
-            <div class="flex justify-end pt-2">
+            <div class="step-advance">
+                <div class="step-advance-eyebrow">
+                    <span>"Next"</span>
+                    <span class="step-advance-eyebrow-label">"Embed the chunks"</span>
+                </div>
                 <button
                     type="button"
                     class="btn btn-primary"
-                    disabled=move || !chunk_status.get().has_chunks()
+                    disabled=advance_disabled
                     on:click=move |_| on_advance.run(())
                 >
                     {move || if chunk_status.get().has_chunks() {
-                        "Proceed to embedding →"
+                        "Continue to embedding →"
                     } else {
-                        "Chunk first to continue"
+                        "Run chunking to continue"
                     }}
                 </button>
             </div>
@@ -258,7 +302,7 @@ fn ChunkPreview(active_indexing: Signal<Option<IndexingDto>>) -> impl IntoView {
                     return view! {
                         <EmptyState
                             title="Pick a pipeline to begin"
-                            body="Once you click Chunk, the resulting chunks appear here.".to_string()
+                            body="Once you run chunking, the resulting chunks appear here.".to_string()
                         />
                     }.into_any();
                 };
@@ -266,7 +310,7 @@ fn ChunkPreview(active_indexing: Signal<Option<IndexingDto>>) -> impl IntoView {
                     return view! {
                         <EmptyState
                             title="No chunks yet"
-                            body="Click \"Chunk this document\" above to split it using the selected configuration.".to_string()
+                            body="Click \"Run chunking\" above to split the document using the selected configuration.".to_string()
                         />
                     }.into_any();
                 }

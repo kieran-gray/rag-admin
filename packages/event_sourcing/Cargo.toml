@@ -1,0 +1,31 @@
+[package]
+name = "event_sourcing"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Generic event-sourcing framework: aggregates, event store, projections, process managers, and a job queue."
+repository = "https://github.com/kieran-gray/rag-admin"
+readme = "README.md"
+keywords = ["event-sourcing", "cqrs", "ddd"]
+categories = ["data-structures"]
+
+[dependencies]
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
+tokio = { version = "1.47", features = ["rt-multi-thread", "sync", "time", "macros"] }
+tracing = "0.1"
+uuid = { version = "1.18", features = ["v4", "v5", "v7", "serde"] }
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+correctness = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+suspicious = { level = "warn", priority = -1 }
+
+unwrap_used = "warn"
+panic = "warn"
+expect_used = "warn"

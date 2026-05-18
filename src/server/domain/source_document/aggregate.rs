@@ -1,38 +1,30 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::event_sourcing::policy::HasPolicies;
-use crate::event_sourcing::Aggregate;
+use event_sourcing::policy::HasPolicies;
+use event_sourcing::Aggregate;
 
 use super::{
     commands::SourceDocumentCommand,
-    document_type::DocumentType,
     events::{DocumentCreated, DocumentDeleted, SourceDocumentEvent, VersionAdded},
     exceptions::SourceDocumentError,
-    source_ref::SourceRef,
-    version::DocumentVersion,
+    version::ContentHash,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourceDocument {
     pub document_id: Uuid,
-    pub document_type: DocumentType,
-    pub source_ref: SourceRef,
-    pub versions: Vec<DocumentVersion>,
+    pub latest_content_hash: Option<ContentHash>,
+    pub latest_version_number: u32,
     pub deleted: bool,
 }
 
 impl SourceDocument {
-    pub fn latest_version(&self) -> Option<&DocumentVersion> {
-        self.versions.last()
-    }
-
     fn from_created(cmd: &DocumentCreated) -> Self {
         Self {
             document_id: cmd.document_id,
-            document_type: cmd.document_type.clone(),
-            source_ref: cmd.source_ref.clone(),
-            versions: Vec::new(),
+            latest_content_hash: None,
+            latest_version_number: 0,
             deleted: false,
         }
     }
@@ -51,12 +43,8 @@ impl Aggregate for SourceDocument {
         match event {
             Self::Event::DocumentCreated(_) => {}
             Self::Event::VersionAdded(e) => {
-                self.versions.push(DocumentVersion {
-                    version_number: e.version_number,
-                    content_hash: e.content_hash.clone(),
-                    occurred_at: e.occurred_at.clone(),
-                    metadata: e.metadata.clone(),
-                });
+                self.latest_version_number = e.version_number;
+                self.latest_content_hash = Some(e.content_hash.clone());
             }
             Self::Event::DocumentDeleted(_) => {
                 self.deleted = true;
@@ -97,16 +85,10 @@ impl Aggregate for SourceDocument {
                 if doc.deleted {
                     return Err(SourceDocumentError::AlreadyDeleted);
                 }
-                if let Some(latest) = doc.latest_version() {
-                    if latest.content_hash == cmd.version.content_hash {
-                        return Ok(vec![]);
-                    }
+                if doc.latest_content_hash.as_ref() == Some(&cmd.version.content_hash) {
+                    return Ok(vec![]);
                 }
-                let version_number = doc
-                    .versions
-                    .last()
-                    .map(|v| v.version_number + 1)
-                    .unwrap_or(1);
+                let version_number = doc.latest_version_number.saturating_add(1).max(1);
                 Ok(vec![Self::Event::VersionAdded(VersionAdded {
                     version_number,
                     content_hash: cmd.version.content_hash,
@@ -151,7 +133,9 @@ impl SourceDocument {
     pub fn test_create(document_id: Uuid, slug: &str) -> SourceDocumentCommand {
         use super::{
             commands::{CreateDocument, NewVersion},
-            version::{BlogPostMetadata, ContentHash, DocumentMetadata},
+            document_type::DocumentType,
+            source_ref::SourceRef,
+            version::{BlogPostMetadata, DocumentMetadata},
         };
         SourceDocumentCommand::CreateDocument(CreateDocument {
             document_id,
@@ -178,8 +162,10 @@ mod tests {
         shared::Timestamp,
         source_document::{
             commands::{AddVersion, DeleteDocument, NewVersion},
+            document_type::DocumentType,
             events::{DocumentCreated, VersionAdded},
-            version::{BlogPostMetadata, ContentHash, DocumentMetadata},
+            source_ref::SourceRef,
+            version::{BlogPostMetadata, DocumentMetadata},
         },
     };
 
@@ -233,8 +219,7 @@ mod tests {
 
         let doc = SourceDocument::from_events(&events).unwrap();
         assert_eq!(doc.document_id, id);
-        assert_eq!(doc.versions.len(), 1);
-        assert_eq!(doc.versions[0].version_number, 1);
+        assert_eq!(doc.latest_version_number, 1);
     }
 
     #[test]
@@ -412,9 +397,8 @@ mod tests {
         }));
 
         let doc = SourceDocument::from_events(&events).unwrap();
-        assert_eq!(doc.versions.len(), 2);
-        assert_eq!(doc.versions[1].version_number, 2);
-        assert_eq!(doc.versions[1].content_hash, make_hash("v2"));
+        assert_eq!(doc.latest_version_number, 2);
+        assert_eq!(doc.latest_content_hash.as_ref(), Some(&make_hash("v2")));
         assert!(!doc.deleted);
     }
 }

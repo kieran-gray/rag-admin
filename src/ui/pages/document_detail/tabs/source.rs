@@ -1,8 +1,8 @@
 use leptos::prelude::*;
 use leptos_router::hooks::use_query_map;
 
-use crate::contracts::{MarkdownBlockDto, MarkdownBlockKindDto, SourceDocumentMarkdownDto};
 use crate::server_functions::source_document::get_document_source;
+use crate::shared::contracts::{MarkdownBlockDto, MarkdownBlockKindDto, SourceDocumentMarkdownDto};
 use crate::ui::components::primitives::{EmptyState, Surface};
 
 #[component]

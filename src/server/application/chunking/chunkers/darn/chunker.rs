@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 
-use crate::catalog::ChunkStrategy;
-use crate::core::{ChunkingConfig, DarnChunkingConfig, DarnGranularity};
 use crate::server::application::chunking::{ChunkOutput, DocumentChunker};
 use crate::server::application::markdown::Document;
 use crate::server::application::ports::Tokenizer;
 use crate::server::application::AppError;
+use crate::shared::reference_data::ChunkStrategy;
+use crate::shared::{ChunkingConfig, DarnChunkingConfig, DarnGranularity};
 
 use super::chunk_optimiser::{ChunkOptimiser, Granularity};
 use super::md_parser::MdParser;
@@ -218,10 +218,10 @@ fn parse_atx_heading(line: &str) -> Option<(usize, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::DarnChunkingConfig;
     use crate::server::application::ports::MarkdownParser;
     use crate::server::application::test_support::MockTokenizer;
     use crate::server::infrastructure::markdown::MarkdownRsParser;
+    use crate::shared::DarnChunkingConfig;
 
     fn chunker() -> DarnChunker {
         DarnChunker
