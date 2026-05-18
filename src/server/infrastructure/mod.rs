@@ -1,5 +1,6 @@
 pub mod clients;
 pub mod configuration;
+pub mod connector;
 pub mod embedding;
 pub mod evaluation;
 pub mod event_sourcing;

@@ -1,63 +1,37 @@
 use leptos::prelude::*;
 
 use crate::shared::contracts::{
-    ChunkDto, DocumentListItemDto, SourceDocumentDetailDto, SourceDocumentDto,
-    SourceDocumentMarkdownDto,
+    ChunkDto, ConnectorDiscoveredItemDto, DocumentListItemDto, SourceDocumentDetailDto,
+    SourceDocumentDto, SourceDocumentMarkdownDto,
 };
 use crate::shared::ChunkingConfig;
 
 #[cfg(feature = "ssr")]
 use crate::server::application::source_document::{
-    SourceAdapterRegistry, SourceDocumentIngestService, SourceDocumentQueryService,
+    SourceDocumentIngestService, SourceDocumentQueryService,
 };
 #[cfg(feature = "ssr")]
-use crate::server::domain::source_document::{document_type::DocumentType, source_ref::SourceRef};
+use crate::server::application::AppError;
+#[cfg(feature = "ssr")]
+use crate::server::domain::source_document::source_ref::SourceRef;
 #[cfg(feature = "ssr")]
 use crate::server_functions::error::{ctx, map_app_error};
 #[cfg(feature = "ssr")]
-use std::collections::HashMap;
-#[cfg(feature = "ssr")]
 use std::sync::Arc;
+
+#[cfg(feature = "ssr")]
+fn parse_source_ref(value: &str) -> Result<SourceRef, ServerFnError> {
+    SourceRef::parse_route_key(value).ok_or_else(|| {
+        map_app_error(&AppError::Validation(format!(
+            "invalid source ref key: {value}"
+        )))
+    })
+}
 
 #[server(name = GetChunks, prefix = "/api", endpoint = "get_chunks")]
 pub async fn get_chunks(chunk_set_id: uuid::Uuid) -> Result<Vec<ChunkDto>, ServerFnError> {
     ctx::<Arc<SourceDocumentQueryService>>()?
         .get_chunks(chunk_set_id)
-        .await
-        .map_err(|e| map_app_error(&e))
-}
-
-#[server(
-    name = StartSourceDocumentIngest,
-    prefix = "/api",
-    endpoint = "start_source_document_ingest"
-)]
-pub async fn start_source_document_ingest(
-    source_ref_slug: String,
-    pipeline_configuration_id: uuid::Uuid,
-    chunking_config: ChunkingConfig,
-) -> Result<uuid::Uuid, ServerFnError> {
-    let ingest = ctx::<Arc<SourceDocumentIngestService>>()?;
-
-    ingest
-        .import_document(
-            SourceRef::UpstreamSlug {
-                slug: source_ref_slug.clone(),
-            },
-            DocumentType::BlogPost,
-        )
-        .await
-        .map_err(|e| map_app_error(&e))?;
-
-    ingest
-        .request_indexing(
-            SourceRef::UpstreamSlug {
-                slug: source_ref_slug,
-            },
-            pipeline_configuration_id,
-            chunking_config,
-            true,
-        )
         .await
         .map_err(|e| map_app_error(&e))
 }
@@ -105,29 +79,10 @@ pub async fn start_indexing_with_defaults(
 
     ingest
         .request_indexing(
-            SourceRef::parse_route_key(&source_ref_slug),
+            parse_source_ref(&source_ref_slug)?,
             pipeline.pipeline_configuration_id,
             chunking.config,
             true,
-        )
-        .await
-        .map_err(|e| map_app_error(&e))
-}
-
-#[server(
-    name = ImportSourceDocument,
-    prefix = "/api",
-    endpoint = "import_source_document"
-)]
-pub async fn import_source_document(
-    source_ref_slug: String,
-) -> Result<SourceDocumentDto, ServerFnError> {
-    ctx::<Arc<SourceDocumentIngestService>>()?
-        .import_document(
-            SourceRef::UpstreamSlug {
-                slug: source_ref_slug,
-            },
-            DocumentType::BlogPost,
         )
         .await
         .map_err(|e| map_app_error(&e))
@@ -148,6 +103,35 @@ pub async fn import_source_document_from_url(
 }
 
 #[server(
+    name = ImportFromConnector,
+    prefix = "/api",
+    endpoint = "import_from_connector"
+)]
+pub async fn import_from_connector(
+    connector_id: uuid::Uuid,
+    source_ref_key: String,
+) -> Result<SourceDocumentDto, ServerFnError> {
+    ctx::<Arc<SourceDocumentIngestService>>()?
+        .import_from_connector(connector_id, parse_source_ref(&source_ref_key)?)
+        .await
+        .map_err(|e| map_app_error(&e))
+}
+
+#[server(
+    name = ListFromConnector,
+    prefix = "/api",
+    endpoint = "list_from_connector"
+)]
+pub async fn list_from_connector(
+    connector_id: uuid::Uuid,
+) -> Result<Vec<ConnectorDiscoveredItemDto>, ServerFnError> {
+    ctx::<Arc<SourceDocumentIngestService>>()?
+        .list_from_connector(connector_id)
+        .await
+        .map_err(|e| map_app_error(&e))
+}
+
+#[server(
     name = RequestIndexing,
     prefix = "/api",
     endpoint = "request_indexing"
@@ -160,7 +144,7 @@ pub async fn request_indexing(
 ) -> Result<uuid::Uuid, ServerFnError> {
     ctx::<Arc<SourceDocumentIngestService>>()?
         .request_indexing(
-            SourceRef::parse_route_key(&source_ref_slug),
+            parse_source_ref(&source_ref_slug)?,
             pipeline_configuration_id,
             chunking_config,
             auto_advance,
@@ -206,44 +190,6 @@ pub async fn list_documents() -> Result<Vec<DocumentListItemDto>, ServerFnError>
 }
 
 #[server(
-    name = ListAdapterDocuments,
-    prefix = "/api",
-    endpoint = "list_adapter_documents"
-)]
-pub async fn list_adapter_documents() -> Result<Vec<DocumentListItemDto>, ServerFnError> {
-    let adapters = ctx::<Arc<SourceAdapterRegistry>>()?;
-    let query = ctx::<Arc<SourceDocumentQueryService>>()?;
-
-    let available = adapters.list_all().await.map_err(|e| map_app_error(&e))?;
-
-    let existing: Vec<SourceDocumentDto> = query.list().await.map_err(|e| map_app_error(&e))?;
-
-    let existing_map: HashMap<String, SourceDocumentDto> = existing
-        .into_iter()
-        .map(|d| (d.source_ref_key.clone(), d))
-        .collect();
-
-    let mut items = vec![];
-
-    for (doc_type, summary) in available {
-        let key = summary.source_ref.natural_key();
-        if !existing_map.contains_key(&key) {
-            items.push(DocumentListItemDto {
-                source_ref_key: key,
-                document_type: doc_type,
-                title: summary.title,
-                document_id: None,
-                latest_version: None,
-                latest_content_hash: None,
-                indexings: vec![],
-            });
-        }
-    }
-
-    Ok(items)
-}
-
-#[server(
     name = GetDocumentDetailBySourceRef,
     prefix = "/api",
     endpoint = "get_document_detail_by_source_ref"
@@ -252,7 +198,7 @@ pub async fn get_document_detail_by_source_ref(
     source_ref_slug: String,
 ) -> Result<Option<SourceDocumentDetailDto>, ServerFnError> {
     ctx::<Arc<SourceDocumentQueryService>>()?
-        .get_detail_by_source_ref(&SourceRef::parse_route_key(&source_ref_slug))
+        .get_detail_by_source_ref(&parse_source_ref(&source_ref_slug)?)
         .await
         .map_err(|e| map_app_error(&e))
 }
@@ -280,7 +226,7 @@ pub async fn get_document_source(
     source_ref_slug: String,
 ) -> Result<Option<SourceDocumentMarkdownDto>, ServerFnError> {
     ctx::<Arc<SourceDocumentQueryService>>()?
-        .get_source_markdown(&SourceRef::parse_route_key(&source_ref_slug))
+        .get_source_markdown(&parse_source_ref(&source_ref_slug)?)
         .await
         .map_err(|e| map_app_error(&e))
 }

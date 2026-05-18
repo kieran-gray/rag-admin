@@ -1,5 +1,4 @@
 use leptos::prelude::*;
-use leptos::task::spawn_local;
 use leptos_router::hooks::{use_params_map, use_query_map};
 
 mod steps;
@@ -12,9 +11,7 @@ use super::shared::short_hash;
 use crate::server_functions::configuration::{
     get_chunking_configurations, get_pipeline_configurations, get_sweep_templates,
 };
-use crate::server_functions::source_document::{
-    get_document_detail_by_source_ref, import_source_document,
-};
+use crate::server_functions::source_document::get_document_detail_by_source_ref;
 use crate::shared::contracts::{
     aggregate_type, ChunkingConfigurationDto, IndexingDto, PipelineConfigurationDto,
     SourceDocumentDetailDto, SourceDocumentDto, SweepTemplateDto,
@@ -484,7 +481,6 @@ fn milestone_rank(ix: &IndexingDto) -> u8 {
 
 fn document_type_label(doc_type: &str) -> &'static str {
     match doc_type {
-        "BlogPost" => "Blog post",
         "Markdown" => "Markdown",
         "PlainText" => "Plain text",
         "WebPage" => "Web page",
@@ -494,56 +490,17 @@ fn document_type_label(doc_type: &str) -> &'static str {
 
 #[component]
 fn UnregisteredDocument(source_ref: String) -> impl IntoView {
-    let source_ref_stored = StoredValue::new(source_ref.clone());
-    let (busy, set_busy) = signal(false);
-    let (error, set_error) = signal::<Option<String>>(None);
-
-    let import = move |_| {
-        if busy.get_untracked() {
-            return;
-        }
-        let slug = source_ref_stored.get_value();
-        set_busy.set(true);
-        set_error.set(None);
-        spawn_local(async move {
-            match import_source_document(slug).await {
-                Ok(_) => {
-                    set_busy.set(false);
-                }
-                Err(e) => {
-                    set_error.set(Some(format!("{e}")));
-                    set_busy.set(false);
-                }
-            }
-        });
-    };
-
     view! {
         <div>
             <PageHeader
                 title=source_ref.clone()
                 eyebrow=format!("Documents / {source_ref}")
-                subtitle="This document is available upstream but has not been imported yet. Import it to inspect chunks, run experiments, or index it.".to_string()
+                subtitle="No document is registered at this source ref.".to_string()
             />
             <Surface>
                 <EmptyState
                     title="Not imported"
-                    body="Importing fetches the upstream content and registers a versioned source document. After that you can run evaluations, chunk it with different strategies, and optionally index it.".to_string()
-                    action=Box::new(move || view! {
-                        <div class="flex flex-col items-start gap-2">
-                            <button
-                                type="button"
-                                class="btn btn-primary"
-                                disabled=busy
-                                on:click=import
-                            >
-                                {move || if busy.get() { "Importing…" } else { "Import from source" }}
-                            </button>
-                            {move || error.get().map(|e| view! {
-                                <div class="log-line-error text-sm">{e}</div>
-                            })}
-                        </div>
-                    }.into_any())
+                    body="Open the Documents page and import this from a connector, URL, or upload.".to_string()
                 />
             </Surface>
         </div>

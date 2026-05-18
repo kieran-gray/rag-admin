@@ -18,6 +18,9 @@ use crate::server::application::configuration::{
     PipelineConfigurationQueryService, PipelineConfigurationService, PipelineResolver,
     SweepTemplateCommandHandler, SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
 };
+use crate::server::application::connector::{
+    ConnectorCommandHandler, ConnectorQueryService, ConnectorRegistry,
+};
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::evaluation::query_service::EvaluationQueryService;
 use crate::server::application::evaluation::{
@@ -28,7 +31,7 @@ use crate::server::application::llm::GenerationService;
 use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::retrieval::RetrievalService;
 use crate::server::application::source_document::{
-    SourceAdapterRegistry, SourceDocumentIngestService, SourceDocumentQueryService,
+    SourceDocumentIngestService, SourceDocumentQueryService,
 };
 use crate::server::application::{ActivityRegistry, JobRegistry};
 use crate::server::infrastructure::clients::{CloudflareApi, OllamaApi};
@@ -69,7 +72,9 @@ pub struct App {
     pub source_document_query_service: Arc<SourceDocumentQueryService>,
     pub retrieval_service: Arc<RetrievalService>,
     pub chat_service: Arc<ChatService>,
-    pub source_adapter_registry: Arc<SourceAdapterRegistry>,
+    pub connector_command_handler: Arc<ConnectorCommandHandler>,
+    pub connector_query_service: Arc<ConnectorQueryService>,
+    pub connector_registry: Arc<ConnectorRegistry>,
     pub event_bus: Arc<EventBus>,
 }
 
@@ -145,7 +150,9 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         source_document_query_service: services.source_document_query_service,
         retrieval_service: services.retrieval_service,
         chat_service: services.chat_service,
-        source_adapter_registry: workflows.source_adapter_registry,
+        connector_command_handler: services.connector_command_handler,
+        connector_query_service: services.connector_query_service,
+        connector_registry: workflows.connector_registry,
         event_bus,
     };
 
@@ -178,7 +185,9 @@ impl App {
         provide_context(Arc::clone(&self.source_document_query_service));
         provide_context(Arc::clone(&self.retrieval_service));
         provide_context(Arc::clone(&self.chat_service));
-        provide_context(Arc::clone(&self.source_adapter_registry));
+        provide_context(Arc::clone(&self.connector_command_handler));
+        provide_context(Arc::clone(&self.connector_query_service));
+        provide_context(Arc::clone(&self.connector_registry));
     }
 
     pub fn apply_axum_extensions(&self, router: Router) -> Router {

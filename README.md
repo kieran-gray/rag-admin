@@ -75,7 +75,6 @@ Environment variables (see `.env.example`):
 | Variable | Purpose |
 | --- | --- |
 | `DATABASE_URL` | Postgres connection string (pgvector required) |
-| `BLOG_URL` | Optional. Base URL of an upstream blog API to expose as a source adapter |
 | `OLLAMA_BASE_URL` | Optional. Defaults to `http://localhost:11434` |
 | `OLLAMA_MEMORY_RESERVATION`, `OLLAMA_MEMORY_LIMIT` | Docker Compose memory settings for the local Ollama service |
 | `OLLAMA_CONTEXT_LENGTH` | Ollama generation context size. Defaults to `16384` |

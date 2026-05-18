@@ -86,7 +86,7 @@ const GENERATION_SEEDS: &[GenerationSeed] = &[
 const VECTOR_INDEX_SEEDS: &[VectorIndexSeed] = &[
     VectorIndexSeed {
         kind: VectorStoreKind::CloudflareVectorize,
-        name: "blog-chunks",
+        name: "document-chunks",
         dimensions: 1024,
     },
     VectorIndexSeed {

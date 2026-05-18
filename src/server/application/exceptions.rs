@@ -16,6 +16,7 @@ use crate::server::domain::configuration::{
     sweep_template::{SweepTemplateError, SweepTemplateRepositoryError},
     vector_index::VectorIndexRepositoryError,
 };
+use crate::server::domain::connector::{ConnectorError, ConnectorRepositoryError};
 use crate::server::domain::embedding_set::repository::EmbeddingSetRepositoryError;
 use crate::server::domain::evaluation::{
     dataset::{exceptions::EvaluationDatasetError, repository::EvaluationDatasetRepositoryError},
@@ -130,6 +131,23 @@ impl From<SweepTemplateError> for AppError {
             | SweepTemplateError::ValidationError(_)
             | SweepTemplateError::InvalidCommand(_) => AppError::Validation(value.to_string()),
         }
+    }
+}
+
+impl From<ConnectorError> for AppError {
+    fn from(value: ConnectorError) -> Self {
+        match value {
+            ConnectorError::NotFound => AppError::NotFound(value.to_string()),
+            ConnectorError::AlreadyExists
+            | ConnectorError::AlreadyDeleted
+            | ConnectorError::ValidationError(_) => AppError::Validation(value.to_string()),
+        }
+    }
+}
+
+impl From<ConnectorRepositoryError> for AppError {
+    fn from(value: ConnectorRepositoryError) -> Self {
+        AppError::Internal(value.to_string())
     }
 }
 

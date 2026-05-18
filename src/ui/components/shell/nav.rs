@@ -24,6 +24,11 @@ const CONFIGURATION_ITEMS: &[NavMenuItem] = &[
         label: "Chunking",
         hint: "strategies · sweeps",
     },
+    NavMenuItem {
+        href: "/configuration/connectors",
+        label: "Connectors",
+        hint: "ingest sources",
+    },
 ];
 
 const PLAYGROUND_ITEMS: &[NavMenuItem] = &[

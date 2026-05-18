@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use readability_rust::Readability;
+
 use crate::server::application::ports::html_to_markdown::{ExtractedDocument, HtmlToMarkdown};
 use crate::server::application::AppError;
 
@@ -13,12 +15,25 @@ impl HtmdConverter {
 
 impl HtmlToMarkdown for HtmdConverter {
     fn convert(&self, html: &str) -> Result<ExtractedDocument, AppError> {
-        let title = extract_title(html);
         let sanitized = strip_inline_scripts_and_styles(html);
-        let markdown = htmd::convert(&sanitized)
+        let (main_html, main_title) = extract_main_content(&sanitized);
+        let title = main_title.or_else(|| extract_title(html));
+        let markdown = htmd::convert(&main_html)
             .map_err(|e| AppError::Upstream(format!("html→markdown conversion failed: {e}")))?;
         Ok(ExtractedDocument { title, markdown })
     }
+}
+
+fn extract_main_content(html: &str) -> (String, Option<String>) {
+    let Ok(mut readability) = Readability::new(html, None) else {
+        return (html.to_string(), None);
+    };
+    let Some(extracted) = readability.parse() else {
+        return (html.to_string(), None);
+    };
+    let body = extracted.content.unwrap_or_else(|| html.to_string());
+    let title = extracted.title.filter(|t| !t.trim().is_empty());
+    (body, title)
 }
 
 fn extract_title(html: &str) -> Option<String> {
@@ -137,5 +152,70 @@ mod tests {
         let html = "<p>before</p><script>oops";
         let cleaned = strip_inline_scripts_and_styles(html);
         assert_eq!(cleaned, "<p>before</p>");
+    }
+
+    #[test]
+    fn readability_strips_chrome_and_keeps_main_content() {
+        let html = r#"
+            <!DOCTYPE html>
+            <html>
+            <head><title>Example Site</title></head>
+            <body>
+                <nav>
+                    <a href="/">Home</a>
+                    <a href="/section-a">Section A</a>
+                    <a href="/section-b">Section B</a>
+                </nav>
+                <header>
+                    <h1>Example Site Header</h1>
+                </header>
+                <main>
+                    <h1>The Real Content Heading</h1>
+                    <p>This is the first paragraph of the main content. It contains enough text that
+                    readability should clearly identify it as the primary content of the page,
+                    distinct from the navigation chrome and footer boilerplate that surround it.</p>
+                    <p>A second paragraph also containing meaningful prose so that readability's
+                    text-density heuristics have something substantial to anchor on when choosing
+                    which subtree of the document to extract as the main body.</p>
+                    <h2>A Section</h2>
+                    <p>More body text under a subheading, again with enough length that the
+                    extraction algorithm will treat this region as load-bearing rather than as
+                    boilerplate to discard.</p>
+                </main>
+                <footer>
+                    <p>© 2026 Example Site</p>
+                    <a href="/about">About</a>
+                </footer>
+            </body>
+            </html>
+        "#;
+
+        let converter = HtmdConverter::new();
+        let extracted = converter.convert(html).expect("convert");
+
+        assert!(
+            extracted.markdown.contains("The Real Content Heading"),
+            "main heading should be kept: {}",
+            extracted.markdown
+        );
+        assert!(
+            extracted
+                .markdown
+                .contains("first paragraph of the main content"),
+            "main body should be kept"
+        );
+        assert!(
+            !extracted.markdown.contains("Example Site Header"),
+            "site header should be dropped: {}",
+            extracted.markdown
+        );
+        assert!(
+            !extracted.markdown.contains("Section B"),
+            "nav links should be dropped"
+        );
+        assert!(
+            !extracted.markdown.contains("© 2026"),
+            "footer should be dropped"
+        );
     }
 }

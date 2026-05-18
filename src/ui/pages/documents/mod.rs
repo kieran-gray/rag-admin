@@ -192,7 +192,6 @@ fn ingest_status(doc: &DocumentListItemDto) -> (String, Status) {
 
 fn document_type_label(doc_type: &str) -> &'static str {
     match doc_type {
-        "BlogPost" => "Blog post",
         "Markdown" => "Markdown",
         "PlainText" => "Plain text",
         "WebPage" => "Web page",

@@ -11,6 +11,7 @@ use crate::server::domain::configuration::generation_model::GenerationModelRepos
 use crate::server::domain::configuration::pipeline_configuration::PipelineConfigurationRepository;
 use crate::server::domain::configuration::sweep_template::SweepTemplateRepository;
 use crate::server::domain::configuration::vector_index::VectorIndexRepository;
+use crate::server::domain::connector::ConnectorRepository;
 use crate::server::domain::embedding_set::repository::EmbeddingSetRepository;
 use crate::server::domain::evaluation::dataset::repository::EvaluationDatasetRepository;
 use crate::server::domain::evaluation::run::repository::EvaluationRunRepository;
@@ -22,6 +23,7 @@ use crate::server::infrastructure::configuration::{
     PostgresGenerationModelRepository, PostgresPipelineConfigurationRepository,
     PostgresSweepTemplateRepository, PostgresVectorIndexRepository,
 };
+use crate::server::infrastructure::connector::PostgresConnectorRepository;
 use crate::server::infrastructure::evaluation::{
     PostgresEvaluationDatasetRepository, PostgresEvaluationRunRepository,
 };
@@ -43,6 +45,7 @@ pub struct Repositories {
     pub pipeline_configuration: Arc<dyn PipelineConfigurationRepository>,
     pub chunking_configuration: Arc<dyn ChunkingConfigurationRepository>,
     pub sweep_template: Arc<dyn SweepTemplateRepository>,
+    pub connector: Arc<dyn ConnectorRepository>,
     pub source_document: Arc<dyn SourceDocumentRepository>,
     pub indexing: Arc<dyn IndexingRepository>,
     pub evaluation_dataset: Arc<dyn EvaluationDatasetRepository>,
@@ -82,6 +85,7 @@ pub fn build_repositories(
             pool.clone(),
         )),
         sweep_template: Arc::new(PostgresSweepTemplateRepository::new(pool.clone())),
+        connector: Arc::new(PostgresConnectorRepository::new(pool.clone())),
         source_document: Arc::new(PostgresSourceDocumentRepository::new(pool.clone())),
         indexing: Arc::new(PostgresIndexingRepository::new(pool.clone())),
         evaluation_dataset: Arc::new(PostgresEvaluationDatasetRepository::new(pool.clone())),

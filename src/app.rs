@@ -9,7 +9,10 @@ use leptos_router::{
 use crate::ui::components::app::event_bus::provide_event_bus;
 use crate::ui::components::shell::AppShell;
 use crate::ui::pages::{
-    configuration::{catalog::CatalogPage, chunking::ChunkingPage, pipelines::PipelinesPage},
+    configuration::{
+        catalog::CatalogPage, chunking::ChunkingPage, connectors::ConnectorsPage,
+        pipelines::PipelinesPage,
+    },
     document_detail::DocumentDetailPage,
     documents::{DocumentByIdRedirect, DocumentsPage},
     evaluations::{
@@ -117,6 +120,10 @@ pub fn App() -> impl IntoView {
                     <Route
                         path=(StaticSegment("configuration"), StaticSegment("chunking"))
                         view=ChunkingPage
+                    />
+                    <Route
+                        path=(StaticSegment("configuration"), StaticSegment("connectors"))
+                        view=ConnectorsPage
                     />
                     <Route
                         path=StaticSegment("configuration")

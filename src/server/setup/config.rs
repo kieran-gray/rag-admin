@@ -8,7 +8,6 @@ trait FromEnv: Sized {
 
 #[derive(Clone)]
 pub struct Config {
-    pub blog_url: Option<String>,
     pub database_url: String,
     pub cloudflare: CloudflareConfig,
     pub ollama: OllamaConfig,
@@ -82,7 +81,6 @@ impl Config {
             ));
         }
         Ok(Self {
-            blog_url: Self::parse_optional("BLOG_URL"),
             database_url: Self::parse("DATABASE_URL")?,
             cloudflare,
             ollama: OllamaConfig::from_env()?,

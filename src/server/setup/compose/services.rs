@@ -13,6 +13,7 @@ use crate::server::application::configuration::{
     PipelineConfigurationQueryService, PipelineConfigurationService, PipelineResolver,
     SweepTemplateCommandHandler, SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
 };
+use crate::server::application::connector::{ConnectorCommandHandler, ConnectorQueryService};
 use crate::server::application::embedding::ports::Embedder;
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::evaluation::ports::{EvaluationGenerator, Retriever};
@@ -57,6 +58,8 @@ pub struct Services {
     pub vector_index_command_handler: Arc<VectorIndexCatalogCommandHandler>,
     pub configuration_defaults_command_handler: Arc<ConfigurationDefaultsCommandHandler>,
     pub sweep_template_command_handler: Arc<SweepTemplateCommandHandler>,
+    pub connector_command_handler: Arc<ConnectorCommandHandler>,
+    pub connector_query_service: Arc<ConnectorQueryService>,
     pub source_document_command_handler: Arc<SourceDocumentCommandHandler>,
     pub indexing_command_handler: Arc<IndexingCommandHandler>,
     pub evaluation_dataset_command_handler: Arc<EvaluationDatasetCommandHandler>,
@@ -198,6 +201,13 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         Arc::clone(&configuration_defaults_command_handler),
         Arc::clone(&id_generator),
     );
+    let connector_query_service = ConnectorQueryService::new(Arc::clone(&repos.connector));
+    let connector_command_handler = ConnectorCommandHandler::new(
+        Arc::clone(&wirings.connector.command_processor),
+        Arc::clone(&connector_query_service),
+        Arc::clone(&clock),
+        Arc::clone(&id_generator),
+    );
     let source_document_command_handler =
         SourceDocumentCommandHandler::new(Arc::clone(&wirings.source_document.command_processor));
     let indexing_command_handler =
@@ -277,6 +287,8 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         vector_index_command_handler,
         configuration_defaults_command_handler,
         sweep_template_command_handler,
+        connector_command_handler,
+        connector_query_service,
         source_document_command_handler,
         indexing_command_handler,
         evaluation_dataset_command_handler,

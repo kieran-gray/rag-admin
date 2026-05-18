@@ -130,24 +130,25 @@ impl HasPolicies<SourceDocument, ()> for SourceDocumentEvent {}
 
 impl SourceDocument {
     #[cfg(test)]
-    pub fn test_create(document_id: Uuid, slug: &str) -> SourceDocumentCommand {
+    pub fn test_create(document_id: Uuid, url: &str) -> SourceDocumentCommand {
         use super::{
             commands::{CreateDocument, NewVersion},
             document_type::DocumentType,
             source_ref::SourceRef,
-            version::{BlogPostMetadata, DocumentMetadata},
+            version::{DocumentMetadata, WebPageMetadata},
         };
         SourceDocumentCommand::CreateDocument(CreateDocument {
             document_id,
-            document_type: DocumentType::BlogPost,
-            source_ref: SourceRef::UpstreamSlug {
-                slug: slug.to_string(),
+            document_type: DocumentType::WebPage,
+            source_ref: SourceRef::Url {
+                url: url.to_string(),
             },
             initial_version: NewVersion {
                 content_hash: ContentHash::new("abc123".to_string()),
-                metadata: DocumentMetadata::BlogPost(BlogPostMetadata {
-                    title: "Test Post".to_string(),
-                    published_at: "2024-01-01".to_string(),
+                metadata: DocumentMetadata::WebPage(WebPageMetadata {
+                    title: "Test Page".to_string(),
+                    source_url: url.to_string(),
+                    fetched_at: "2024-01-01T00:00:00Z".into(),
                 }),
             },
             occurred_at: "2024-01-01T00:00:00Z".into(),
@@ -165,27 +166,24 @@ mod tests {
             document_type::DocumentType,
             events::{DocumentCreated, VersionAdded},
             source_ref::SourceRef,
-            version::{BlogPostMetadata, DocumentMetadata},
+            version::{DocumentMetadata, WebPageMetadata},
         },
     };
 
-    fn make_created_events(document_id: Uuid, slug: &str) -> Vec<SourceDocumentEvent> {
+    fn make_created_events(document_id: Uuid, url: &str) -> Vec<SourceDocumentEvent> {
         vec![
             SourceDocumentEvent::DocumentCreated(DocumentCreated {
                 document_id,
-                document_type: DocumentType::BlogPost,
-                source_ref: SourceRef::UpstreamSlug {
-                    slug: slug.to_string(),
+                document_type: DocumentType::WebPage,
+                source_ref: SourceRef::Url {
+                    url: url.to_string(),
                 },
                 occurred_at: now(),
             }),
             SourceDocumentEvent::VersionAdded(VersionAdded {
                 version_number: 1,
                 content_hash: ContentHash::new("abc123".to_string()),
-                metadata: DocumentMetadata::BlogPost(BlogPostMetadata {
-                    title: "My Post".to_string(),
-                    published_at: "2024-01-01".to_string(),
-                }),
+                metadata: make_metadata(url),
                 occurred_at: now(),
             }),
         ]
@@ -199,19 +197,22 @@ mod tests {
         ContentHash::new(s.to_string())
     }
 
-    fn make_metadata() -> DocumentMetadata {
-        DocumentMetadata::BlogPost(BlogPostMetadata {
-            title: "My Post".to_string(),
-            published_at: "2024-01-01".to_string(),
+    fn make_metadata(url: &str) -> DocumentMetadata {
+        DocumentMetadata::WebPage(WebPageMetadata {
+            title: "My Page".to_string(),
+            source_url: url.to_string(),
+            fetched_at: now(),
         })
     }
 
     #[test]
     fn create_document_emits_created_and_version_added() {
         let id = Uuid::new_v4();
-        let events =
-            SourceDocument::handle_command(None, SourceDocument::test_create(id, "my-post"))
-                .unwrap();
+        let events = SourceDocument::handle_command(
+            None,
+            SourceDocument::test_create(id, "https://example.com/a"),
+        )
+        .unwrap();
 
         assert_eq!(events.len(), 2);
         assert!(matches!(events[0], SourceDocumentEvent::DocumentCreated(_)));
@@ -225,12 +226,14 @@ mod tests {
     #[test]
     fn creating_already_existing_document_fails() {
         let id = Uuid::new_v4();
-        let events = make_created_events(id, "my-post");
+        let events = make_created_events(id, "https://example.com/a");
         let doc = SourceDocument::from_events(&events).unwrap();
 
-        let err =
-            SourceDocument::handle_command(Some(&doc), SourceDocument::test_create(id, "my-post"))
-                .unwrap_err();
+        let err = SourceDocument::handle_command(
+            Some(&doc),
+            SourceDocument::test_create(id, "https://example.com/a"),
+        )
+        .unwrap_err();
 
         assert!(matches!(err, SourceDocumentError::AlreadyExists));
     }
@@ -238,7 +241,7 @@ mod tests {
     #[test]
     fn add_version_increments_version_number() {
         let id = Uuid::new_v4();
-        let events = make_created_events(id, "my-post");
+        let events = make_created_events(id, "https://example.com/a");
         let doc = SourceDocument::from_events(&events).unwrap();
 
         let new_events = SourceDocument::handle_command(
@@ -247,7 +250,7 @@ mod tests {
                 document_id: id,
                 version: NewVersion {
                     content_hash: make_hash("def456"),
-                    metadata: make_metadata(),
+                    metadata: make_metadata("https://example.com/a"),
                 },
                 occurred_at: now(),
             }),
@@ -266,7 +269,7 @@ mod tests {
     #[test]
     fn add_version_with_identical_hash_is_idempotent() {
         let id = Uuid::new_v4();
-        let events = make_created_events(id, "my-post");
+        let events = make_created_events(id, "https://example.com/a");
         let doc = SourceDocument::from_events(&events).unwrap();
 
         let new_events = SourceDocument::handle_command(
@@ -275,7 +278,7 @@ mod tests {
                 document_id: id,
                 version: NewVersion {
                     content_hash: make_hash("abc123"),
-                    metadata: make_metadata(),
+                    metadata: make_metadata("https://example.com/a"),
                 },
                 occurred_at: now(),
             }),
@@ -294,7 +297,7 @@ mod tests {
                 document_id: id,
                 version: NewVersion {
                     content_hash: make_hash("abc123"),
-                    metadata: make_metadata(),
+                    metadata: make_metadata("https://example.com/a"),
                 },
                 occurred_at: now(),
             }),
@@ -307,7 +310,7 @@ mod tests {
     #[test]
     fn delete_emits_document_deleted() {
         let id = Uuid::new_v4();
-        let events = make_created_events(id, "my-post");
+        let events = make_created_events(id, "https://example.com/a");
         let doc = SourceDocument::from_events(&events).unwrap();
 
         let new_events = SourceDocument::handle_command(
@@ -329,7 +332,7 @@ mod tests {
     #[test]
     fn double_delete_fails() {
         let id = Uuid::new_v4();
-        let mut events = make_created_events(id, "my-post");
+        let mut events = make_created_events(id, "https://example.com/a");
         events.push(SourceDocumentEvent::DocumentDeleted(DocumentDeleted {
             occurred_at: now(),
         }));
@@ -350,7 +353,7 @@ mod tests {
     #[test]
     fn add_version_on_deleted_document_fails() {
         let id = Uuid::new_v4();
-        let mut events = make_created_events(id, "my-post");
+        let mut events = make_created_events(id, "https://example.com/a");
         events.push(SourceDocumentEvent::DocumentDeleted(DocumentDeleted {
             occurred_at: now(),
         }));
@@ -362,7 +365,7 @@ mod tests {
                 document_id: id,
                 version: NewVersion {
                     content_hash: make_hash("new123"),
-                    metadata: make_metadata(),
+                    metadata: make_metadata("https://example.com/a"),
                 },
                 occurred_at: now(),
             }),
@@ -378,7 +381,7 @@ mod tests {
             SourceDocument::from_events(&[SourceDocumentEvent::VersionAdded(VersionAdded {
                 version_number: 1,
                 content_hash: make_hash("abc"),
-                metadata: make_metadata(),
+                metadata: make_metadata("https://example.com/a"),
                 occurred_at: now(),
             })]);
 
@@ -388,11 +391,11 @@ mod tests {
     #[test]
     fn full_event_replay_is_consistent() {
         let id = Uuid::new_v4();
-        let mut events = make_created_events(id, "slug");
+        let mut events = make_created_events(id, "https://example.com/a");
         events.push(SourceDocumentEvent::VersionAdded(VersionAdded {
             version_number: 2,
             content_hash: make_hash("v2"),
-            metadata: make_metadata(),
+            metadata: make_metadata("https://example.com/a"),
             occurred_at: now(),
         }));
 

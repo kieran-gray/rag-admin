@@ -1,5 +1,5 @@
 use leptos::prelude::*;
-use leptos_router::hooks::{use_navigate, use_params_map};
+use leptos_router::hooks::{use_location, use_navigate, use_params_map};
 use leptos_router::NavigateOptions;
 use uuid::Uuid;
 
@@ -9,6 +9,7 @@ use crate::ui::components::primitives::{EmptyState, Surface};
 #[component]
 pub fn DocumentByIdRedirect() -> impl IntoView {
     let params = use_params_map();
+    let location = use_location();
     let document_id = Memo::new(move |_| {
         params
             .with(|p| p.get("document_id").unwrap_or_default().to_string())
@@ -30,9 +31,19 @@ pub fn DocumentByIdRedirect() -> impl IntoView {
 
     Effect::new(move |_| {
         if let Some(Ok(Some(detail))) = detail.get() {
+            let search = location.search.get();
+            let suffix = if search.is_empty() {
+                String::new()
+            } else if search.starts_with('?') {
+                search
+            } else {
+                format!("?{search}")
+            };
             let target = format!(
-                "/documents/{}/{}",
-                detail.document.document_type, detail.document.source_ref_key,
+                "/documents/{}/{}{}",
+                detail.document.document_type,
+                urlencoding::encode(&detail.document.source_ref_key),
+                suffix,
             );
             use_navigate()(
                 &target,

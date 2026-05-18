@@ -1,11 +1,16 @@
+use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
 
 use uuid::Uuid;
 
 use crate::server::application::configuration::PipelineResolver;
+use crate::server::application::connector::{
+    ports::FetchedDocument as ConnectorFetched, ConnectorQueryService, ConnectorRegistry,
+};
 use crate::server::application::ports::{Clock, HtmlToMarkdown, HttpClient, IdGenerator};
 use crate::server::application::AppError;
+use crate::server::domain::connector::ConnectorConfig;
 use crate::server::domain::indexing::commands::{
     IndexingCommand, RequestIngest, RequeueChunking, RequeueEmbedding, RequeueIndexing,
 };
@@ -18,13 +23,11 @@ use crate::server::domain::source_document::source_ref::SourceRef;
 use crate::server::domain::source_document::version::{
     ContentHash, DocumentMetadata, PlainMetadata, WebPageMetadata,
 };
+use crate::shared::contracts::connector::ConnectorDiscoveredItemDto;
 use crate::shared::contracts::SourceDocumentDto;
 use crate::shared::ChunkingConfig;
 
-use super::{
-    command_handler::SourceDocumentCommandHandler, ports::BlobStore,
-    source_adapter_registry::SourceAdapterRegistry,
-};
+use super::{command_handler::SourceDocumentCommandHandler, ports::BlobStore};
 use crate::server::application::indexing::command_handler::IndexingCommandHandler;
 
 pub struct SourceDocumentIngestServiceDeps {
@@ -32,7 +35,8 @@ pub struct SourceDocumentIngestServiceDeps {
     pub indexing_command_handler: Arc<IndexingCommandHandler>,
     pub source_document_repository: Arc<dyn SourceDocumentRepository>,
     pub blob_store: Arc<dyn BlobStore>,
-    pub source_adapter_registry: Arc<SourceAdapterRegistry>,
+    pub connector_registry: Arc<ConnectorRegistry>,
+    pub connector_query_service: Arc<ConnectorQueryService>,
     pub pipeline_resolver: Arc<PipelineResolver>,
     pub http_client: Arc<dyn HttpClient>,
     pub html_to_markdown: Arc<dyn HtmlToMarkdown>,
@@ -45,7 +49,8 @@ pub struct SourceDocumentIngestService {
     indexing_command_handler: Arc<IndexingCommandHandler>,
     source_document_repository: Arc<dyn SourceDocumentRepository>,
     blob_store: Arc<dyn BlobStore>,
-    source_adapter_registry: Arc<SourceAdapterRegistry>,
+    connector_registry: Arc<ConnectorRegistry>,
+    connector_query_service: Arc<ConnectorQueryService>,
     pipeline_resolver: Arc<PipelineResolver>,
     http_client: Arc<dyn HttpClient>,
     html_to_markdown: Arc<dyn HtmlToMarkdown>,
@@ -60,7 +65,8 @@ impl SourceDocumentIngestService {
             indexing_command_handler: deps.indexing_command_handler,
             source_document_repository: deps.source_document_repository,
             blob_store: deps.blob_store,
-            source_adapter_registry: deps.source_adapter_registry,
+            connector_registry: deps.connector_registry,
+            connector_query_service: deps.connector_query_service,
             pipeline_resolver: deps.pipeline_resolver,
             http_client: deps.http_client,
             html_to_markdown: deps.html_to_markdown,
@@ -69,24 +75,43 @@ impl SourceDocumentIngestService {
         })
     }
 
-    pub async fn import_document(
+    pub async fn list_from_connector(
         &self,
-        source_ref: SourceRef,
-        document_type: DocumentType,
-    ) -> Result<SourceDocumentDto, AppError> {
-        let adapter = self
-            .source_adapter_registry
-            .get(&document_type)
-            .ok_or_else(|| {
-                AppError::Validation(format!("no adapter registered for {document_type:?}"))
-            })?;
-        let fetched = adapter
-            .fetch(&source_ref)
-            .await
-            .map_err(|e| AppError::Upstream(format!("fetch failed: {e}")))?;
+        connector_id: Uuid,
+    ) -> Result<Vec<ConnectorDiscoveredItemDto>, AppError> {
+        let connector = self.load_connector_config(connector_id).await?;
+        let implementation = self.connector_registry.get(connector.kind())?;
+        let items = implementation.list(&connector).await?;
 
-        self.persist_document(source_ref, document_type, fetched.content, fetched.metadata)
-            .await
+        let existing = self.source_document_repository.list().await?;
+        let mut existing_keys: HashSet<String> = HashSet::new();
+        for doc in existing {
+            existing_keys.insert(doc.source_ref.natural_key());
+        }
+
+        Ok(items
+            .into_iter()
+            .map(|item| {
+                let key = item.source_ref.natural_key();
+                let already_imported = existing_keys.contains(&key);
+                ConnectorDiscoveredItemDto {
+                    source_ref_key: key,
+                    title: item.title,
+                    already_imported,
+                }
+            })
+            .collect())
+    }
+
+    pub async fn import_from_connector(
+        &self,
+        connector_id: Uuid,
+        source_ref: SourceRef,
+    ) -> Result<SourceDocumentDto, AppError> {
+        let connector = self.load_connector_config(connector_id).await?;
+        let implementation = self.connector_registry.get(connector.kind())?;
+        let fetched = implementation.fetch(&connector, &source_ref).await?;
+        self.persist_fetched(fetched).await
     }
 
     pub async fn import_upload(
@@ -99,7 +124,7 @@ impl SourceDocumentIngestService {
         let metadata = match document_type {
             DocumentType::Markdown => DocumentMetadata::Markdown(PlainMetadata { title }),
             DocumentType::PlainText => DocumentMetadata::PlainText(PlainMetadata { title }),
-            DocumentType::BlogPost | DocumentType::WebPage => {
+            DocumentType::WebPage => {
                 return Err(AppError::Validation(format!(
                     "uploads cannot create {document_type:?}; supported types are Markdown and PlainText"
                 )));
@@ -138,6 +163,31 @@ impl SourceDocumentIngestService {
             DocumentType::WebPage,
             extracted.markdown.into_bytes(),
             metadata,
+        )
+        .await
+    }
+
+    async fn load_connector_config(&self, connector_id: Uuid) -> Result<ConnectorConfig, AppError> {
+        self.connector_query_service
+            .get_config(connector_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("connector {connector_id} not found")))
+    }
+
+    async fn persist_fetched(
+        &self,
+        fetched: ConnectorFetched,
+    ) -> Result<SourceDocumentDto, AppError> {
+        let document_type = match &fetched.metadata {
+            DocumentMetadata::WebPage(_) => DocumentType::WebPage,
+            DocumentMetadata::Markdown(_) => DocumentType::Markdown,
+            DocumentMetadata::PlainText(_) => DocumentType::PlainText,
+        };
+        self.persist_document(
+            fetched.source_ref,
+            document_type,
+            fetched.content,
+            fetched.metadata,
         )
         .await
     }

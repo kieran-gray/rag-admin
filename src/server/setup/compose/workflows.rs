@@ -4,6 +4,7 @@ use std::sync::Arc;
 use sqlx::PgPool;
 use tokio::sync::Notify;
 
+use crate::server::application::connector::{ConnectorImpl, ConnectorRegistry};
 use crate::server::application::evaluation::dataset::EvaluationDatasetEffectExecutor;
 use crate::server::application::evaluation::ports::LlmJudge;
 use crate::server::application::evaluation::run::{
@@ -14,7 +15,7 @@ use crate::server::application::indexing::{IndexingEffect, IndexingEffectExecuto
 use crate::server::application::ports::HtmlToMarkdown;
 use crate::server::application::ports::{Clock, HttpClient, IdGenerator};
 use crate::server::application::source_document::{
-    SourceAdapterRegistry, SourceDocumentIngestService, SourceDocumentIngestServiceDeps,
+    SourceDocumentIngestService, SourceDocumentIngestServiceDeps,
 };
 use crate::server::application::spawn_activity_projection;
 use crate::server::domain::configuration::defaults::{
@@ -30,6 +31,7 @@ use crate::server::domain::configuration::sweep_template::{SweepTemplate, SweepT
 use crate::server::domain::configuration::vector_index::{
     make_vector_index_projector, VectorIndexCatalog,
 };
+use crate::server::domain::connector::{Connector, ConnectorProjector};
 use crate::server::domain::evaluation::dataset::aggregate::EvaluationDataset;
 use crate::server::domain::evaluation::dataset::effects::EvaluationDatasetEffect;
 use crate::server::domain::evaluation::dataset::projector::EvaluationDatasetProjector;
@@ -40,13 +42,13 @@ use crate::server::domain::indexing::aggregate::Indexing;
 use crate::server::domain::indexing::projector::IndexingProjector;
 use crate::server::domain::source_document::aggregate::SourceDocument;
 use crate::server::domain::source_document::projector::SourceDocumentProjector;
+use crate::server::infrastructure::connector::SitemapConnector;
 use crate::server::infrastructure::evaluation::LlmJudgeAdapter;
 use crate::server::infrastructure::event_sourcing::{
     spawn_postgres_event_listener, PostgresJobQueue,
 };
 use crate::server::infrastructure::html::HtmdConverter;
 use crate::server::infrastructure::http::ReqwestHttpClient;
-use crate::server::infrastructure::source_document::HttpBlogAdapter;
 use crate::server::setup::compose::aggregates::{spawn_driver, AggregateWirings};
 use crate::server::setup::compose::repositories::Repositories;
 use crate::server::setup::compose::services::Services;
@@ -58,7 +60,7 @@ use event_sourcing::process_manager::ProcessManager;
 
 pub struct Workflows {
     pub source_document_ingest_service: Arc<SourceDocumentIngestService>,
-    pub source_adapter_registry: Arc<SourceAdapterRegistry>,
+    pub connector_registry: Arc<ConnectorRegistry>,
 }
 
 pub struct WorkflowsDeps<'a> {
@@ -75,7 +77,7 @@ pub struct WorkflowsDeps<'a> {
 
 pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError> {
     let WorkflowsDeps {
-        config,
+        config: _,
         pool,
         http,
         clock,
@@ -141,6 +143,16 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
             Arc::clone(&repos.pipeline_configuration),
             Arc::clone(&repos.sweep_template),
         ))],
+        None,
+        Arc::clone(&checkpoint),
+        Arc::clone(&event_bus),
+        &mut wakeups,
+    );
+    spawn_driver::<Connector, ()>(
+        Arc::clone(&wirings.connector.event_store),
+        vec![Arc::new(ConnectorProjector::new(Arc::clone(
+            &repos.connector,
+        )))],
         None,
         Arc::clone(&checkpoint),
         Arc::clone(&event_bus),
@@ -299,22 +311,26 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
 
     spawn_postgres_event_listener(pool, wakeups);
 
-    let mut source_adapter_registry = SourceAdapterRegistry::new();
-    if let Some(blog_url) = config.blog_url.clone() {
-        source_adapter_registry.register(HttpBlogAdapter::new(Arc::clone(&http), blog_url));
-    }
-    let source_adapter_registry = Arc::new(source_adapter_registry);
-
     let html_to_markdown: Arc<dyn HtmlToMarkdown> = HtmdConverter::new();
-
     let http_port: Arc<dyn HttpClient> = Arc::clone(&http) as Arc<dyn HttpClient>;
+
+    let sitemap_connector: Arc<dyn ConnectorImpl> = SitemapConnector::new(
+        Arc::clone(&http_port),
+        Arc::clone(&html_to_markdown),
+        Arc::clone(&clock),
+    );
+    let mut connector_registry = ConnectorRegistry::new();
+    connector_registry.register(sitemap_connector);
+    let connector_registry = Arc::new(connector_registry);
+
     let source_document_ingest_service =
         SourceDocumentIngestService::new(SourceDocumentIngestServiceDeps {
             source_document_command_handler: Arc::clone(&services.source_document_command_handler),
             indexing_command_handler: Arc::clone(&services.indexing_command_handler),
             source_document_repository: Arc::clone(&repos.source_document),
             blob_store: Arc::clone(&repos.blob_store),
-            source_adapter_registry: Arc::clone(&source_adapter_registry),
+            connector_registry: Arc::clone(&connector_registry),
+            connector_query_service: Arc::clone(&services.connector_query_service),
             pipeline_resolver: Arc::clone(&services.pipeline_resolver),
             http_client: http_port,
             html_to_markdown,
@@ -324,6 +340,6 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
 
     Ok(Workflows {
         source_document_ingest_service,
-        source_adapter_registry,
+        connector_registry,
     })
 }

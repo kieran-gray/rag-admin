@@ -2,6 +2,7 @@ pub mod activity;
 pub mod aggregate_types;
 pub mod chat;
 pub mod configuration;
+pub mod connector;
 pub mod evaluation;
 pub mod events;
 pub mod ingest;
@@ -25,6 +26,11 @@ pub use configuration::{
     SweepTemplateCommandDto, SweepTemplateDto, UpdateChunkingConfigurationDto,
     UpdateEmbeddingModelDto, UpdateGenerationModelDto, UpdatePipelineConfigurationDto,
     UpdateSweepTemplateDto, UpdateVectorIndexDto, VectorIndexCommandDto, VectorIndexDto,
+};
+pub use connector::{
+    ConnectorCommandDto, ConnectorConfigDto, ConnectorDiscoveredItemDto, ConnectorDto,
+    ConnectorKindDto, RegisterConnectorDto, RenameConnectorDto, SitemapConfigDto,
+    UnregisterConnectorDto, UpdateConnectorConfigDto,
 };
 pub use evaluation::{
     BestVariantDto, EvaluationDatasetDto, EvaluationDatasetSummaryDto, EvaluationJobInfo,

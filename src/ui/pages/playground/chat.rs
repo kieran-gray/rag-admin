@@ -281,11 +281,11 @@ fn SourcesList(hits: Vec<QueryHit>) -> impl IntoView {
                 let heading = hit.heading.clone();
                 let score_display = format!("{:.3}", hit.score);
                 let snippet = hit.snippet.clone();
-                let source_link = match (hit.source_ref_key.as_ref(), hit.char_start, hit.char_end) {
-                    (Some(slug), Some(start), Some(end)) => Some(format!(
-                        "/documents/BlogPost/{slug}?tab=source&ref_start={start}&ref_end={end}"
+                let source_link = match (hit.document_id, hit.char_start, hit.char_end) {
+                    (Some(doc_id), Some(start), Some(end)) => Some(format!(
+                        "/documents/by-id/{doc_id}?tab=source&ref_start={start}&ref_end={end}"
                     )),
-                    (Some(slug), _, _) => Some(format!("/documents/BlogPost/{slug}?tab=source")),
+                    (Some(doc_id), _, _) => Some(format!("/documents/by-id/{doc_id}?tab=source")),
                     _ => None,
                 };
                 view! {

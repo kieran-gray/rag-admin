@@ -24,12 +24,6 @@ impl fmt::Display for ContentHash {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BlogPostMetadata {
-    pub title: String,
-    pub published_at: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlainMetadata {
     pub title: String,
 }
@@ -44,7 +38,6 @@ pub struct WebPageMetadata {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum DocumentMetadata {
-    BlogPost(BlogPostMetadata),
     Markdown(PlainMetadata),
     PlainText(PlainMetadata),
     WebPage(WebPageMetadata),
@@ -52,11 +45,8 @@ pub enum DocumentMetadata {
 
 impl DocumentMetadata {
     pub fn title(&self) -> &str {
-        #[allow(clippy::match_same_arms)]
         match self {
-            DocumentMetadata::BlogPost(m) => &m.title,
-            DocumentMetadata::Markdown(m) => &m.title,
-            DocumentMetadata::PlainText(m) => &m.title,
+            DocumentMetadata::Markdown(m) | DocumentMetadata::PlainText(m) => &m.title,
             DocumentMetadata::WebPage(m) => &m.title,
         }
     }

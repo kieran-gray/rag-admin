@@ -84,6 +84,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 http = "1"
 uuid = { version = "1.18", features = ["v4", "v5", "v7", "js", "serde"] }
+readability-rust = { version = "0.1.0", optional = true }
 
 [features]
 hydrate = ["leptos/hydrate"]
@@ -104,6 +105,7 @@ ssr = [
     "dep:enum-map",
     "dep:markdown",
     "dep:htmd",
+    "dep:readability-rust",
     "dep:sqlx",
     "dep:event_sourcing",
     "leptos/ssr",
@@ -172,6 +174,7 @@ denylist = [
     "enum-map",
     "markdown",
     "htmd",
+    "readability-rust",
 ]
 skip_feature_sets = [["ssr", "hydrate"], []]
 

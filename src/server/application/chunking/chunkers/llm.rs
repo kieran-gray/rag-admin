@@ -14,7 +14,7 @@ use crate::server::domain::configuration::generation_model::GenerationModelRepos
 use crate::shared::reference_data::ChunkStrategy;
 use crate::shared::ChunkingConfig;
 
-const SYSTEM_PROMPT: &str = "You split blog text into compact, self-contained retrieval chunks. \
+const SYSTEM_PROMPT: &str = "You split document text into compact, self-contained retrieval chunks. \
     The text has been divided into numbered micro-chunks marked with <|start_chunk_X|> and \
     <|end_chunk_X|> tags, where X is the chunk number. Choose split points so each final chunk is \
     narrow enough to avoid irrelevant context, but complete enough that a retriever selecting only \

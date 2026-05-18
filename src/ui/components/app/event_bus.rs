@@ -52,33 +52,28 @@ pub fn use_event_bus() -> EventBus {
     use_context::<EventBus>().expect("EventBus context must be provided in App")
 }
 
-pub fn use_invalidator<F>(predicate: F) -> Memo<u32>
+pub fn use_invalidator<F>(predicate: F) -> ReadSignal<u32>
 where
     F: Fn(&PublishedEvent) -> bool + Send + Sync + 'static,
 {
     let bus = use_event_bus();
     let (count, set_count) = signal(0u32);
 
-    Effect::new(move |prev_epoch: Option<u32>| {
-        let epoch = bus.epoch.get();
-        let event = bus.last_event.get();
-
-        if let Some(prev) = prev_epoch {
-            if prev != epoch {
-                set_count.update(|c| *c = c.wrapping_add(1));
-            }
-        }
-
-        if let Some(ref e) = event {
-            if predicate(e) {
-                set_count.update(|c| *c = c.wrapping_add(1));
-            }
-        }
-
-        epoch
+    Effect::new(move |_| {
+        let _ = bus.epoch.get();
+        set_count.update(|c| *c = c.wrapping_add(1));
     });
 
-    Memo::new(move |_| count.get())
+    Effect::new(move |_| {
+        let Some(event) = bus.last_event.get() else {
+            return;
+        };
+        if predicate(&event) {
+            set_count.update(|c| *c = c.wrapping_add(1));
+        }
+    });
+
+    count
 }
 
 #[cfg(feature = "hydrate")]
