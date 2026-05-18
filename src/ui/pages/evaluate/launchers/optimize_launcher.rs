@@ -1,7 +1,6 @@
 use leptos::prelude::*;
 use uuid::Uuid;
 
-use crate::server_functions::evaluation::start_run_optimization;
 use crate::shared::contracts::RunOptimizationRequestDto;
 use crate::shared::{OptimizationBudget, OptimizationConfig, OptimizationScope};
 use crate::ui::components::primitives::{Status, StatusPill, Surface};
@@ -12,31 +11,32 @@ fn describe_budget(b: OptimizationBudget) -> String {
 
 #[component]
 pub fn OptimizeLauncher(
-    document_id: Uuid,
-    #[prop(optional)] dataset_id: Option<Uuid>,
-    #[prop(optional)] pipeline_configuration_id: Option<Uuid>,
+    dataset_id: Option<Uuid>,
+    pipeline_configuration_id: Option<Uuid>,
+    on_launch: Callback<RunOptimizationRequestDto>,
+    busy: ReadSignal<bool>,
+    #[prop(optional)] error: Option<ReadSignal<Option<String>>>,
 ) -> impl IntoView {
-    let _ = document_id;
     let (budget, set_budget) = signal(OptimizationBudget::Thorough);
     let (scope, set_scope) = signal(OptimizationScope::Both);
     let (judges, set_judges) = signal(false);
-    let (busy, set_busy) = signal(false);
-    let (error, set_error) = signal::<Option<String>>(None);
+    let (local_error, set_local_error) = signal::<Option<String>>(None);
 
-    let on_launch = move |_| {
+    let on_click = move |_| {
         let Some(ds) = dataset_id else {
-            set_error.set(Some(
+            set_local_error.set(Some(
                 "Pick a dataset before launching an optimization.".into(),
             ));
             return;
         };
         let Some(pipeline) = pipeline_configuration_id else {
-            set_error.set(Some(
+            set_local_error.set(Some(
                 "Pick a pipeline before launching an optimization.".into(),
             ));
             return;
         };
-        let request = RunOptimizationRequestDto {
+        set_local_error.set(None);
+        on_launch.run(RunOptimizationRequestDto {
             dataset_id: ds,
             pipeline_configuration_id: pipeline,
             optimization: OptimizationConfig {
@@ -45,26 +45,10 @@ pub fn OptimizeLauncher(
                 judges_enabled: judges.get_untracked(),
                 seed: None,
             },
-        };
-        set_busy.set(true);
-        set_error.set(None);
-        leptos::task::spawn_local(async move {
-            match start_run_optimization(request).await {
-                Ok(info) => {
-                    let run_id = info.job_id;
-                    let _ = leptos::web_sys::window().and_then(|w| {
-                        w.location()
-                            .set_href(&format!("/runs/{run_id}/optimize"))
-                            .ok()
-                    });
-                }
-                Err(e) => {
-                    set_busy.set(false);
-                    set_error.set(Some(e.to_string()));
-                }
-            }
         });
     };
+
+    let surfaced_error = move || error.and_then(|e| e.get()).or_else(|| local_error.get());
 
     view! {
         <Surface title="Find best configuration".to_string()>
@@ -122,7 +106,7 @@ pub fn OptimizeLauncher(
                     "Enable LLM-judge pass on final rung (slow; extra cost)"
                 </label>
 
-                {move || error.get().map(|e| view! {
+                {move || surfaced_error().map(|e| view! {
                     <StatusPill label=format!("Error: {e}") kind=Status::Fail />
                 })}
 
@@ -130,7 +114,7 @@ pub fn OptimizeLauncher(
                     type="button"
                     class="btn btn-primary"
                     prop:disabled=move || busy.get()
-                    on:click=on_launch
+                    on:click=on_click
                 >
                     {move || if busy.get() { "Launching…" } else { "Find best configuration" }}
                 </button>

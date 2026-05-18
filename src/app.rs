@@ -15,6 +15,7 @@ use crate::ui::pages::{
     },
     document_detail::DocumentDetailPage,
     documents::{DocumentByIdRedirect, DocumentsPage},
+    evaluate::{EvaluateByIdRedirect, EvaluatePage},
     evaluations::{
         DatasetDetailPage, EvaluationsPage, OptimizeProgressPage, ReplicateComparePage,
         RunDetailPage,
@@ -83,6 +84,22 @@ pub fn App() -> impl IntoView {
                             ParamSegment("source_ref"),
                         )
                         view=DocumentDetailPage
+                    />
+                    <Route
+                        path=(
+                            StaticSegment("evaluate"),
+                            StaticSegment("by-id"),
+                            ParamSegment("document_id"),
+                        )
+                        view=EvaluateByIdRedirect
+                    />
+                    <Route
+                        path=(
+                            StaticSegment("evaluate"),
+                            ParamSegment("doc_type"),
+                            ParamSegment("source_ref"),
+                        )
+                        view=EvaluatePage
                     />
                     <Route path=StaticSegment("evaluations") view=EvaluationsPage />
                     <Route

@@ -110,7 +110,7 @@ fn NewEvaluationDialog(#[prop(into)] open: Signal<bool>, on_close: Callback<()>)
     let navigate = use_navigate();
     let go_to_doc = Callback::new(move |doc: DocumentListItemDto| {
         let href = format!(
-            "/documents/{}/{}?tab=chunk&tune=1",
+            "/evaluate/{}/{}",
             doc.document_type.to_lowercase(),
             urlencoding::encode(&doc.source_ref_key),
         );
@@ -122,7 +122,7 @@ fn NewEvaluationDialog(#[prop(into)] open: Signal<bool>, on_close: Callback<()>)
         <Dialog
             open=open
             title="Run a new evaluation"
-            subtitle="Pick a document. The chunk view opens with the tuning panel expanded so you can generate a dataset or kick off optimization.".to_string()
+            subtitle="Pick a document. The evaluation workflow opens at the dataset step.".to_string()
             on_close=on_close
         >
             <Suspense fallback=|| view! { <p class="muted text-sm">"Loading documents…"</p> }>

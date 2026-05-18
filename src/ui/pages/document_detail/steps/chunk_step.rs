@@ -5,12 +5,10 @@ use uuid::Uuid;
 use crate::server_functions::source_document::{get_chunks, request_indexing};
 use crate::shared::contracts::{
     ChunkDto, ChunkingConfigurationDto, IndexingDto, PipelineConfigurationDto,
-    SourceDocumentDetailDto, SweepTemplateDto,
 };
 use crate::ui::components::primitives::{EmptyState, Help, Status, StatusPill, Surface};
 use crate::ui::pages::document_detail::steps::ConfigSelection;
 use crate::ui::pages::document_detail::tabs::chunks::chunk_card::ChunkCard;
-use crate::ui::pages::document_detail::tabs::EvaluationTab;
 
 #[component]
 pub fn ChunkStep(
@@ -19,22 +17,11 @@ pub fn ChunkStep(
     chunking_configurations: StoredValue<Vec<ChunkingConfigurationDto>>,
     indexings: Signal<Vec<IndexingDto>>,
     source_ref: String,
-    detail: SourceDocumentDetailDto,
-    pipelines_full: Vec<PipelineConfigurationDto>,
-    chunking_full: Vec<ChunkingConfigurationDto>,
-    sweep_templates: Vec<SweepTemplateDto>,
-    initial_tune: bool,
     on_advance: Callback<()>,
 ) -> impl IntoView {
     let source_ref = StoredValue::new(source_ref);
     let (busy, set_busy) = signal(false);
     let (error, set_error) = signal::<Option<String>>(None);
-    let (show_tuning, set_show_tuning) = signal(initial_tune);
-
-    let detail_for_tune = StoredValue::new(detail);
-    let pipelines_for_tune = StoredValue::new(pipelines_full);
-    let chunking_for_tune = StoredValue::new(chunking_full);
-    let sweep_for_tune = StoredValue::new(sweep_templates);
 
     let active_indexing: Signal<Option<IndexingDto>> = Signal::derive(move || {
         let pid = selection.pipeline_id.get()?;
@@ -93,25 +80,16 @@ pub fn ChunkStep(
             <Surface
                 title="Pipeline and chunking configuration".to_string()
                 actions=Box::new(move || view! {
-                    <div class="flex items-center gap-2">
-                        <button
-                            type="button"
-                            class="btn btn-sm btn-ghost"
-                            on:click=move |_| set_show_tuning.update(|v| *v = !*v)
-                        >
-                            {move || if show_tuning.get() { "Hide tuning".to_string() } else { "Tune chunking ↗".to_string() }}
-                        </button>
-                        <Help title="How chunking works".to_string()>
-                            <p>
-                                "The chunking step splits the document's markdown into smaller, retrievable pieces. Pick a pipeline (which embedding model and vector store to use) and a chunking strategy, then run chunking. Once chunks exist you can preview them below before embedding."
-                            </p>
-                            <p class="mt-3">
-                                "Different strategies trade off chunk size, overlap, and boundary detection. If you are unsure which to use, click "
-                                <span class="font-medium">"Tune chunking"</span>
-                                " to generate a synthetic Q&A set and score strategies against this document."
-                            </p>
-                        </Help>
-                    </div>
+                    <Help title="How chunking works".to_string()>
+                        <p>
+                            "The chunking step splits the document's markdown into smaller, retrievable pieces. Pick a pipeline (which embedding model and vector store to use) and a chunking strategy, then run chunking. Once chunks exist you can preview them below before embedding."
+                        </p>
+                        <p class="mt-3">
+                            "Different strategies trade off chunk size, overlap, and boundary detection. To compare strategies systematically, open the "
+                            <span class="font-medium">"Evaluate"</span>
+                            " workflow from the document header."
+                        </p>
+                    </Help>
                 }.into_any())
             >
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -144,17 +122,6 @@ pub fn ChunkStep(
                     <div class="log-line-error text-sm mt-3">{e}</div>
                 })}
             </Surface>
-
-            {move || show_tuning.get().then(|| view! {
-                <Surface title="Tune chunking".to_string()>
-                    <EvaluationTab
-                        detail=Some(detail_for_tune.get_value())
-                        pipelines=pipelines_for_tune.get_value()
-                        chunking_configurations=chunking_for_tune.get_value()
-                        sweep_templates=sweep_for_tune.get_value()
-                    />
-                </Surface>
-            })}
 
             <details class="surface collapsible-card" open>
                 <summary class="collapsible-card-summary">

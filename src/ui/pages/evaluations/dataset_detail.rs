@@ -194,8 +194,8 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
             />
 
             <div class="mb-4">
-                <A href=format!("/documents/by-id/{document_id}") attr:class="muted text-sm">
-                    "← Back to document"
+                <A href=format!("/evaluate/by-id/{document_id}") attr:class="muted text-sm">
+                    "← Back to evaluation"
                 </A>
             </div>
 
