@@ -2092,7 +2092,7 @@ header::before {
 
 /* ── Documents page ────────────────────────────────────────────────────── */
 
-.docs-toolbar {
+.list-page-toolbar {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem 0.75rem;
@@ -2102,13 +2102,13 @@ header::before {
     align-items: center;
 }
 
-.docs-search {
+.list-page-search {
     position: relative;
     flex: 1 1 18rem;
     min-width: 12rem;
 }
 
-.docs-search-icon {
+.list-page-search-icon {
     position: absolute;
     left: 0.625rem;
     top: 50%;
@@ -2119,7 +2119,7 @@ header::before {
     line-height: 1;
 }
 
-.docs-search input {
+.list-page-search input {
     width: 100%;
     padding: 0.4rem 1.85rem 0.4rem 1.85rem;
     background-color: var(--color-surface-1);
@@ -2131,18 +2131,18 @@ header::before {
     transition: border-color 0.12s ease, background-color 0.12s ease, box-shadow 0.12s ease;
 }
 
-.docs-search input:focus {
+.list-page-search input:focus {
     outline: none;
     border-color: var(--color-accent);
     background-color: var(--color-surface-2);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 18%, transparent);
 }
 
-.docs-search input::placeholder {
+.list-page-search input::placeholder {
     color: var(--color-text-faint);
 }
 
-.docs-search-clear {
+.list-page-search-clear {
     position: absolute;
     right: 0.4rem;
     top: 50%;
@@ -2157,19 +2157,19 @@ header::before {
     font-size: 0.75rem;
 }
 
-.docs-search-clear:hover {
+.list-page-search-clear:hover {
     color: var(--color-text);
     background-color: var(--color-surface-2);
 }
 
-.docs-filter-group {
+.list-page-filter-group {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
     flex-wrap: wrap;
 }
 
-.docs-filter-label {
+.list-page-filter-label {
     font-size: 0.6875rem;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -2177,7 +2177,7 @@ header::before {
     margin-right: 0.125rem;
 }
 
-.docs-chip {
+.list-page-chip {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
@@ -2194,30 +2194,30 @@ header::before {
     font-family: inherit;
 }
 
-.docs-chip:hover {
+.list-page-chip:hover {
     border-color: var(--color-border-strong);
     background-color: var(--color-surface-2);
     color: var(--color-text);
 }
 
-.docs-chip[data-active="true"] {
+.list-page-chip[data-active="true"] {
     color: var(--color-text);
     background-color: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface-2));
     border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 18%, transparent) inset;
 }
 
-.docs-chip-count {
+.list-page-chip-count {
     color: var(--color-text-faint);
     font-variant-numeric: tabular-nums;
     font-size: 0.6875rem;
 }
 
-.docs-chip[data-active="true"] .docs-chip-count {
+.list-page-chip[data-active="true"] .list-page-chip-count {
     color: color-mix(in srgb, var(--color-accent) 85%, var(--color-text));
 }
 
-.docs-chip-dot {
+.list-page-chip-dot {
     width: 6px;
     height: 6px;
     border-radius: 999px;
@@ -2226,7 +2226,7 @@ header::before {
     flex-shrink: 0;
 }
 
-.docs-active-filters {
+.list-page-active-filters {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -2238,12 +2238,12 @@ header::before {
     color: var(--color-text-muted);
 }
 
-.docs-active-filters .docs-chip {
+.list-page-active-filters .list-page-chip {
     cursor: default;
     padding: 0.15rem 0.45rem;
 }
 
-.docs-active-filters-clear {
+.list-page-active-filters-clear {
     margin-left: auto;
     background: none;
     border: none;
@@ -2255,7 +2255,7 @@ header::before {
     font-family: inherit;
 }
 
-.docs-active-filters-clear:hover {
+.list-page-active-filters-clear:hover {
     color: var(--color-text);
 }
 
@@ -2309,14 +2309,14 @@ header::before {
     font-variant-numeric: tabular-nums;
 }
 
-.docs-title-cell {
+.list-page-title-cell {
     display: flex;
     flex-direction: column;
     gap: 0.15rem;
     min-width: 0;
 }
 
-.docs-title-text {
+.list-page-title-text {
     color: var(--color-text);
     font-weight: 500;
     overflow: hidden;
@@ -2324,7 +2324,7 @@ header::before {
     white-space: nowrap;
 }
 
-.docs-title-sub {
+.list-page-title-sub {
     color: var(--color-text-faint);
     font-size: 0.7rem;
     overflow: hidden;
@@ -2333,7 +2333,7 @@ header::before {
     font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
 
-.docs-pagination {
+.list-page-pagination {
     display: flex;
     align-items: center;
     gap: 0.625rem;
@@ -2345,25 +2345,25 @@ header::before {
     flex-wrap: wrap;
 }
 
-.docs-pagination-spacer {
+.list-page-pagination-spacer {
     flex: 1;
 }
 
-.docs-pagination .btn {
+.list-page-pagination .btn {
     padding: 0.3rem 0.625rem;
     font-size: 0.75rem;
 }
 
-.docs-page-indicator {
+.list-page-indicator {
     font-variant-numeric: tabular-nums;
     color: var(--color-text);
 }
 
-.docs-skeleton-row td {
+.list-page-skeleton-row td {
     color: transparent;
 }
 
-.docs-skeleton-bar {
+.list-page-skeleton-bar {
     display: inline-block;
     height: 0.6rem;
     background: linear-gradient(
@@ -2374,16 +2374,16 @@ header::before {
     );
     background-size: 200% 100%;
     border-radius: 4px;
-    animation: docs-skeleton-pulse 1.4s ease-in-out infinite;
+    animation: list-page-skeleton-pulse 1.4s ease-in-out infinite;
     width: 100%;
 }
 
-@keyframes docs-skeleton-pulse {
+@keyframes list-page-skeleton-pulse {
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
 }
 
-.docs-empty-filter {
+.list-page-empty-filter {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -2394,7 +2394,7 @@ header::before {
     color: var(--color-text-muted);
 }
 
-.docs-empty-filter strong {
+.list-page-empty-filter strong {
     color: var(--color-text);
     font-weight: 500;
 }

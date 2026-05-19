@@ -35,7 +35,8 @@ pub use connector::{
 pub use evaluation::{
     BestVariantDto, EvaluationDatasetDto, EvaluationDatasetSummaryDto, EvaluationJobInfo,
     EvaluationQuestionDto, EvaluationReferenceDto, EvaluationRunDto, EvaluationRunSummaryDto,
-    RecentEvaluationRunDto, RunEvaluationRequestDto, RunOptimizationRequestDto,
+    RecentEvaluationRunDto, RunEvaluationRequestDto, RunListPageDto, RunListQueryDto,
+    RunOptimizationRequestDto, RunStatusFacetDto, RunStatusFilterDto,
 };
 pub use events::PublishedEvent;
 pub use ingest::{IngestOptions, LogEvent, LogLevel};

@@ -5,9 +5,11 @@ use uuid::Uuid;
 use crate::shared::contracts::BestVariantDto;
 use crate::shared::contracts::{
     EvaluationDatasetDto, EvaluationDatasetSummaryDto, EvaluationJobInfo, EvaluationRunDto,
-    EvaluationRunSummaryDto, RecentEvaluationRunDto, RunEvaluationRequestDto,
-    RunOptimizationRequestDto,
+    EvaluationRunSummaryDto, RecentEvaluationRunDto, RunEvaluationRequestDto, RunListPageDto,
+    RunListQueryDto, RunOptimizationRequestDto,
 };
+#[cfg(feature = "ssr")]
+use crate::shared::contracts::{RunStatusFacetDto, RunStatusFilterDto};
 
 #[cfg(feature = "ssr")]
 use crate::server::application::evaluation::query_service::EvaluationQueryService;
@@ -17,6 +19,14 @@ use crate::server::application::evaluation::{
 };
 #[cfg(feature = "ssr")]
 use crate::server::application::source_document::SourceDocumentQueryService;
+#[cfg(feature = "ssr")]
+use crate::server::domain::evaluation::run::aggregate::EvaluationRunStatus;
+#[cfg(feature = "ssr")]
+use crate::server::domain::evaluation::run::read_model::EvaluationRunReadModel;
+#[cfg(feature = "ssr")]
+use crate::server::domain::evaluation::run::repository::{
+    RunListCursor, RunListQuery, RunStatusFilter,
+};
 #[cfg(feature = "ssr")]
 use crate::server_functions::error::{ctx, map_app_error};
 #[cfg(feature = "ssr")]
@@ -295,45 +305,154 @@ pub async fn get_recent_runs(limit: u32) -> Result<Vec<RecentEvaluationRunDto>, 
         .await
         .map_err(|e| map_app_error(&e))?;
 
-    let doc_index: HashMap<Uuid, String> = documents
+    let doc_index = build_doc_index(&documents).await?;
+
+    Ok(runs.iter().map(|r| map_run_to_dto(r, &doc_index)).collect())
+}
+
+#[server(
+    name = GetEvaluationRunsPage,
+    prefix = "/api",
+    endpoint = "get_evaluation_runs_page"
+)]
+pub async fn get_evaluation_runs_page(
+    query: RunListQueryDto,
+) -> Result<RunListPageDto, ServerFnError> {
+    let cursor = match query.cursor.as_deref() {
+        None => None,
+        Some(value) => Some(decode_run_cursor(value)?),
+    };
+
+    let domain_query = RunListQuery {
+        cursor,
+        limit: if query.limit == 0 { 25 } else { query.limit },
+        statuses: query
+            .statuses
+            .iter()
+            .map(|s| match s {
+                RunStatusFilterDto::Completed => RunStatusFilter::Completed,
+                RunStatusFilterDto::Running => RunStatusFilter::Running,
+                RunStatusFilterDto::Failed => RunStatusFilter::Failed,
+                RunStatusFilterDto::Pending => RunStatusFilter::Pending,
+            })
+            .collect(),
+    };
+
+    let svc = ctx::<Arc<EvaluationQueryService>>()?;
+    let documents = ctx::<Arc<SourceDocumentQueryService>>()?;
+
+    let page = svc
+        .list_runs_page(domain_query)
+        .await
+        .map_err(|e| map_app_error(&e))?;
+
+    let doc_index = build_doc_index(&documents).await?;
+
+    let items = page
+        .items
+        .iter()
+        .map(|r| map_run_to_dto(r, &doc_index))
+        .collect();
+
+    let status_counts = page
+        .status_counts
+        .into_iter()
+        .map(|(filter, count)| RunStatusFacetDto {
+            status: status_filter_to_dto(filter),
+            count,
+        })
+        .collect();
+
+    let next_cursor = page
+        .next_cursor
+        .as_ref()
+        .map(|c: &RunListCursor| format!("{}|{}", c.created_at, c.run_id));
+
+    Ok(RunListPageDto {
+        items,
+        next_cursor,
+        total_matching: page.total_matching,
+        total_all: page.total_all,
+        status_counts,
+    })
+}
+
+#[cfg(feature = "ssr")]
+fn decode_run_cursor(value: &str) -> Result<RunListCursor, ServerFnError> {
+    use crate::server::application::AppError;
+
+    let (created_at, run_id_str) = value
+        .rsplit_once('|')
+        .ok_or_else(|| map_app_error(&AppError::Validation("invalid run cursor".into())))?;
+    let run_id = Uuid::parse_str(run_id_str)
+        .map_err(|e| map_app_error(&AppError::Validation(format!("cursor uuid: {e}"))))?;
+    Ok(RunListCursor {
+        created_at: created_at.to_string(),
+        run_id,
+    })
+}
+
+#[cfg(feature = "ssr")]
+fn status_filter_to_dto(filter: RunStatusFilter) -> RunStatusFilterDto {
+    match filter {
+        RunStatusFilter::Completed => RunStatusFilterDto::Completed,
+        RunStatusFilter::Running => RunStatusFilterDto::Running,
+        RunStatusFilter::Failed => RunStatusFilterDto::Failed,
+        RunStatusFilter::Pending => RunStatusFilterDto::Pending,
+    }
+}
+
+#[cfg(feature = "ssr")]
+async fn build_doc_index(
+    documents: &SourceDocumentQueryService,
+) -> Result<HashMap<Uuid, String>, ServerFnError> {
+    Ok(documents
         .list()
         .await
         .map_err(|e| map_app_error(&e))?
         .into_iter()
         .map(|d| (d.document_id, d.title))
-        .collect();
-
-    Ok(runs
-        .into_iter()
-        .map(|r| {
-            let policy = r.scoring_policy;
-            let best = r
-                .variant_results
-                .iter()
-                .max_by(|a, b| {
-                    policy
-                        .score(&a.metrics())
-                        .partial_cmp(&policy.score(&b.metrics()))
-                        .unwrap_or(Ordering::Equal)
-                })
-                .map(|v| BestVariantDto {
-                    label: v.variant_label.clone(),
-                    config: v.variant_config,
-                    options: v.options.clone(),
-                    score: policy.score(&v.metrics()),
-                    metrics: v.metrics(),
-                });
-
-            RecentEvaluationRunDto {
-                run_id: r.run_id,
-                dataset_id: r.dataset_id,
-                document_id: r.document_id,
-                document_title: doc_index.get(&r.document_id).cloned(),
-                status: r.status.as_str().to_string(),
-                variant_count: r.variants_count,
-                created_at: r.created_at.to_string(),
-                best,
-            }
-        })
         .collect())
+}
+
+#[cfg(feature = "ssr")]
+fn map_run_to_dto(
+    run: &EvaluationRunReadModel,
+    doc_index: &HashMap<Uuid, String>,
+) -> RecentEvaluationRunDto {
+    let policy = run.scoring_policy;
+    let best = run
+        .variant_results
+        .iter()
+        .max_by(|a, b| {
+            policy
+                .score(&a.metrics())
+                .partial_cmp(&policy.score(&b.metrics()))
+                .unwrap_or(Ordering::Equal)
+        })
+        .map(|v| BestVariantDto {
+            label: v.variant_label.clone(),
+            config: v.variant_config,
+            options: v.options.clone(),
+            score: policy.score(&v.metrics()),
+            metrics: v.metrics(),
+        });
+
+    let failure_reason = match &run.status {
+        EvaluationRunStatus::Failed { reason } if !reason.is_empty() => Some(reason.clone()),
+        _ => None,
+    };
+
+    RecentEvaluationRunDto {
+        run_id: run.run_id,
+        dataset_id: run.dataset_id,
+        document_id: run.document_id,
+        document_title: doc_index.get(&run.document_id).cloned(),
+        status: run.status.as_str().to_string(),
+        variant_count: run.variants_count,
+        variants_scored: run.variants_scored,
+        failure_reason,
+        created_at: run.created_at.to_string(),
+        best,
+    }
 }

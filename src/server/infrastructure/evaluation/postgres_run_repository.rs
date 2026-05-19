@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, QueryBuilder, Row};
 use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
 
@@ -9,7 +9,8 @@ use crate::server::domain::evaluation::run::read_model::{
     EvaluationRunReadModel, EvaluationVariantResultDto, NewRunSummary,
 };
 use crate::server::domain::evaluation::run::repository::{
-    EvaluationRunRepository, EvaluationRunRepositoryError,
+    EvaluationRunRepository, EvaluationRunRepositoryError, RunListCursor, RunListPage,
+    RunListQuery, RunStatusFilter,
 };
 use crate::server::domain::evaluation::run::scoring_policy::{ScoringPolicy, ScoringWeights};
 use crate::server::domain::shared::Timestamp;
@@ -141,6 +142,106 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         rows.into_iter()
             .map(EvaluationRunReadModel::try_from)
             .collect::<Result<Vec<_>, _>>()
+    }
+
+    async fn list_page(
+        &self,
+        query: &RunListQuery,
+    ) -> Result<RunListPage, EvaluationRunRepositoryError> {
+        let limit = query.limit.clamp(1, 200) as i64;
+        let fetch_limit = limit + 1;
+
+        let total_matching: i64 = {
+            let mut qb: QueryBuilder<Postgres> =
+                QueryBuilder::new("SELECT COUNT(*)::BIGINT FROM evaluation_runs WHERE 1=1");
+            push_status_filter(&mut qb, &query.statuses);
+            qb.build_query_scalar::<i64>()
+                .fetch_one(&self.pool)
+                .await
+                .map_err(|e| EvaluationRunRepositoryError::Internal(format!("count: {e}")))?
+        };
+
+        let total_all: i64 =
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::BIGINT FROM evaluation_runs")
+                .fetch_one(&self.pool)
+                .await
+                .map_err(|e| EvaluationRunRepositoryError::Internal(format!("count_all: {e}")))?;
+
+        let count_rows = sqlx::query(
+            "SELECT status, COUNT(*)::BIGINT AS count FROM evaluation_runs GROUP BY status",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| EvaluationRunRepositoryError::Internal(format!("status_counts: {e}")))?;
+
+        let mut status_counts: Vec<(RunStatusFilter, u64)> = Vec::new();
+        for row in count_rows {
+            let status: String = row
+                .try_get("status")
+                .map_err(|e| EvaluationRunRepositoryError::Internal(format!("status row: {e}")))?;
+            let count: i64 = row
+                .try_get("count")
+                .map_err(|e| EvaluationRunRepositoryError::Internal(format!("count row: {e}")))?;
+            if let Some(filter) = status_filter_from_str(&status) {
+                status_counts.push((filter, count.max(0) as u64));
+            }
+        }
+        status_counts.sort_by_key(|(f, _)| status_filter_order(*f));
+
+        let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
+            "SELECT
+                run_id, dataset_id, pipeline_configuration_id, document_id, document_version,
+                variants, options, autotune_request, optimization,
+                status, variants_count, variants_prepared, variants_scored, failure_reason,
+                scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
+                scoring_precision_omega_weight, fingerprint, created_at
+            FROM evaluation_runs
+            WHERE 1=1",
+        );
+        push_status_filter(&mut qb, &query.statuses);
+
+        if let Some(cursor) = &query.cursor {
+            let parsed =
+                time::OffsetDateTime::parse(&cursor.created_at, &Rfc3339).map_err(|e| {
+                    EvaluationRunRepositoryError::Internal(format!("cursor timestamp: {e}"))
+                })?;
+            qb.push(" AND (created_at, run_id) < (");
+            qb.push_bind(parsed);
+            qb.push(", ");
+            qb.push_bind(cursor.run_id);
+            qb.push(")");
+        }
+        qb.push(" ORDER BY created_at DESC, run_id DESC LIMIT ");
+        qb.push_bind(fetch_limit);
+
+        let rows: Vec<RunRow> = qb
+            .build_query_as()
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| EvaluationRunRepositoryError::Internal(format!("list_page: {e}")))?;
+
+        let mut models: Vec<EvaluationRunReadModel> = rows
+            .into_iter()
+            .map(EvaluationRunReadModel::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let next_cursor = if models.len() as i64 > limit {
+            models.pop();
+            models.last().map(|m| RunListCursor {
+                created_at: m.created_at.to_string(),
+                run_id: m.run_id,
+            })
+        } else {
+            None
+        };
+
+        Ok(RunListPage {
+            items: models,
+            next_cursor,
+            total_matching: total_matching.max(0) as u64,
+            total_all: total_all.max(0) as u64,
+            status_counts,
+        })
     }
 
     async fn load_variant_results(
@@ -512,6 +613,46 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         .await
         .map_err(|e| EvaluationRunRepositoryError::Internal(format!("mark_failed: {e}")))?;
         Ok(())
+    }
+}
+
+fn push_status_filter(qb: &mut QueryBuilder<'_, Postgres>, statuses: &[RunStatusFilter]) {
+    if statuses.is_empty() {
+        return;
+    }
+    qb.push(" AND status IN (");
+    let mut sep = qb.separated(", ");
+    for status in statuses {
+        sep.push_bind(status_filter_as_str(*status));
+    }
+    sep.push_unseparated(")");
+}
+
+fn status_filter_as_str(status: RunStatusFilter) -> &'static str {
+    match status {
+        RunStatusFilter::Completed => "completed",
+        RunStatusFilter::Running => "running",
+        RunStatusFilter::Failed => "failed",
+        RunStatusFilter::Pending => "pending",
+    }
+}
+
+fn status_filter_from_str(status: &str) -> Option<RunStatusFilter> {
+    match status {
+        "completed" => Some(RunStatusFilter::Completed),
+        "running" => Some(RunStatusFilter::Running),
+        "failed" => Some(RunStatusFilter::Failed),
+        "pending" => Some(RunStatusFilter::Pending),
+        _ => None,
+    }
+}
+
+fn status_filter_order(status: RunStatusFilter) -> u8 {
+    match status {
+        RunStatusFilter::Running => 0,
+        RunStatusFilter::Pending => 1,
+        RunStatusFilter::Completed => 2,
+        RunStatusFilter::Failed => 3,
     }
 }
 

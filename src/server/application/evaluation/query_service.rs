@@ -8,7 +8,7 @@ use crate::server::domain::evaluation::{
     dataset::{read_model::EvaluationDatasetReadModel, repository::EvaluationDatasetRepository},
     run::{
         read_model::{EvaluationRunReadModel, EvaluationVariantResultDto},
-        repository::EvaluationRunRepository,
+        repository::{EvaluationRunRepository, RunListPage, RunListQuery},
     },
 };
 
@@ -106,6 +106,19 @@ impl EvaluationQueryService {
             run.variant_results = self.load_variant_results(run.run_id).await?;
         }
         Ok(runs)
+    }
+
+    pub async fn list_runs_page(&self, query: RunListQuery) -> Result<RunListPage, AppError> {
+        let mut page = self
+            .run_repository
+            .list_page(&query)
+            .await
+            .map_err(|e| AppError::Internal(format!("failed to list runs page: {e}")))?;
+
+        for run in &mut page.items {
+            run.variant_results = self.load_variant_results(run.run_id).await?;
+        }
+        Ok(page)
     }
 
     async fn load_variant_results(

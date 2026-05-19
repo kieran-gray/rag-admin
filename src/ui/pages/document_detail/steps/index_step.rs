@@ -146,11 +146,10 @@ pub fn IndexStep(
             {move || matches!(stage.get(), IndexStage::Done).then(|| view! {
                 <div class="done-banner">
                     <div class="flex items-center gap-3">
-                        <StatusPill label="Indexed".to_string() kind=Status::Ok />
                         <span class="text-sm">"This document is searchable."</span>
                     </div>
                     <div class="done-banner-actions">
-                        <A href="/playground/retrieve" attr:class="btn btn-sm btn-ghost">
+                        <A href="/playground/chat" attr:class="btn btn-sm btn-ghost">
                             "Open in playground →"
                         </A>
                     </div>

@@ -287,9 +287,9 @@ fn DocumentsToolbar(
 ) -> impl IntoView {
     let has_search = move || !search.get().trim().is_empty();
     view! {
-        <div class="docs-toolbar">
-            <div class="docs-search">
-                <span class="docs-search-icon" aria-hidden="true">"⌕"</span>
+        <div class="list-page-toolbar">
+            <div class="list-page-search">
+                <span class="list-page-search-icon" aria-hidden="true">"⌕"</span>
                 <input
                     type="search"
                     placeholder="Search by title or URL…"
@@ -301,7 +301,7 @@ fn DocumentsToolbar(
                 {move || has_search().then(|| view! {
                     <button
                         type="button"
-                        class="docs-search-clear"
+                        class="list-page-search-clear"
                         aria-label="Clear search"
                         on:click=move |_| on_clear_search.run(())
                     >"×"</button>
@@ -328,28 +328,28 @@ fn FacetBar(
     });
 
     view! {
-        <div class="docs-toolbar" style="border-top: none;">
-            <div class="docs-filter-group">
-                <span class="docs-filter-label">"Status"</span>
+        <div class="list-page-toolbar" style="border-top: none;">
+            <div class="list-page-filter-group">
+                <span class="list-page-filter-label">"Status"</span>
                 {move || statuses.get().into_iter().map(|status| {
                     let is_active = filter_state.with(|s| s.statuses.contains(&status));
                     let color = status_color(status);
                     view! {
                         <button
                             type="button"
-                            class="docs-chip"
+                            class="list-page-chip"
                             data-active=move || is_active.to_string()
                             on:click=move |_| toggle_status.run(status)
                         >
-                            <span class="docs-chip-dot" style=format!("background-color: {}", color)></span>
+                            <span class="list-page-chip-dot" style=format!("background-color: {}", color)></span>
                             {status.label()}
                         </button>
                     }
                 }).collect_view()}
             </div>
 
-            <div class="docs-filter-group">
-                <span class="docs-filter-label">"Source"</span>
+            <div class="list-page-filter-group">
+                <span class="list-page-filter-label">"Source"</span>
                 <Transition fallback=|| view! { <span class="faint text-xs">"…"</span> }>
                     {move || page.get().and_then(Result::ok).map(|p| {
                         let facets = p.sources.clone();
@@ -382,13 +382,13 @@ fn SourceFacets(
                 view! {
                     <button
                         type="button"
-                        class="docs-chip"
+                        class="list-page-chip"
                         data-active=move || is_active.to_string()
                         on:click=move |_| toggle_source.run(key_click.clone())
                     >
                         <SourceMark source=facet.source.clone() compact=true />
                         <span>{label}</span>
-                        <span class="docs-chip-count">{count.to_string()}</span>
+                        <span class="list-page-chip-count">{count.to_string()}</span>
                     </button>
                 }
             }).collect_view()}
@@ -426,7 +426,7 @@ fn ActiveFilters(
                         .unwrap_or_default();
 
                     view! {
-                        <div class="docs-active-filters">
+                        <div class="list-page-active-filters">
                             <span>
                                 {format!(
                                     "{total_match} match{}",
@@ -436,7 +436,7 @@ fn ActiveFilters(
                             {(!state.search.is_empty())
                                 .then(|| {
                                     view! {
-                                        <span class="docs-chip" data-active="true">
+                                        <span class="list-page-chip" data-active="true">
                                             <span class="faint">"Search:"</span>
                                             <span>{state.search.clone()}</span>
                                         </span>
@@ -451,12 +451,12 @@ fn ActiveFilters(
                                     view! {
                                         <button
                                             type="button"
-                                            class="docs-chip"
+                                            class="list-page-chip"
                                             data-active="true"
                                             on:click=move |_| toggle_status.run(status)
                                         >
                                             <span
-                                                class="docs-chip-dot"
+                                                class="list-page-chip-dot"
                                                 style=format!("background-color: {}", color)
                                             ></span>
                                             <span>{status.label()}</span>
@@ -477,7 +477,7 @@ fn ActiveFilters(
                                     view! {
                                         <button
                                             type="button"
-                                            class="docs-chip"
+                                            class="list-page-chip"
                                             data-active="true"
                                             on:click=move |_| toggle_source.run(key_click.clone())
                                         >
@@ -489,7 +489,7 @@ fn ActiveFilters(
                                 .collect_view()}
                             <button
                                 type="button"
-                                class="docs-active-filters-clear"
+                                class="list-page-active-filters-clear"
                                 on:click=move |_| on_clear.run(())
                             >
                                 "Clear all"
@@ -545,9 +545,9 @@ fn DocumentRow(doc: DocumentListItemDto) -> impl IntoView {
         <tr>
             <td>
                 <A href=href.clone() attr:class="block">
-                    <div class="docs-title-cell">
-                        <div class="docs-title-text">{title}</div>
-                        <div class="docs-title-sub" title=sub_text.clone()>{sub_text.clone()}</div>
+                    <div class="list-page-title-cell">
+                        <div class="list-page-title-text">{title}</div>
+                        <div class="list-page-title-sub" title=sub_text.clone()>{sub_text.clone()}</div>
                     </div>
                 </A>
             </td>
@@ -596,7 +596,7 @@ fn PaginationBar(
     on_next: Callback<()>,
 ) -> impl IntoView {
     view! {
-        <div class="docs-pagination">
+        <div class="list-page-pagination">
             <Transition fallback=|| view! { <span class="faint">"…"</span> }>
                 {move || {
                     page.get()
@@ -614,8 +614,8 @@ fn PaginationBar(
                             view! {
                                 <>
                                     <span>{extra}</span>
-                                    <span class="docs-pagination-spacer"></span>
-                                    <span class="docs-page-indicator">
+                                    <span class="list-page-pagination-spacer"></span>
+                                    <span class="list-page-indicator">
                                         {move || format!("Page {}", page_number.get())}
                                     </span>
                                     <button
@@ -658,14 +658,14 @@ fn SkeletonTable() -> impl IntoView {
             </thead>
             <tbody>
                 {(0..6).map(|_| view! {
-                    <tr class="docs-skeleton-row">
+                    <tr class="list-page-skeleton-row">
                         <td>
-                            <div class="docs-skeleton-bar" style="width: 60%"></div>
-                            <div class="docs-skeleton-bar" style="width: 80%; margin-top: 0.3rem; height: 0.5rem"></div>
+                            <div class="list-page-skeleton-bar" style="width: 60%"></div>
+                            <div class="list-page-skeleton-bar" style="width: 80%; margin-top: 0.3rem; height: 0.5rem"></div>
                         </td>
-                        <td><div class="docs-skeleton-bar" style="width: 6rem"></div></td>
-                        <td><div class="docs-skeleton-bar" style="width: 4rem"></div></td>
-                        <td class="text-right"><div class="docs-skeleton-bar" style="width: 2rem; display:inline-block"></div></td>
+                        <td><div class="list-page-skeleton-bar" style="width: 6rem"></div></td>
+                        <td><div class="list-page-skeleton-bar" style="width: 4rem"></div></td>
+                        <td class="text-right"><div class="list-page-skeleton-bar" style="width: 2rem; display:inline-block"></div></td>
                         <td></td>
                     </tr>
                 }).collect_view()}
@@ -677,7 +677,7 @@ fn SkeletonTable() -> impl IntoView {
 #[component]
 fn EmptyFilterState(on_clear: Callback<()>) -> impl IntoView {
     view! {
-        <div class="docs-empty-filter">
+        <div class="list-page-empty-filter">
             <strong>"No documents match these filters"</strong>
             <p class="muted text-sm">"Try removing a filter or clearing your search."</p>
             <button

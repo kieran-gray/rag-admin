@@ -96,6 +96,73 @@ pub struct RecentEvaluationRunDto {
     pub document_title: Option<String>,
     pub status: String,
     pub variant_count: u32,
+    #[serde(default)]
+    pub variants_scored: u32,
+    #[serde(default)]
+    pub failure_reason: Option<String>,
     pub created_at: String,
     pub best: Option<BestVariantDto>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RunStatusFilterDto {
+    Completed,
+    Running,
+    Failed,
+    Pending,
+}
+
+impl RunStatusFilterDto {
+    pub fn label(self) -> &'static str {
+        match self {
+            RunStatusFilterDto::Completed => "Completed",
+            RunStatusFilterDto::Running => "Running",
+            RunStatusFilterDto::Failed => "Failed",
+            RunStatusFilterDto::Pending => "Pending",
+        }
+    }
+
+    pub fn slug(self) -> &'static str {
+        match self {
+            RunStatusFilterDto::Completed => "completed",
+            RunStatusFilterDto::Running => "running",
+            RunStatusFilterDto::Failed => "failed",
+            RunStatusFilterDto::Pending => "pending",
+        }
+    }
+
+    pub fn from_slug(slug: &str) -> Option<Self> {
+        match slug {
+            "completed" => Some(RunStatusFilterDto::Completed),
+            "running" => Some(RunStatusFilterDto::Running),
+            "failed" => Some(RunStatusFilterDto::Failed),
+            "pending" => Some(RunStatusFilterDto::Pending),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RunListQueryDto {
+    #[serde(default)]
+    pub cursor: Option<String>,
+    pub limit: u32,
+    #[serde(default)]
+    pub statuses: Vec<RunStatusFilterDto>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RunStatusFacetDto {
+    pub status: RunStatusFilterDto,
+    pub count: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RunListPageDto {
+    pub items: Vec<RecentEvaluationRunDto>,
+    pub next_cursor: Option<String>,
+    pub total_matching: u64,
+    pub total_all: u64,
+    pub status_counts: Vec<RunStatusFacetDto>,
 }

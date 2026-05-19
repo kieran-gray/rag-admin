@@ -11,6 +11,36 @@ pub enum EvaluationRunRepositoryError {
     Internal(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RunStatusFilter {
+    Completed,
+    Running,
+    Failed,
+    Pending,
+}
+
+#[derive(Debug, Clone)]
+pub struct RunListCursor {
+    pub created_at: String,
+    pub run_id: Uuid,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct RunListQuery {
+    pub cursor: Option<RunListCursor>,
+    pub limit: u32,
+    pub statuses: Vec<RunStatusFilter>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RunListPage {
+    pub items: Vec<EvaluationRunReadModel>,
+    pub next_cursor: Option<RunListCursor>,
+    pub total_matching: u64,
+    pub total_all: u64,
+    pub status_counts: Vec<(RunStatusFilter, u64)>,
+}
+
 #[async_trait]
 pub trait EvaluationRunRepository: Send + Sync {
     async fn load(
@@ -32,6 +62,11 @@ pub trait EvaluationRunRepository: Send + Sync {
         &self,
         limit: u32,
     ) -> Result<Vec<EvaluationRunReadModel>, EvaluationRunRepositoryError>;
+
+    async fn list_page(
+        &self,
+        query: &RunListQuery,
+    ) -> Result<RunListPage, EvaluationRunRepositoryError>;
 
     async fn load_variant_results(
         &self,
