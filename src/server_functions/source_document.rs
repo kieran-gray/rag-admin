@@ -1,8 +1,8 @@
 use leptos::prelude::*;
 
 use crate::shared::contracts::{
-    ChunkDto, ConnectorDiscoveredItemDto, DocumentListItemDto, SourceDocumentDetailDto,
-    SourceDocumentDto, SourceDocumentMarkdownDto,
+    ChunkDto, ConnectorDiscoveredItemDto, DocumentListItemDto, DocumentListPageDto,
+    DocumentListQueryDto, SourceDocumentDetailDto, SourceDocumentDto, SourceDocumentMarkdownDto,
 };
 use crate::shared::ChunkingConfig;
 
@@ -185,6 +185,20 @@ pub async fn requeue_indexing(indexing_id: uuid::Uuid) -> Result<(), ServerFnErr
 pub async fn list_documents() -> Result<Vec<DocumentListItemDto>, ServerFnError> {
     ctx::<Arc<SourceDocumentQueryService>>()?
         .list_documents()
+        .await
+        .map_err(|e| map_app_error(&e))
+}
+
+#[server(
+    name = ListDocumentsPage,
+    prefix = "/api",
+    endpoint = "list_documents_page"
+)]
+pub async fn list_documents_page(
+    query: DocumentListQueryDto,
+) -> Result<DocumentListPageDto, ServerFnError> {
+    ctx::<Arc<SourceDocumentQueryService>>()?
+        .list_documents_page(query)
         .await
         .map_err(|e| map_app_error(&e))
 }

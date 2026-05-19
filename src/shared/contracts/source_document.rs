@@ -10,6 +10,117 @@ pub struct DocumentListItemDto {
     pub latest_version: Option<u32>,
     pub latest_content_hash: Option<String>,
     pub indexings: Vec<IndexingDto>,
+    pub source: SourceDescriptorDto,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum SourceDescriptorDto {
+    Upload,
+    Url { host: String, url: String },
+}
+
+impl SourceDescriptorDto {
+    pub fn filter_key(&self) -> String {
+        match self {
+            SourceDescriptorDto::Upload => "upload".to_string(),
+            SourceDescriptorDto::Url { host, .. } => format!("url:{host}"),
+        }
+    }
+
+    pub fn label(&self) -> String {
+        match self {
+            SourceDescriptorDto::Upload => "Upload".to_string(),
+            SourceDescriptorDto::Url { host, .. } => host.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum SourceFilterDto {
+    Upload,
+    UrlHost { host: String },
+}
+
+impl SourceFilterDto {
+    pub fn from_filter_key(key: &str) -> Option<Self> {
+        if key == "upload" {
+            return Some(SourceFilterDto::Upload);
+        }
+        key.strip_prefix("url:")
+            .map(|host| SourceFilterDto::UrlHost {
+                host: host.to_string(),
+            })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DocumentStatusFilterDto {
+    Registered,
+    InProgress,
+    Indexed,
+    Failed,
+}
+
+impl DocumentStatusFilterDto {
+    pub fn label(self) -> &'static str {
+        match self {
+            DocumentStatusFilterDto::Registered => "Registered",
+            DocumentStatusFilterDto::InProgress => "In progress",
+            DocumentStatusFilterDto::Indexed => "Indexed",
+            DocumentStatusFilterDto::Failed => "Failed",
+        }
+    }
+
+    pub fn slug(self) -> &'static str {
+        match self {
+            DocumentStatusFilterDto::Registered => "registered",
+            DocumentStatusFilterDto::InProgress => "in_progress",
+            DocumentStatusFilterDto::Indexed => "indexed",
+            DocumentStatusFilterDto::Failed => "failed",
+        }
+    }
+
+    pub fn from_slug(slug: &str) -> Option<Self> {
+        match slug {
+            "registered" => Some(DocumentStatusFilterDto::Registered),
+            "in_progress" => Some(DocumentStatusFilterDto::InProgress),
+            "indexed" => Some(DocumentStatusFilterDto::Indexed),
+            "failed" => Some(DocumentStatusFilterDto::Failed),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DocumentListQueryDto {
+    #[serde(default)]
+    pub cursor: Option<String>,
+    pub limit: u32,
+    #[serde(default)]
+    pub search: Option<String>,
+    #[serde(default)]
+    pub sources: Vec<SourceFilterDto>,
+    #[serde(default)]
+    pub statuses: Vec<DocumentStatusFilterDto>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourceFacetDto {
+    pub source: SourceDescriptorDto,
+    pub document_count: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocumentListPageDto {
+    pub items: Vec<DocumentListItemDto>,
+    pub next_cursor: Option<String>,
+    pub total_matching: u64,
+    pub total_all: u64,
+    pub sources: Vec<SourceFacetDto>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

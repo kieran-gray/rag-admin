@@ -41,6 +41,8 @@ pub use events::PublishedEvent;
 pub use ingest::{IngestOptions, LogEvent, LogLevel};
 pub use query::{QueryHit, QueryRequest, QueryResult};
 pub use source_document::{
-    ChunkDto, DocumentListItemDto, IndexingDto, MarkdownBlockDto, MarkdownBlockKindDto,
-    SourceDocumentDetailDto, SourceDocumentDto, SourceDocumentMarkdownDto,
+    ChunkDto, DocumentListItemDto, DocumentListPageDto, DocumentListQueryDto,
+    DocumentStatusFilterDto, IndexingDto, MarkdownBlockDto, MarkdownBlockKindDto,
+    SourceDescriptorDto, SourceDocumentDetailDto, SourceDocumentDto, SourceDocumentMarkdownDto,
+    SourceFacetDto, SourceFilterDto,
 };
