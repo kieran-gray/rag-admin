@@ -166,7 +166,7 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
             match delete_dataset(dataset_id).await {
                 Ok(_) => {
                     use_navigate()(
-                        &format!("/documents/by-id/{document_id}"),
+                        "/evaluations",
                         NavigateOptions {
                             replace: true,
                             ..Default::default()

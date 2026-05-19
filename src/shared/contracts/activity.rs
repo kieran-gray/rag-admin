@@ -28,11 +28,15 @@ pub enum ActivityStatus {
     Running,
     Completed,
     Failed,
+    Cancelled,
 }
 
 impl ActivityStatus {
     pub fn is_terminal(self) -> bool {
-        matches!(self, ActivityStatus::Completed | ActivityStatus::Failed)
+        matches!(
+            self,
+            ActivityStatus::Completed | ActivityStatus::Failed | ActivityStatus::Cancelled
+        )
     }
 }
 
@@ -44,6 +48,10 @@ pub enum ActivityDelta {
         occurred_at: String,
     },
     Fail {
+        stream_id: Uuid,
+        occurred_at: String,
+    },
+    Cancel {
         stream_id: Uuid,
         occurred_at: String,
     },
@@ -137,6 +145,12 @@ pub fn classify(
         }
         (aggregate_type::EVALUATION_DATASET, "DatasetGenerationFailed") => {
             Some(ActivityDelta::Fail {
+                stream_id,
+                occurred_at: occurred_at.to_string(),
+            })
+        }
+        (aggregate_type::EVALUATION_DATASET, "DatasetGenerationCancelled") => {
+            Some(ActivityDelta::Cancel {
                 stream_id,
                 occurred_at: occurred_at.to_string(),
             })

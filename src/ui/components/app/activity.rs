@@ -235,6 +235,15 @@ fn apply_delta(rows: &mut Vec<ActivityJobDto>, delta: ActivityDelta) {
                 row.finished_at = Some(occurred_at);
             }
         }
+        ActivityDelta::Cancel {
+            stream_id,
+            occurred_at,
+        } => {
+            if let Some(row) = rows.iter_mut().find(|r| r.stream_id == stream_id) {
+                row.status = ActivityStatus::Cancelled;
+                row.finished_at = Some(occurred_at);
+            }
+        }
         ActivityDelta::Remove { stream_id } => {
             rows.retain(|r| r.stream_id != stream_id);
         }

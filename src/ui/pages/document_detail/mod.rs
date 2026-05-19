@@ -3,7 +3,6 @@ use leptos_router::components::A;
 use leptos_router::hooks::{use_params_map, use_query_map};
 
 mod steps;
-mod tabs;
 
 use steps::{ChunkStep, ConfigSelection, DocumentStep, EmbedStep, IndexStep};
 
@@ -245,6 +244,10 @@ fn DocumentWorkspace(
                     match step {
                         WorkflowStep::Document => view! {
                             <DocumentStep
+                                selection=selection
+                                pipelines=pipelines_stored
+                                chunking_configurations=chunking_stored
+                                indexings=indexings_signal
                                 source_ref=source_ref
                                 on_advance=on_advance_to_chunk
                             />
@@ -252,7 +255,6 @@ fn DocumentWorkspace(
                         WorkflowStep::Chunk => view! {
                             <ChunkStep
                                 selection=selection
-                                pipelines=pipelines_stored
                                 chunking_configurations=chunking_stored
                                 indexings=indexings_signal
                                 source_ref=source_ref

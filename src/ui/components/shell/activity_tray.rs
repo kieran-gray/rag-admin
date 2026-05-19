@@ -1,4 +1,5 @@
 use leptos::prelude::*;
+use leptos_router::components::A;
 use uuid::Uuid;
 
 use crate::shared::contracts::{ActivityJobDto, ActivityKind, ActivityStatus};
@@ -215,6 +216,7 @@ fn JobDetail(job: ActivityJobDto, #[prop(into)] url: Signal<Option<String>>) -> 
         ActivityStatus::Running => "running",
         ActivityStatus::Completed => "completed",
         ActivityStatus::Failed => "failed",
+        ActivityStatus::Cancelled => "cancelled",
     };
     let started = short_time(&job.started_at);
     let finished = job
@@ -224,6 +226,7 @@ fn JobDetail(job: ActivityJobDto, #[prop(into)] url: Signal<Option<String>>) -> 
         .unwrap_or_default();
     let label = job.label.clone();
     let started_for_status = started.clone();
+    let detail_href = detail_href(job.kind, job.stream_id);
 
     view! {
         <div class="activity-tray-meta">
@@ -240,6 +243,15 @@ fn JobDetail(job: ActivityJobDto, #[prop(into)] url: Signal<Option<String>>) -> 
                     format!("{started} → {finished}")
                 }}
             </span>
+            {detail_href.map(|href| view! {
+                <A
+                    href=href
+                    attr:class="activity-tray-meta-link"
+                    attr:title="Open detail view"
+                >
+                    "View →"
+                </A>
+            })}
         </div>
         <div class="activity-tray-log">
             <LogStream url=url />
@@ -267,6 +279,14 @@ fn kind_label(kind: ActivityKind) -> &'static str {
     }
 }
 
+fn detail_href(kind: ActivityKind, stream_id: Uuid) -> Option<String> {
+    match kind {
+        ActivityKind::EvaluationDataset => Some(format!("/datasets/{stream_id}")),
+        ActivityKind::EvaluationRun => Some(format!("/runs/{stream_id}")),
+        ActivityKind::Indexing => None,
+    }
+}
+
 fn short_id(id: Uuid) -> String {
     id.to_string().chars().take(8).collect()
 }
@@ -276,6 +296,7 @@ fn status_dot_class(status: ActivityStatus) -> &'static str {
         ActivityStatus::Running => "activity-dot activity-dot-active",
         ActivityStatus::Completed => "activity-dot",
         ActivityStatus::Failed => "activity-dot activity-dot-fail",
+        ActivityStatus::Cancelled => "activity-dot activity-dot-cancel",
     }
 }
 

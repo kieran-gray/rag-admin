@@ -127,6 +127,16 @@ impl ActivityRegistry {
                     row.terminal_at = Some(Instant::now());
                 }
             }
+            ActivityDelta::Cancel {
+                stream_id,
+                occurred_at,
+            } => {
+                if let Some(row) = state.rows.get_mut(&stream_id) {
+                    row.dto.status = ActivityStatus::Cancelled;
+                    row.dto.finished_at = Some(occurred_at);
+                    row.terminal_at = Some(Instant::now());
+                }
+            }
             ActivityDelta::Remove { stream_id } => {
                 state.rows.remove(&stream_id);
                 state.pending_streams.remove(&stream_id);

@@ -3,17 +3,13 @@ use leptos::task::spawn_local;
 use uuid::Uuid;
 
 use crate::server_functions::source_document::{get_chunks, request_indexing};
-use crate::shared::contracts::{
-    ChunkDto, ChunkingConfigurationDto, IndexingDto, PipelineConfigurationDto,
-};
+use crate::shared::contracts::{ChunkDto, ChunkingConfigurationDto, IndexingDto};
 use crate::ui::components::primitives::{EmptyState, Help, Status, StatusPill, Surface};
 use crate::ui::pages::document_detail::steps::ConfigSelection;
-use crate::ui::pages::document_detail::tabs::chunks::chunk_card::ChunkCard;
 
 #[component]
 pub fn ChunkStep(
     selection: ConfigSelection,
-    pipelines: StoredValue<Vec<PipelineConfigurationDto>>,
     chunking_configurations: StoredValue<Vec<ChunkingConfigurationDto>>,
     indexings: Signal<Vec<IndexingDto>>,
     source_ref: String,
@@ -78,11 +74,11 @@ pub fn ChunkStep(
     view! {
         <div class="space-y-6">
             <Surface
-                title="Pipeline and chunking configuration".to_string()
+                title="Chunking configuration".to_string()
                 actions=Box::new(move || view! {
                     <Help title="How chunking works".to_string()>
                         <p>
-                            "The chunking step splits the document's markdown into smaller, retrievable pieces. Pick a pipeline (which embedding model and vector store to use) and a chunking strategy, then run chunking. Once chunks exist you can preview them below before embedding."
+                            "The chunking step splits the document's markdown into smaller, retrievable pieces using the selected strategy. Once chunks exist you can preview them below before embedding."
                         </p>
                         <p class="mt-3">
                             "Different strategies trade off chunk size, overlap, and boundary detection. To compare strategies systematically, open the "
@@ -92,10 +88,7 @@ pub fn ChunkStep(
                     </Help>
                 }.into_any())
             >
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <PipelineSelect selection=selection pipelines=pipelines />
-                    <ChunkingSelect selection=selection chunking_configurations=chunking_configurations />
-                </div>
+                <ChunkingSelect selection=selection chunking_configurations=chunking_configurations />
 
                 <div class="flex items-center justify-between gap-3 mt-4 pt-3 border-t border-[var(--color-border)]">
                     <ChunkStatusLine status=chunk_status />
@@ -152,40 +145,6 @@ pub fn ChunkStep(
                 </button>
             </div>
         </div>
-    }
-}
-
-#[component]
-fn PipelineSelect(
-    selection: ConfigSelection,
-    pipelines: StoredValue<Vec<PipelineConfigurationDto>>,
-) -> impl IntoView {
-    view! {
-        <label class="flex flex-col gap-1 text-sm">
-            <span class="eyebrow">"Pipeline"</span>
-            <select
-                class="input"
-                on:change=move |ev| {
-                    selection.pipeline_id.set(Uuid::parse_str(&event_target_value(&ev)).ok());
-                }
-            >
-                {move || pipelines.with_value(|ps| {
-                    ps.iter().map(|p| {
-                        let id = p.pipeline_configuration_id;
-                        let suffix = if p.is_default { " · default" } else { "" };
-                        let name = p.name.clone();
-                        let embedding = p.embedding_model_name.clone().unwrap_or_default();
-                        let label = if embedding.is_empty() {
-                            format!("{name}{suffix}")
-                        } else {
-                            format!("{name}{suffix} · {embedding}")
-                        };
-                        let selected = selection.pipeline_id.get() == Some(id);
-                        view! { <option value=id.to_string() selected=selected>{label}</option> }
-                    }).collect_view()
-                })}
-            </select>
-        </label>
     }
 }
 
@@ -305,6 +264,29 @@ fn ChunkPreview(active_indexing: Signal<Option<IndexingDto>>) -> impl IntoView {
                 }).unwrap_or_else(|| view! { <p class="muted text-sm">"Loading chunks…"</p> }.into_any())
             }}
         </Transition>
+    }
+}
+
+#[component]
+pub fn ChunkCard(chunk: ChunkDto) -> impl IntoView {
+    let text_length = chunk.text.len();
+    let heading = chunk.heading.clone();
+    let sequence = chunk.sequence;
+    let text = StoredValue::new(chunk.text);
+
+    view! {
+        <div class="surface-raised rounded p-3 flex flex-col gap-2">
+            <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <div class="eyebrow">{format!("Chunk · seq {sequence:03}")}</div>
+                    <div class="text-sm font-medium truncate">{heading}</div>
+                </div>
+                <span class="text-xs muted shrink-0">{format!("{text_length} chars")}</span>
+            </div>
+            <pre class="text-xs leading-relaxed whitespace-pre-wrap max-h-40 overflow-auto muted">
+                {text.get_value()}
+            </pre>
+        </div>
     }
 }
 
