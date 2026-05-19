@@ -3,13 +3,15 @@ use event_sourcing::policy::{HasPolicies, PolicyContext, PolicyFn};
 
 use super::aggregate::Indexing;
 use super::effects::{
-    ExecuteChunkingEffect, ExecuteEmbeddingEffect, ExecuteIndexingEffect, IndexingEffect,
+    ExecuteChunkingEffect, ExecuteEmbeddingEffect, ExecuteIndexingEffect, ExecuteRemovalEffect,
+    IndexingEffect,
 };
 use super::events::IndexingEvent;
 
 const CHUNKING: &str = "execute_chunking";
 const EMBEDDING: &str = "execute_embedding";
 const INDEXING: &str = "execute_indexing";
+const REMOVAL: &str = "execute_removal";
 
 impl HasPolicies<Indexing, IndexingEffect> for IndexingEvent {
     fn policies() -> &'static [PolicyFn<Self, Indexing, IndexingEffect>] {
@@ -19,6 +21,7 @@ impl HasPolicies<Indexing, IndexingEffect> for IndexingEvent {
             index_on_indexing_requeued,
             embed_on_chunking_completed,
             index_on_embedding_completed,
+            cleanup_on_indexing_removed,
         ]
     }
 }
@@ -109,5 +112,26 @@ fn indexing_effect(ctx: &PolicyContext<'_, Indexing, IndexingEvent>) -> NewJob<I
         job_type: INDEXING,
         idempotency_key: IdempotencyKey::new(indexing_id, log_position, INDEXING),
         payload: IndexingEffect::ExecuteIndexing(ExecuteIndexingEffect { indexing_id }),
+    }
+}
+
+fn cleanup_on_indexing_removed(
+    event: &IndexingEvent,
+    ctx: &PolicyContext<'_, Indexing, IndexingEvent>,
+) -> Vec<NewJob<IndexingEffect>> {
+    match event {
+        IndexingEvent::IndexingRemoved(_) => vec![removal_effect(ctx)],
+        _ => Vec::new(),
+    }
+}
+
+fn removal_effect(ctx: &PolicyContext<'_, Indexing, IndexingEvent>) -> NewJob<IndexingEffect> {
+    let indexing_id = ctx.state.indexing_id;
+    let log_position = ctx.envelope.metadata.log_position;
+    NewJob {
+        partition_key: indexing_id,
+        job_type: REMOVAL,
+        idempotency_key: IdempotencyKey::new(indexing_id, log_position, REMOVAL),
+        payload: IndexingEffect::ExecuteRemoval(ExecuteRemovalEffect { indexing_id }),
     }
 }

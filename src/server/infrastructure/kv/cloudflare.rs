@@ -23,20 +23,39 @@ impl CloudflareKvStore {
 #[async_trait]
 impl KvStore for CloudflareKvStore {
     async fn put_json(&self, key: &str, value: &Value) -> Result<(), AppError> {
-        let encoded_key = urlencode(key);
-        let url = format!(
-            "{}/accounts/{}/storage/kv/namespaces/{}/values/{}",
-            CLOUDFLARE_API_BASE,
-            self.api.account_id(),
-            self.namespace_id,
-            encoded_key
-        );
+        let url = self.value_url(key);
         let body_bytes = serde_json::to_vec(value)
             .map_err(|e| AppError::Internal(format!("encode kv value: {e}")))?;
         self.api
             .request(Method::PUT, &url, body_bytes, "application/json", "kv-put")
             .await?;
         Ok(())
+    }
+
+    async fn delete(&self, key: &str) -> Result<(), AppError> {
+        let url = self.value_url(key);
+        self.api
+            .request(
+                Method::DELETE,
+                &url,
+                vec![],
+                "application/json",
+                "kv-delete",
+            )
+            .await?;
+        Ok(())
+    }
+}
+
+impl CloudflareKvStore {
+    fn value_url(&self, key: &str) -> String {
+        format!(
+            "{}/accounts/{}/storage/kv/namespaces/{}/values/{}",
+            CLOUDFLARE_API_BASE,
+            self.api.account_id(),
+            self.namespace_id,
+            urlencode(key)
+        )
     }
 }
 

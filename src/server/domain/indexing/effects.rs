@@ -17,9 +17,15 @@ pub struct ExecuteIndexingEffect {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExecuteRemovalEffect {
+    pub indexing_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum IndexingEffect {
     ExecuteChunking(ExecuteChunkingEffect),
     ExecuteEmbedding(ExecuteEmbeddingEffect),
     ExecuteIndexing(ExecuteIndexingEffect),
+    ExecuteRemoval(ExecuteRemovalEffect),
 }

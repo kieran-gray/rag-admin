@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::ops::Range;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -33,12 +34,14 @@ use event_sourcing::command_processor::CommandProcessor;
 use event_sourcing::process_manager::{EffectError, EffectExecutor};
 
 use super::indexing::{
-    ExecuteChunkingEffect, ExecuteEmbeddingEffect, ExecuteIndexingEffect, IndexingEffect,
+    ExecuteChunkingEffect, ExecuteEmbeddingEffect, ExecuteIndexingEffect, ExecuteRemovalEffect,
+    IndexingEffect,
 };
 
 const EMBED_BATCH: usize = 50;
 const UPSERT_BATCH: usize = 100;
-const TAIL_CLEANUP_WINDOW: u32 = 512;
+const TAIL_CLEANUP_WINDOW: u32 = 100;
+const REMOVAL_SWEEP_WINDOW: u32 = 512;
 
 pub struct IndexingEffectExecutor {
     source_document_repository: Arc<dyn SourceDocumentRepository>,
@@ -128,6 +131,28 @@ impl IndexingEffectExecutor {
             .await
     }
 
+    async fn build_index_scope(
+        &self,
+        indexing: &IndexingReadModel,
+        pipeline: &ResolvedPipeline,
+    ) -> Result<IndexScope, AppError> {
+        let document = self
+            .source_document_repository
+            .load(indexing.document_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("document {}", indexing.document_id)))?;
+        let source_slug = document
+            .latest_metadata
+            .slug()
+            .map_or_else(|| document.source_ref.natural_key(), str::to_owned);
+        Ok(IndexScope::new(
+            indexing.document_id,
+            indexing.pipeline_configuration_id,
+            pipeline.vector_index.name.clone(),
+            source_slug,
+        ))
+    }
+
     async fn execute_chunking(&self, effect: &ExecuteChunkingEffect) -> Result<(), AppError> {
         let indexing_id = effect.indexing_id;
         self.session
@@ -165,6 +190,19 @@ impl IndexingEffectExecutor {
                 |job| self.run_indexing(indexing_id, job),
             )
             .await
+    }
+
+    async fn execute_removal(&self, effect: &ExecuteRemovalEffect) -> Result<(), AppError> {
+        let indexing = self.load_indexing(effect.indexing_id).await?;
+        let pipeline = self.load_pipeline(&indexing).await?;
+        let scope = self.build_index_scope(&indexing, &pipeline).await?;
+
+        let ids = scope.vector_ids(0..REMOVAL_SWEEP_WINDOW);
+        let vector_index = self.vector_index_resolver.build(&pipeline.vector_index)?;
+        vector_index.delete(&ids).await?;
+
+        self.kv_store.delete(&scope.kv_key()).await?;
+        Ok(())
     }
 
     async fn run_chunking(&self, indexing_id: Uuid, job: Arc<Job>) -> Result<(), AppError> {
@@ -390,13 +428,6 @@ impl IndexingEffectExecutor {
         let chunk_set_id = indexing.chunk_set_id.ok_or_else(|| {
             AppError::Validation("indexing requested without a chunk_set; restart chunking".into())
         })?;
-        if indexing.status.is_indexed() {
-            job.emit(InternalLogEvent::info(
-                "Indexing already complete; nothing to upsert.",
-            ))
-            .await;
-            return Ok(());
-        }
 
         let pipeline = self.load_pipeline(&indexing).await?;
         let chunks = self.chunk_set_repository.load_chunks(chunk_set_id).await?;
@@ -406,55 +437,50 @@ impl IndexingEffectExecutor {
             .await?;
         let chunk_map: HashMap<Uuid, &Chunk> = chunks.iter().map(|c| (c.chunk_id, c)).collect();
 
-        let document_id = indexing.document_id;
-        let pipeline_configuration_id = indexing.pipeline_configuration_id;
-        let document_version = indexing.document_version;
-
-        let document = self
-            .source_document_repository
-            .load(document_id)
-            .await?
-            .ok_or_else(|| AppError::NotFound(format!("document {document_id}")))?;
-        let post_slug = document.source_ref.natural_key();
-        let post_version = document_version.to_string();
-
-        let doc_id_hex = uuid_hex(document_id);
-        let pipeline_hex_full = uuid_hex(pipeline_configuration_id);
-        let pipeline_hex_short: String = pipeline_hex_full.chars().take(8).collect();
-        let pipeline_hex_short = pipeline_hex_short.as_str();
+        let scope = self.build_index_scope(&indexing, &pipeline).await?;
+        let source_version = indexing.document_version.to_string();
 
         let records: Vec<VectorRecord> = embeddings
             .iter()
             .filter_map(|e| chunk_map.get(&e.chunk_id).map(|c| (e, *c)))
-            .map(|(e, chunk)| VectorRecord {
-                id: vector_id(&doc_id_hex, pipeline_hex_short, chunk.sequence),
-                values: e.vector.clone(),
-                metadata: json!({
-                    "document_id": document_id.to_string(),
-                    "document_version": document_version,
-                    "pipeline_configuration_id": pipeline_configuration_id.to_string(),
-                    "chunk_id": chunk.chunk_id.to_string(),
-                    "chunk_set_id": chunk_set_id.to_string(),
-                    "post_slug": post_slug,
-                    "post_version": post_version,
-                    "heading": chunk.heading,
-                    "text": chunk.text,
-                    "char_start": chunk.char_start,
-                    "char_end": chunk.char_end,
-                }),
+            .map(|(e, chunk)| {
+                let references = extract_markdown_references(&chunk.text);
+                let reference_titles: Vec<&str> =
+                    references.iter().map(|r| r.title.as_str()).collect();
+                let reference_urls: Vec<&str> = references.iter().map(|r| r.url.as_str()).collect();
+                VectorRecord {
+                    id: scope.vector_id(chunk.sequence),
+                    values: e.vector.clone(),
+                    metadata: json!({
+                        "document_id": indexing.document_id.to_string(),
+                        "document_version": indexing.document_version,
+                        "pipeline_configuration_id": indexing.pipeline_configuration_id.to_string(),
+                        "chunk_id": chunk.sequence,
+                        "chunk_uuid": chunk.chunk_id.to_string(),
+                        "chunk_set_id": chunk_set_id.to_string(),
+                        "source_slug": scope.source_slug,
+                        "source_version": source_version,
+                        "heading": chunk.heading,
+                        "text": chunk.text,
+                        "char_start": chunk.char_start,
+                        "char_end": chunk.char_end,
+                        "reference_titles": reference_titles,
+                        "reference_urls": reference_urls,
+                    }),
+                }
             })
             .collect();
 
         let vector_index = self.vector_index_resolver.build(&pipeline.vector_index)?;
         let vector_count = records.len() as u32;
-        let vector_index_name = pipeline.vector_index.name.clone();
 
         job.emit(
             InternalLogEvent::info(format!(
-                "Upserting {vector_count} vectors to '{vector_index_name}'"
+                "Upserting {} vectors to '{}'",
+                vector_count, scope.vector_index_name
             ))
             .with_meta("vector_count", json!(vector_count))
-            .with_meta("vector_index", json!(vector_index_name)),
+            .with_meta("vector_index", json!(scope.vector_index_name)),
         )
         .await;
 
@@ -475,9 +501,7 @@ impl IndexingEffectExecutor {
             vector_index.upsert(batch).await?;
         }
 
-        let tail_ids: Vec<String> = (vector_count..vector_count + TAIL_CLEANUP_WINDOW)
-            .map(|seq| vector_id(&doc_id_hex, pipeline_hex_short, seq))
-            .collect();
+        let tail_ids = scope.vector_ids(vector_count..vector_count + TAIL_CLEANUP_WINDOW);
         if let Err(e) = vector_index.delete(&tail_ids).await {
             job.emit(
                 InternalLogEvent::info(format!("Tail cleanup delete skipped: {e}"))
@@ -486,11 +510,11 @@ impl IndexingEffectExecutor {
             .await;
         }
 
-        let kv_key = format!("post_version:{post_slug}");
-        let kv_value = json!({ "v": post_version });
+        let kv_key = scope.kv_key();
+        let kv_value = json!({ "v": source_version });
         if let Err(e) = self.kv_store.put_json(&kv_key, &kv_value).await {
             job.emit(
-                InternalLogEvent::error(format!("KV post_version write failed: {e}"))
+                InternalLogEvent::error(format!("KV source_version write failed: {e}"))
                     .with_meta("kv_key", json!(kv_key))
                     .with_meta("error", json!(e.to_string())),
             )
@@ -510,10 +534,11 @@ impl IndexingEffectExecutor {
             .await?;
         job.emit(
             InternalLogEvent::success(format!(
-                "Upsert complete · {vector_count} vectors \u{2192} '{vector_index_name}'"
+                "Upsert complete · {} vectors \u{2192} '{}'",
+                vector_count, scope.vector_index_name
             ))
             .with_meta("vector_count", json!(vector_count))
-            .with_meta("vector_index", json!(vector_index_name)),
+            .with_meta("vector_index", json!(scope.vector_index_name)),
         )
         .await;
         Ok(())
@@ -524,8 +549,117 @@ fn uuid_hex(id: Uuid) -> String {
     id.as_simple().to_string()
 }
 
-fn vector_id(doc_id_hex: &str, pipeline_hex_short: &str, sequence: u32) -> String {
-    format!("{doc_id_hex}:{pipeline_hex_short}:{sequence}")
+struct Reference {
+    title: String,
+    url: String,
+}
+
+fn extract_markdown_references(text: &str) -> Vec<Reference> {
+    let bytes = text.as_bytes();
+    let mut out = Vec::new();
+    let mut seen_urls: HashSet<String> = HashSet::new();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        let Some(rel) = bytes
+            .get(i..)
+            .and_then(|tail| tail.iter().position(|&b| b == b'['))
+        else {
+            break;
+        };
+        let open = i + rel;
+        if open > 0 && bytes.get(open - 1) == Some(&b'!') {
+            i = open + 1;
+            continue;
+        }
+        if open > 0 && bytes.get(open - 1) == Some(&b'\\') {
+            i = open + 1;
+            continue;
+        }
+
+        let Some(close_rel) = bytes
+            .get(open + 1..)
+            .and_then(|tail| tail.iter().position(|&b| b == b']'))
+        else {
+            break;
+        };
+        let close = open + 1 + close_rel;
+        if bytes.get(close + 1) != Some(&b'(') {
+            i = close + 1;
+            continue;
+        }
+
+        let Some(paren_close_rel) = bytes
+            .get(close + 2..)
+            .and_then(|tail| tail.iter().position(|&b| b == b')'))
+        else {
+            break;
+        };
+        let paren_close = close + 2 + paren_close_rel;
+
+        let title = text.get(open + 1..close).unwrap_or("").trim().to_string();
+        let target = text
+            .get(close + 2..paren_close)
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        let url = strip_link_title(&target).trim().to_string();
+        if !title.is_empty() && is_http_url(&url) && seen_urls.insert(url.clone()) {
+            out.push(Reference { title, url });
+        }
+        i = paren_close + 1;
+    }
+    out
+}
+
+fn strip_link_title(target: &str) -> &str {
+    target.split_whitespace().next().unwrap_or("")
+}
+
+fn is_http_url(s: &str) -> bool {
+    s.starts_with("http://") || s.starts_with("https://")
+}
+
+struct IndexScope {
+    doc_id_hex: String,
+    pipeline_hex_short: String,
+    vector_index_name: String,
+    source_slug: String,
+}
+
+impl IndexScope {
+    fn new(
+        document_id: Uuid,
+        pipeline_configuration_id: Uuid,
+        vector_index_name: String,
+        source_slug: String,
+    ) -> Self {
+        let pipeline_hex_full = uuid_hex(pipeline_configuration_id);
+        let pipeline_hex_short = pipeline_hex_full.chars().take(8).collect();
+        Self {
+            doc_id_hex: uuid_hex(document_id),
+            pipeline_hex_short,
+            vector_index_name,
+            source_slug,
+        }
+    }
+
+    fn vector_id(&self, sequence: u32) -> String {
+        format!(
+            "{}:{}:{}",
+            self.doc_id_hex, self.pipeline_hex_short, sequence
+        )
+    }
+
+    fn vector_ids(&self, sequences: Range<u32>) -> Vec<String> {
+        sequences.map(|seq| self.vector_id(seq)).collect()
+    }
+
+    fn kv_key(&self) -> String {
+        format!(
+            "source_version:{}:{}",
+            self.vector_index_name, self.source_slug
+        )
+    }
 }
 
 fn is_requeue_safe(_indexing: &IndexingReadModel) -> bool {
@@ -539,7 +673,60 @@ impl EffectExecutor<IndexingEffect> for IndexingEffectExecutor {
             IndexingEffect::ExecuteChunking(e) => self.execute_chunking(e).await,
             IndexingEffect::ExecuteEmbedding(e) => self.execute_embedding(e).await,
             IndexingEffect::ExecuteIndexing(e) => self.execute_indexing(e).await,
+            IndexingEffect::ExecuteRemoval(e) => self.execute_removal(e).await,
         };
         result.map_err(|e| Box::new(e) as EffectError)
+    }
+}
+
+#[cfg(test)]
+mod reference_tests {
+    use super::extract_markdown_references;
+
+    fn collect(text: &str) -> Vec<(String, String)> {
+        extract_markdown_references(text)
+            .into_iter()
+            .map(|r| (r.title, r.url))
+            .collect()
+    }
+
+    #[test]
+    fn extracts_basic_markdown_links() {
+        let text =
+            "See [Martin Fowler](https://martinfowler.com/eaaDev/EventSourcing.html) for details.";
+        assert_eq!(
+            collect(text),
+            vec![(
+                "Martin Fowler".to_string(),
+                "https://martinfowler.com/eaaDev/EventSourcing.html".to_string()
+            )]
+        );
+    }
+
+    #[test]
+    fn skips_image_markdown() {
+        let text = "![alt](https://example.com/image.png)";
+        assert!(collect(text).is_empty());
+    }
+
+    #[test]
+    fn skips_relative_urls() {
+        let text = "Internal link: [home](/posts/foo).";
+        assert!(collect(text).is_empty());
+    }
+
+    #[test]
+    fn dedupes_repeated_urls() {
+        let text = "First [Fowler](https://example.com) and again [Fowler](https://example.com).";
+        assert_eq!(collect(text).len(), 1);
+    }
+
+    #[test]
+    fn handles_link_with_title_attribute() {
+        let text = r#"[Docs](https://example.com "Title")"#;
+        assert_eq!(
+            collect(text),
+            vec![("Docs".to_string(), "https://example.com".to_string())]
+        );
     }
 }

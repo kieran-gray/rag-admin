@@ -96,7 +96,7 @@ impl VectorIndex for NamedVectorizeIndex {
         if ids.is_empty() {
             return Ok(());
         }
-        let url = self.url("delete-by-ids");
+        let url = self.url("delete_by_ids");
         let body = serde_json::json!({ "ids": ids });
         let bytes = serde_json::to_vec(&body)
             .map_err(|e| AppError::Internal(format!("encode delete body: {e}")))?;

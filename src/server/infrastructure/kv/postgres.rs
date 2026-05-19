@@ -33,4 +33,13 @@ impl KvStore for PostgresKvStore {
         .map_err(|e| AppError::Internal(format!("pg kv put: {e}")))?;
         Ok(())
     }
+
+    async fn delete(&self, key: &str) -> Result<(), AppError> {
+        sqlx::query("DELETE FROM kv_store WHERE key = $1")
+            .bind(key)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| AppError::Internal(format!("pg kv delete: {e}")))?;
+        Ok(())
+    }
 }

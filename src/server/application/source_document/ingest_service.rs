@@ -21,7 +21,7 @@ use crate::server::domain::source_document::document_type::DocumentType;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::server::domain::source_document::source_ref::SourceRef;
 use crate::server::domain::source_document::version::{
-    ContentHash, DocumentMetadata, PlainMetadata, WebPageMetadata,
+    slug_from_url, ContentHash, DocumentMetadata, PlainMetadata, WebPageMetadata,
 };
 use crate::shared::contracts::connector::ConnectorDiscoveredItemDto;
 use crate::shared::contracts::SourceDocumentDto;
@@ -154,6 +154,7 @@ impl SourceDocumentIngestService {
 
         let metadata = DocumentMetadata::WebPage(WebPageMetadata {
             title,
+            slug: slug_from_url(&url),
             source_url: url.clone(),
             fetched_at: self.clock.now(),
         });

@@ -13,7 +13,9 @@ use crate::server::application::ports::{Clock, HtmlToMarkdown, HttpClient};
 use crate::server::application::AppError;
 use crate::server::domain::connector::{ConnectorConfig, ConnectorKind, SitemapConfig};
 use crate::server::domain::source_document::source_ref::SourceRef;
-use crate::server::domain::source_document::version::{DocumentMetadata, WebPageMetadata};
+use crate::server::domain::source_document::version::{
+    slug_from_url, DocumentMetadata, WebPageMetadata,
+};
 
 const MAX_SITEMAP_DEPTH: usize = 4;
 
@@ -129,6 +131,7 @@ impl ConnectorImpl for SitemapConnector {
             content: extracted.markdown.into_bytes(),
             metadata: DocumentMetadata::WebPage(WebPageMetadata {
                 title,
+                slug: slug_from_url(url),
                 source_url: url.clone(),
                 fetched_at: self.clock.now(),
             }),

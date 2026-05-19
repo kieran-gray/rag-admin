@@ -148,6 +148,7 @@ impl SourceDocument {
                 metadata: DocumentMetadata::WebPage(WebPageMetadata {
                     title: "Test Page".to_string(),
                     source_url: url.to_string(),
+                    slug: "test-page".to_string(),
                     fetched_at: "2024-01-01T00:00:00Z".into(),
                 }),
             },
@@ -201,6 +202,7 @@ mod tests {
         DocumentMetadata::WebPage(WebPageMetadata {
             title: "My Page".to_string(),
             source_url: url.to_string(),
+            slug: "my-page".to_string(),
             fetched_at: now(),
         })
     }
