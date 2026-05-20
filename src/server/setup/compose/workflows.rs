@@ -12,9 +12,8 @@ use crate::server::application::evaluation::run::{
     OptimizeRunEffectExecutor, TrialScorer,
 };
 use crate::server::application::indexing::{IndexingEffect, IndexingEffectExecutor};
-use crate::server::application::ports::HtmlToMarkdown;
 use crate::server::application::ports::{Clock, HttpClient, IdGenerator};
-use crate::server::application::source_document::ports::PdfToMarkdown;
+use crate::server::application::source_document::ports::{HtmlToMarkdown, PdfToMarkdown};
 use crate::server::application::source_document::{
     DocumentNormalizerRegistry, SourceDocumentIngestService, SourceDocumentIngestServiceDeps,
 };
@@ -45,12 +44,12 @@ use crate::server::domain::source_document::aggregate::SourceDocument;
 use crate::server::domain::source_document::projector::SourceDocumentProjector;
 use crate::server::infrastructure::connector::SitemapConnector;
 use crate::server::infrastructure::evaluation::LlmJudgeAdapter;
-use crate::server::infrastructure::event_sourcing::{
+use crate::server::infrastructure::shared::event_sourcing::{
     spawn_postgres_event_listener, PostgresJobQueue,
 };
-use crate::server::infrastructure::html::HtmdConverter;
-use crate::server::infrastructure::http::ReqwestHttpClient;
-use crate::server::infrastructure::pdf::PdfExtractConverter;
+use crate::server::infrastructure::shared::http::ReqwestHttpClient;
+use crate::server::infrastructure::source_document::normalizers::html::HtmdConverter;
+use crate::server::infrastructure::source_document::normalizers::pdf::PdfExtractConverter;
 use crate::server::infrastructure::source_document::{
     HtmlNormalizer, MarkdownNormalizer, PdfNormalizer, PlainTextNormalizer,
 };

@@ -1,4 +1,4 @@
-use crate::server::application::ports::ExtractedDocument;
+use crate::server::application::source_document::ports::ExtractedDocument;
 use crate::server::application::AppError;
 
 pub trait PdfToMarkdown: Send + Sync {

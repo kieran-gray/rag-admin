@@ -8,7 +8,7 @@ use event_sourcing::{IdempotencyKey, JobQueue, NewJob};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use rag_admin::server::infrastructure::event_sourcing::PostgresJobQueue;
+use rag_admin::server::infrastructure::shared::event_sourcing::PostgresJobQueue;
 
 const QUEUE: &str = "test_queue";
 const WORKER_A: &str = "worker-a";

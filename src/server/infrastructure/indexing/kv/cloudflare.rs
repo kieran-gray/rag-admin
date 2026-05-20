@@ -7,7 +7,7 @@ use serde_json::Value;
 
 use crate::server::application::indexing::ports::KvStore;
 use crate::server::application::AppError;
-use crate::server::infrastructure::clients::{CloudflareApi, CLOUDFLARE_API_BASE};
+use crate::server::infrastructure::shared::clients::{CloudflareApi, CLOUDFLARE_API_BASE};
 
 pub struct CloudflareKvStore {
     api: Arc<CloudflareApi>,

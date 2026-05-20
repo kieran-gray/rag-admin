@@ -33,13 +33,13 @@ use crate::server::application::source_document::{
     SourceDocumentCommandHandler, SourceDocumentQueryService,
 };
 use crate::server::application::{ActivityRegistry, JobRegistry};
-use crate::server::infrastructure::clients::{CloudflareApi, OllamaApi};
+use crate::server::infrastructure::shared::clients::{CloudflareApi, OllamaApi};
 use crate::server::infrastructure::embedding::{OllamaEmbedder, WorkersAiEmbedder};
 use crate::server::infrastructure::evaluation::{LlmEvaluationGenerator, PgvectorRetriever};
-use crate::server::infrastructure::http::ReqwestHttpClient;
+use crate::server::infrastructure::shared::http::ReqwestHttpClient;
 use crate::server::infrastructure::llm::{OllamaGenerationClient, WorkersAiGenerationClient};
-use crate::server::infrastructure::markdown::MarkdownRsParser;
-use crate::server::infrastructure::tokenizer::{TiktokenTokenizer, DEFAULT_TIKTOKEN_MODEL};
+use crate::server::infrastructure::shared::markdown::MarkdownRsParser;
+use crate::server::infrastructure::shared::tokenizer::{TiktokenTokenizer, DEFAULT_TIKTOKEN_MODEL};
 use crate::server::infrastructure::vector::{
     CloudflareVectorIndexProvider, PostgresVectorIndexProvider,
 };

@@ -14,7 +14,7 @@ use crate::server::domain::evaluation::run::repository::{
 };
 use crate::server::domain::evaluation::run::scoring_policy::{ScoringPolicy, ScoringWeights};
 use crate::server::domain::shared::Timestamp;
-use crate::server::infrastructure::sql::timestamps::to_offset_datetime;
+use crate::server::infrastructure::shared::sql::timestamps::to_offset_datetime;
 use crate::shared::{
     ChunkingVariant, EvaluationAutotuneRequest, EvaluationResultSplit, EvaluationRunOptions,
     OptimizationConfig,

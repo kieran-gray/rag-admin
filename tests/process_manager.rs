@@ -15,7 +15,7 @@ use event_sourcing::event_store::EventStore;
 use event_sourcing::job_queue::{IdempotencyKey, JobQueue, NewJob};
 use event_sourcing::policy::{HasPolicies, PolicyContext, PolicyFn};
 use event_sourcing::process_manager::{EffectError, EffectExecutor, ProcessManager};
-use rag_admin::server::infrastructure::event_sourcing::{
+use rag_admin::server::infrastructure::shared::event_sourcing::{
     PostgresAggregateSnapshotStore, PostgresEventStore, PostgresJobQueue,
 };
 

@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use event_sourcing::error::EsError;
 use event_sourcing::event_store::EventStore;
-use rag_admin::server::infrastructure::event_sourcing::PostgresEventStore;
+use rag_admin::server::infrastructure::shared::event_sourcing::PostgresEventStore;
 
 const AGGREGATE: &str = "test_aggregate";
 

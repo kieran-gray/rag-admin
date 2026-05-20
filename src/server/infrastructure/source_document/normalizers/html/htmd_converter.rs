@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use readability_rust::Readability;
 
-use crate::server::application::ports::html_to_markdown::{ExtractedDocument, HtmlToMarkdown};
+use crate::server::application::source_document::ports::html_to_markdown::{
+    ExtractedDocument, HtmlToMarkdown,
+};
 use crate::server::application::AppError;
 
 pub struct HtmdConverter;

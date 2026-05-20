@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::server::application::indexing::ports::VectorIndex;
 use crate::server::application::source_document::ports::VectorIndexProvider;
-use crate::server::infrastructure::clients::CloudflareApi;
+use crate::server::infrastructure::shared::clients::CloudflareApi;
 
 use super::named_vectorize_index::NamedVectorizeIndex;
 

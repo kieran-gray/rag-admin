@@ -1,5 +1,5 @@
-pub mod postgres_repository;
-pub mod sitemap;
+pub mod postgres_connector_repository;
+pub mod sources;
 
-pub use postgres_repository::PostgresConnectorRepository;
-pub use sitemap::SitemapConnector;
+pub use postgres_connector_repository::PostgresConnectorRepository;
+pub use sources::SitemapConnector;

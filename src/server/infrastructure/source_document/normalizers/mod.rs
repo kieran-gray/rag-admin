@@ -1,10 +1,10 @@
-pub mod html_normalizer;
-pub mod markdown_normalizer;
-pub mod pdf_normalizer;
-pub mod plain_text_normalizer;
+pub mod html;
+pub mod markdown;
+pub mod pdf;
+pub mod plain_text;
 mod title;
 
-pub use html_normalizer::HtmlNormalizer;
-pub use markdown_normalizer::MarkdownNormalizer;
-pub use pdf_normalizer::PdfNormalizer;
-pub use plain_text_normalizer::PlainTextNormalizer;
+pub use html::{HtmdConverter, HtmlNormalizer};
+pub use markdown::MarkdownNormalizer;
+pub use pdf::{PdfExtractConverter, PdfNormalizer};
+pub use plain_text::PlainTextNormalizer;

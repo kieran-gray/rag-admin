@@ -10,7 +10,7 @@ use crate::server::application::llm::ports::{
     GenerationClient, GenerationRequest, GenerationResponse, GenerationResponseFormat,
 };
 use crate::server::application::AppError;
-use crate::server::infrastructure::http::ReqwestHttpClient;
+use crate::server::infrastructure::shared::http::ReqwestHttpClient;
 
 pub struct OllamaGenerationClient {
     http: Arc<ReqwestHttpClient>,

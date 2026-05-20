@@ -1,0 +1,3 @@
+pub mod postgres_embedding_set_repository;
+
+pub use postgres_embedding_set_repository::PostgresEmbeddingSetRepository;

@@ -10,7 +10,7 @@ use crate::server::application::indexing::ports::vector_index::{
 };
 use crate::server::application::AppError;
 use crate::server::domain::VectorRecord;
-use crate::server::infrastructure::clients::{CloudflareApi, CLOUDFLARE_API_BASE};
+use crate::server::infrastructure::shared::clients::{CloudflareApi, CLOUDFLARE_API_BASE};
 
 pub struct NamedVectorizeIndex {
     api: Arc<CloudflareApi>,

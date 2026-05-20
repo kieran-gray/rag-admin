@@ -11,7 +11,7 @@ use crate::server::application::llm::ports::{
     GenerationClient, GenerationRequest, GenerationResponse, GenerationResponseFormat,
 };
 use crate::server::application::AppError;
-use crate::server::infrastructure::clients::{CloudflareApi, CLOUDFLARE_API_BASE};
+use crate::server::infrastructure::shared::clients::{CloudflareApi, CLOUDFLARE_API_BASE};
 
 pub struct WorkersAiGenerationClient {
     api: Arc<CloudflareApi>,

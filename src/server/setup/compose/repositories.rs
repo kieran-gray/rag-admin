@@ -17,7 +17,7 @@ use crate::server::domain::evaluation::dataset::repository::EvaluationDatasetRep
 use crate::server::domain::evaluation::run::repository::EvaluationRunRepository;
 use crate::server::domain::indexing::repository::IndexingRepository;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
-use crate::server::infrastructure::clients::CloudflareApi;
+use crate::server::infrastructure::shared::clients::CloudflareApi;
 use crate::server::infrastructure::configuration::{
     PostgresChunkingConfigurationRepository, PostgresEmbeddingModelRepository,
     PostgresGenerationModelRepository, PostgresPipelineConfigurationRepository,
@@ -27,12 +27,13 @@ use crate::server::infrastructure::connector::PostgresConnectorRepository;
 use crate::server::infrastructure::evaluation::{
     PostgresEvaluationDatasetRepository, PostgresEvaluationRunRepository,
 };
-use crate::server::infrastructure::event_sourcing::PostgresCheckpointRepository;
+use crate::server::infrastructure::shared::event_sourcing::PostgresCheckpointRepository;
 use crate::server::infrastructure::indexing::PostgresIndexingRepository;
-use crate::server::infrastructure::kv::{CloudflareKvStore, PostgresKvStore};
+use crate::server::infrastructure::indexing::kv::{CloudflareKvStore, PostgresKvStore};
+use crate::server::infrastructure::chunk_set::PostgresChunkSetRepository;
+use crate::server::infrastructure::embedding_set::PostgresEmbeddingSetRepository;
 use crate::server::infrastructure::source_document::{
-    PostgresBlobStore, PostgresChunkSetRepository, PostgresEmbeddingSetRepository,
-    PostgresSourceDocumentRepository,
+    PostgresBlobStore, PostgresSourceDocumentRepository,
 };
 use crate::server::setup::config::{Config, KvBackend};
 use crate::server::setup::exceptions::SetupError;

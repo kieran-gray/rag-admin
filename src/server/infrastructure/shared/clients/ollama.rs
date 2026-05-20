@@ -4,7 +4,7 @@ use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use reqwest::Method;
 
 use crate::server::application::AppError;
-use crate::server::infrastructure::http::ReqwestHttpClient;
+use crate::server::infrastructure::shared::http::ReqwestHttpClient;
 
 pub struct OllamaApi {
     http: Arc<ReqwestHttpClient>,

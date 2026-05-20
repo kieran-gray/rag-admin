@@ -9,7 +9,7 @@ use crate::server::application::AppError;
 use crate::server::domain::source_document::document_type::DocumentType;
 use crate::server::domain::source_document::version::{DocumentMetadata, PlainMetadata};
 
-use super::title::title_from_hints;
+use super::super::title::title_from_hints;
 
 pub struct PlainTextNormalizer;
 

@@ -174,7 +174,7 @@ fn parse_atx_heading(line: &str) -> Option<(usize, String)> {
 #[cfg(test)]
 mod tests {
     use crate::server::application::ports::MarkdownParser;
-    use crate::server::infrastructure::markdown::MarkdownRsParser;
+    use crate::server::infrastructure::shared::markdown::MarkdownRsParser;
 
     #[test]
     fn llm_text_units_bind_heading_and_colon_intro_list() {

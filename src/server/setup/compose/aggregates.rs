@@ -17,7 +17,7 @@ use crate::server::domain::evaluation::dataset::aggregate::EvaluationDataset;
 use crate::server::domain::evaluation::run::aggregate::EvaluationRun;
 use crate::server::domain::indexing::aggregate::Indexing;
 use crate::server::domain::source_document::aggregate::SourceDocument;
-use crate::server::infrastructure::event_sourcing::{
+use crate::server::infrastructure::shared::event_sourcing::{
     PostgresAggregateSnapshotStore, PostgresEventStore,
 };
 use event_sourcing::aggregate_repository::AggregateRepository;

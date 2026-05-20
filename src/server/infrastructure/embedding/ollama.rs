@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::server::application::embedding::ports::Embedder;
 use crate::server::application::AppError;
-use crate::server::infrastructure::clients::OllamaApi;
+use crate::server::infrastructure::shared::clients::OllamaApi;
 
 pub struct OllamaEmbedder {
     api: Arc<OllamaApi>,

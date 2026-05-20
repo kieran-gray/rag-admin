@@ -481,7 +481,7 @@ mod tests {
     use super::*;
     use crate::server::application::ports::MarkdownParser;
     use crate::server::application::test_support::MockTokenizer;
-    use crate::server::infrastructure::markdown::MarkdownRsParser;
+    use crate::server::infrastructure::shared::markdown::MarkdownRsParser;
 
     fn tokenizer() -> MockTokenizer {
         MockTokenizer::new()

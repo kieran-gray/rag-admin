@@ -7,7 +7,7 @@ use crate::server::domain::embedding_set::entity::{ChunkEmbedding, EmbeddingSet}
 use crate::server::domain::embedding_set::repository::{
     EmbeddingSetRepository, EmbeddingSetRepositoryError,
 };
-use crate::server::infrastructure::sql::pgvector_codec::{
+use crate::server::infrastructure::shared::sql::pgvector_codec::{
     format_vector_literal, parse_vector_literal,
 };
 

@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 
 use crate::server::application::embedding::ports::Embedder;
 use crate::server::application::AppError;
-use crate::server::infrastructure::clients::{CloudflareApi, CLOUDFLARE_API_BASE};
+use crate::server::infrastructure::shared::clients::{CloudflareApi, CLOUDFLARE_API_BASE};
 
 pub struct WorkersAiEmbedder {
     api: Arc<CloudflareApi>,

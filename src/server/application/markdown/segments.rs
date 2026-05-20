@@ -55,7 +55,7 @@ fn flush_segment(out: &mut Vec<SegmentBlock>, current: &[&Block], heading_path: 
 #[cfg(test)]
 mod tests {
     use crate::server::application::ports::MarkdownParser;
-    use crate::server::infrastructure::markdown::MarkdownRsParser;
+    use crate::server::infrastructure::shared::markdown::MarkdownRsParser;
 
     #[test]
     fn bert_segments_keep_code_fences_atomic() {

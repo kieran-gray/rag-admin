@@ -43,7 +43,7 @@ fn flush_section(out: &mut Vec<SectionBlock>, current: &[&Block], heading_path: 
 #[cfg(test)]
 mod tests {
     use crate::server::application::ports::MarkdownParser;
-    use crate::server::infrastructure::markdown::MarkdownRsParser;
+    use crate::server::infrastructure::shared::markdown::MarkdownRsParser;
 
     #[test]
     fn sections_split_at_cut_depth_and_preserve_heading_path() {

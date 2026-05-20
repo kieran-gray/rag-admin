@@ -10,7 +10,7 @@ use crate::server::application::indexing::ports::vector_index::{
 use crate::server::application::source_document::ports::VectorIndexProvider;
 use crate::server::application::AppError;
 use crate::server::domain::VectorRecord;
-use crate::server::infrastructure::sql::pgvector_codec::format_vector_literal;
+use crate::server::infrastructure::shared::sql::pgvector_codec::format_vector_literal;
 
 pub struct PostgresVectorIndex {
     pool: PgPool,

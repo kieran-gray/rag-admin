@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use crate::server::application::ports::ExtractedDocument;
-use crate::server::application::source_document::ports::PdfToMarkdown;
+use crate::server::application::source_document::ports::{ExtractedDocument, PdfToMarkdown};
 use crate::server::application::AppError;
 
 pub struct PdfExtractConverter;

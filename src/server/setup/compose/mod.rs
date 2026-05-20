@@ -34,10 +34,10 @@ use crate::server::application::source_document::{
     SourceDocumentIngestService, SourceDocumentQueryService,
 };
 use crate::server::application::{ActivityRegistry, JobRegistry};
-use crate::server::infrastructure::clients::{CloudflareApi, OllamaApi};
-use crate::server::infrastructure::http::ReqwestHttpClient;
-use crate::server::infrastructure::id::UuidGenerator;
-use crate::server::infrastructure::time::SystemClock;
+use crate::server::infrastructure::shared::clients::{CloudflareApi, OllamaApi};
+use crate::server::infrastructure::shared::http::ReqwestHttpClient;
+use crate::server::infrastructure::shared::id::UuidGenerator;
+use crate::server::infrastructure::shared::time::SystemClock;
 use crate::server::setup::config::Config;
 use crate::server::setup::exceptions::SetupError;
 use crate::server::setup::seed::seed_if_empty;
