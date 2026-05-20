@@ -6,6 +6,7 @@ use crate::server::application::indexing::ports::KvStore;
 use crate::server::application::source_document::ports::BlobStore;
 use crate::server::domain::chunk_set::repository::ChunkSetRepository;
 use crate::server::domain::configuration::chunking_configuration::ChunkingConfigurationRepository;
+use crate::server::domain::configuration::defaults::ConfigurationDefaultsRepository;
 use crate::server::domain::configuration::embedding_model::EmbeddingModelRepository;
 use crate::server::domain::configuration::generation_model::GenerationModelRepository;
 use crate::server::domain::configuration::pipeline_configuration::PipelineConfigurationRepository;
@@ -23,9 +24,10 @@ use crate::server::domain::indexing::repository::IndexingRepository;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::server::infrastructure::chunk_set::PostgresChunkSetRepository;
 use crate::server::infrastructure::configuration::{
-    PostgresChunkingConfigurationRepository, PostgresEmbeddingModelRepository,
-    PostgresGenerationModelRepository, PostgresPipelineConfigurationRepository,
-    PostgresSweepTemplateRepository, PostgresVectorIndexRepository,
+    PostgresChunkingConfigurationRepository, PostgresConfigurationDefaultsRepository,
+    PostgresEmbeddingModelRepository, PostgresGenerationModelRepository,
+    PostgresPipelineConfigurationRepository, PostgresSweepTemplateRepository,
+    PostgresVectorIndexRepository,
 };
 use crate::server::infrastructure::connector::PostgresConnectorRepository;
 use crate::server::infrastructure::connector_import::PostgresConnectorImportRepository;
@@ -53,6 +55,7 @@ pub struct Repositories {
     pub vector_index: Arc<dyn VectorIndexRepository>,
     pub pipeline_configuration: Arc<dyn PipelineConfigurationRepository>,
     pub chunking_configuration: Arc<dyn ChunkingConfigurationRepository>,
+    pub configuration_defaults: Arc<dyn ConfigurationDefaultsRepository>,
     pub sweep_template: Arc<dyn SweepTemplateRepository>,
     pub connector: Arc<dyn ConnectorRepository>,
     pub connector_import: Arc<dyn ConnectorImportRepository>,
@@ -94,6 +97,9 @@ pub fn build_repositories(
             pool.clone(),
         )),
         chunking_configuration: Arc::new(PostgresChunkingConfigurationRepository::new(
+            pool.clone(),
+        )),
+        configuration_defaults: Arc::new(PostgresConfigurationDefaultsRepository::new(
             pool.clone(),
         )),
         sweep_template: Arc::new(PostgresSweepTemplateRepository::new(pool.clone())),

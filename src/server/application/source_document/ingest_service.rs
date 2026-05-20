@@ -5,15 +5,12 @@ use uuid::Uuid;
 use crate::server::application::configuration::PipelineResolver;
 use crate::server::application::connector::{ConnectorQueryService, ConnectorRegistry};
 use crate::server::application::connector_import::ConnectorImportCommandHandler;
+use crate::server::application::indexing::{
+    command_handler::IndexingCommandHandler, RequestIngestInput,
+};
 use crate::server::application::ports::{Clock, HttpClient, IdGenerator};
 use crate::server::application::AppError;
 use crate::server::domain::connector::ConnectorConfig;
-use crate::server::domain::indexing::commands::{
-    IndexingCommand, RequestIngest, RequeueChunking, RequeueEmbedding, RequeueIndexing,
-};
-use crate::server::domain::source_document::commands::{
-    AddVersion, CreateDocument, NewVersion, SourceDocumentCommand,
-};
 use crate::server::domain::source_document::document_type::DocumentType;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::server::domain::source_document::source_ref::SourceRef;
@@ -23,7 +20,6 @@ use crate::shared::ChunkingConfig;
 
 use super::ports::{AcquisitionHints, BlobStore, ContentType, NormalizedDocument, RawDocument};
 use super::{command_handler::SourceDocumentCommandHandler, DocumentNormalizerRegistry};
-use crate::server::application::indexing::command_handler::IndexingCommandHandler;
 
 pub struct SourceDocumentIngestServiceDeps {
     pub source_document_command_handler: Arc<SourceDocumentCommandHandler>,
@@ -87,13 +83,7 @@ impl SourceDocumentIngestService {
         let dto = self.persist_document(normalized).await?;
 
         self.connector_import_command_handler
-            .record(
-                connector_id,
-                dto.document_id,
-                source_ref_key,
-                sync_id,
-                self.clock.now(),
-            )
+            .record(connector_id, dto.document_id, source_ref_key, sync_id)
             .await?;
 
         Ok(dto)
@@ -163,7 +153,6 @@ impl SourceDocumentIngestService {
             metadata,
         } = normalized;
 
-        let occurred_at = self.clock.now();
         let content_hash = self.blob_store.put(&content).await?;
 
         let existing = self
@@ -173,18 +162,14 @@ impl SourceDocumentIngestService {
 
         let (document_id, document_version) = match existing {
             None => {
-                let document_id = self.id_generator.new_uuid();
-                self.source_document_command_handler
-                    .handle(SourceDocumentCommand::CreateDocument(CreateDocument {
-                        document_id,
-                        document_type: document_type.clone(),
-                        source_ref: source_ref.clone(),
-                        initial_version: NewVersion {
-                            content_hash: content_hash.clone(),
-                            metadata: metadata.clone(),
-                        },
-                        occurred_at: occurred_at.clone(),
-                    }))
+                let document_id = self
+                    .source_document_command_handler
+                    .create_document(
+                        document_type.clone(),
+                        source_ref.clone(),
+                        content_hash.clone(),
+                        metadata.clone(),
+                    )
                     .await?;
                 (document_id, 1u32)
             }
@@ -193,14 +178,11 @@ impl SourceDocumentIngestService {
                     (existing_doc.document_id, existing_doc.latest_version_number)
                 } else {
                     self.source_document_command_handler
-                        .handle(SourceDocumentCommand::AddVersion(AddVersion {
-                            document_id: existing_doc.document_id,
-                            version: NewVersion {
-                                content_hash: content_hash.clone(),
-                                metadata: metadata.clone(),
-                            },
-                            occurred_at: occurred_at.clone(),
-                        }))
+                        .add_document_version(
+                            existing_doc.document_id,
+                            content_hash.clone(),
+                            metadata.clone(),
+                        )
                         .await?;
                     (
                         existing_doc.document_id,
@@ -243,52 +225,14 @@ impl SourceDocumentIngestService {
             .resolve(pipeline_configuration_id)
             .await?;
 
-        let occurred_at = self.clock.now();
-        let request_id = self.id_generator.new_uuid();
-
         self.indexing_command_handler
-            .request_ingest(RequestIngest {
+            .request_ingest(RequestIngestInput {
                 document_id: document.document_id,
                 pipeline_configuration_id,
                 document_version: document.latest_version_number,
                 chunking_config,
-                request_id,
                 auto_advance,
-                occurred_at,
             })
-            .await
-    }
-
-    pub async fn requeue_chunking(&self, indexing_id: Uuid) -> Result<(), AppError> {
-        self.indexing_command_handler
-            .handle_for(
-                indexing_id,
-                IndexingCommand::RequeueChunking(RequeueChunking {
-                    occurred_at: self.clock.now(),
-                }),
-            )
-            .await
-    }
-
-    pub async fn requeue_embedding(&self, indexing_id: Uuid) -> Result<(), AppError> {
-        self.indexing_command_handler
-            .handle_for(
-                indexing_id,
-                IndexingCommand::RequeueEmbedding(RequeueEmbedding {
-                    occurred_at: self.clock.now(),
-                }),
-            )
-            .await
-    }
-
-    pub async fn requeue_indexing(&self, indexing_id: Uuid) -> Result<(), AppError> {
-        self.indexing_command_handler
-            .handle_for(
-                indexing_id,
-                IndexingCommand::RequeueIndexing(RequeueIndexing {
-                    occurred_at: self.clock.now(),
-                }),
-            )
             .await
     }
 }

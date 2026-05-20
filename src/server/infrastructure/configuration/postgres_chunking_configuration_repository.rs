@@ -3,11 +3,13 @@ use sqlx::postgres::PgRow;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::server::domain::configuration::catalog::CatalogRepository;
 use crate::server::domain::configuration::chunking_configuration::{
-    ChunkingConfigurationReadModel, ChunkingConfigurationRepository,
-    ChunkingConfigurationRepositoryError, ChunkingConfigurationUpdate, NewChunkingConfiguration,
+    ChunkingConfiguration, ChunkingConfigurationReadModel, ChunkingConfigurationRepository,
+    ChunkingConfigurationRepositoryError,
 };
 use crate::shared::ChunkingConfig;
+use event_sourcing::error::ProjectionError;
 
 pub struct PostgresChunkingConfigurationRepository {
     pool: PgPool,
@@ -20,12 +22,49 @@ impl PostgresChunkingConfigurationRepository {
 }
 
 #[async_trait]
+impl CatalogRepository<ChunkingConfiguration> for PostgresChunkingConfigurationRepository {
+    async fn upsert(&self, entry: ChunkingConfiguration) -> Result<(), ProjectionError> {
+        let generation_model_id = generation_model_id(&entry.config);
+        let config_json = serde_json::to_value(entry.config)
+            .map_err(|e| ProjectionError::Storage(format!("serialize config: {e}")))?;
+        sqlx::query(
+            "
+            INSERT INTO chunking_configurations (id, name, generation_model_id, config)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (id) DO UPDATE SET
+                name                = $2,
+                generation_model_id = $3,
+                config              = $4,
+                updated_at          = NOW()
+            ",
+        )
+        .bind(entry.chunking_configuration_id)
+        .bind(&entry.name)
+        .bind(generation_model_id)
+        .bind(&config_json)
+        .execute(&self.pool)
+        .await
+        .map(|_| ())
+        .map_err(|e| ProjectionError::Storage(format!("upsert chunking config: {e}")))
+    }
+
+    async fn delete(&self, id: Uuid) -> Result<(), ProjectionError> {
+        sqlx::query("DELETE FROM chunking_configurations WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map(|_| ())
+            .map_err(|e| ProjectionError::Storage(format!("delete chunking config: {e}")))
+    }
+}
+
+#[async_trait]
 impl ChunkingConfigurationRepository for PostgresChunkingConfigurationRepository {
     async fn load_all(
         &self,
     ) -> Result<Vec<ChunkingConfigurationReadModel>, ChunkingConfigurationRepositoryError> {
         let rows: Vec<ChunkingConfigurationRow> = sqlx::query_as(
-            "SELECT id, name, config, is_default
+            "SELECT id, name, config
              FROM chunking_configurations
              ORDER BY created_at ASC",
         )
@@ -42,136 +81,16 @@ impl ChunkingConfigurationRepository for PostgresChunkingConfigurationRepository
         &self,
         id: Uuid,
     ) -> Result<Option<ChunkingConfigurationReadModel>, ChunkingConfigurationRepositoryError> {
-        let row: Option<ChunkingConfigurationRow> = sqlx::query_as(
-            "SELECT id, name, config, is_default FROM chunking_configurations WHERE id = $1",
-        )
-        .bind(id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| ChunkingConfigurationRepositoryError::Internal(format!("find_by_id: {e}")))?;
-        row.map(TryInto::try_into).transpose()
-    }
-
-    async fn find_default(
-        &self,
-    ) -> Result<Option<ChunkingConfigurationReadModel>, ChunkingConfigurationRepositoryError> {
-        let row: Option<ChunkingConfigurationRow> = sqlx::query_as(
-            "SELECT id, name, config, is_default
-             FROM chunking_configurations
-             WHERE is_default = TRUE
-             LIMIT 1",
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| {
-            ChunkingConfigurationRepositoryError::Internal(format!("find_default: {e}"))
-        })?;
-        row.map(TryInto::try_into).transpose()
-    }
-
-    async fn create(
-        &self,
-        row: NewChunkingConfiguration,
-    ) -> Result<(), ChunkingConfigurationRepositoryError> {
-        let config_json = serialize_config(&row.config)?;
-        let generation_model_id = generation_model_id(&row.config);
-        sqlx::query(
-            "
-            INSERT INTO chunking_configurations (id, name, generation_model_id, config)
-            VALUES ($1, $2, $3, $4)
-            ",
-        )
-        .bind(row.id)
-        .bind(&row.name)
-        .bind(generation_model_id)
-        .bind(&config_json)
-        .execute(&self.pool)
-        .await
-        .map(|_| ())
-        .map_err(|e| map_db_error(&e))
-    }
-
-    async fn update(
-        &self,
-        row: ChunkingConfigurationUpdate,
-    ) -> Result<(), ChunkingConfigurationRepositoryError> {
-        let config_json = serialize_config(&row.config)?;
-        let generation_model_id = generation_model_id(&row.config);
-        let affected = sqlx::query(
-            "
-            UPDATE chunking_configurations
-            SET name                = $2,
-                generation_model_id = $3,
-                config              = $4,
-                updated_at          = NOW()
-            WHERE id = $1
-            ",
-        )
-        .bind(row.id)
-        .bind(&row.name)
-        .bind(generation_model_id)
-        .bind(&config_json)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| map_db_error(&e))?;
-        if affected.rows_affected() == 0 {
-            return Err(ChunkingConfigurationRepositoryError::NotFound(row.id));
-        }
-        Ok(())
-    }
-
-    async fn set_default(&self, id: Uuid) -> Result<(), ChunkingConfigurationRepositoryError> {
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(|e| ChunkingConfigurationRepositoryError::Internal(format!("tx: {e}")))?;
-
-        sqlx::query("UPDATE chunking_configurations SET is_default = FALSE WHERE is_default")
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| {
-                ChunkingConfigurationRepositoryError::Internal(format!("clear default: {e}"))
-            })?;
-
-        let affected =
-            sqlx::query("UPDATE chunking_configurations SET is_default = TRUE WHERE id = $1")
+        let row: Option<ChunkingConfigurationRow> =
+            sqlx::query_as("SELECT id, name, config FROM chunking_configurations WHERE id = $1")
                 .bind(id)
-                .execute(&mut *tx)
+                .fetch_optional(&self.pool)
                 .await
                 .map_err(|e| {
-                    ChunkingConfigurationRepositoryError::Internal(format!("set default: {e}"))
+                    ChunkingConfigurationRepositoryError::Internal(format!("find_by_id: {e}"))
                 })?;
-
-        if affected.rows_affected() == 0 {
-            return Err(ChunkingConfigurationRepositoryError::NotFound(id));
-        }
-
-        tx.commit()
-            .await
-            .map_err(|e| ChunkingConfigurationRepositoryError::Internal(format!("commit: {e}")))?;
-        Ok(())
+        row.map(TryInto::try_into).transpose()
     }
-
-    async fn delete(&self, id: Uuid) -> Result<(), ChunkingConfigurationRepositoryError> {
-        let affected = sqlx::query("DELETE FROM chunking_configurations WHERE id = $1")
-            .bind(id)
-            .execute(&self.pool)
-            .await
-            .map_err(|e| ChunkingConfigurationRepositoryError::Internal(format!("delete: {e}")))?;
-        if affected.rows_affected() == 0 {
-            return Err(ChunkingConfigurationRepositoryError::NotFound(id));
-        }
-        Ok(())
-    }
-}
-
-fn serialize_config(
-    config: &ChunkingConfig,
-) -> Result<serde_json::Value, ChunkingConfigurationRepositoryError> {
-    serde_json::to_value(config).map_err(|e| {
-        ChunkingConfigurationRepositoryError::Internal(format!("serialize config: {e}"))
-    })
 }
 
 fn generation_model_id(config: &ChunkingConfig) -> Option<Uuid> {
@@ -181,34 +100,10 @@ fn generation_model_id(config: &ChunkingConfig) -> Option<Uuid> {
     }
 }
 
-fn map_db_error(error: &sqlx::Error) -> ChunkingConfigurationRepositoryError {
-    match error {
-        sqlx::Error::Database(db) => {
-            let code = db
-                .code()
-                .map(std::borrow::Cow::into_owned)
-                .unwrap_or_default();
-            match code.as_str() {
-                "23505" => ChunkingConfigurationRepositoryError::NameConflict,
-                "23503" => ChunkingConfigurationRepositoryError::ReferenceViolation(
-                    db.message().to_string(),
-                ),
-                _ => ChunkingConfigurationRepositoryError::Internal(format!(
-                    "chunking configuration: {error}"
-                )),
-            }
-        }
-        _ => ChunkingConfigurationRepositoryError::Internal(format!(
-            "chunking configuration: {error}"
-        )),
-    }
-}
-
 struct ChunkingConfigurationRow {
     id: Uuid,
     name: String,
     config: serde_json::Value,
-    is_default: bool,
 }
 
 impl sqlx::FromRow<'_, PgRow> for ChunkingConfigurationRow {
@@ -218,7 +113,6 @@ impl sqlx::FromRow<'_, PgRow> for ChunkingConfigurationRow {
             id: row.try_get("id")?,
             name: row.try_get("name")?,
             config: row.try_get("config")?,
-            is_default: row.try_get("is_default")?,
         })
     }
 }
@@ -234,7 +128,6 @@ impl TryFrom<ChunkingConfigurationRow> for ChunkingConfigurationReadModel {
             chunking_configuration_id: row.id,
             name: row.name,
             config,
-            is_default: row.is_default,
         })
     }
 }

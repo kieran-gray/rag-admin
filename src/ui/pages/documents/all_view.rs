@@ -273,11 +273,13 @@ pub fn AllDocumentsView(open_import: Callback<()>) -> impl IntoView {
                 })}
             </Transition>
 
-            <PaginationBar
-                summary=summary
-                controls=pagination
-                on_next=on_next
-            />
+            <Suspense>
+                <PaginationBar
+                    summary=summary
+                    controls=pagination
+                    on_next=on_next
+                />
+            </Suspense>
         </Surface>
     }
 }

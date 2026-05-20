@@ -19,6 +19,9 @@ use crate::server::application::source_document::{
     DocumentNormalizerRegistry, SourceDocumentIngestService, SourceDocumentIngestServiceDeps,
 };
 use crate::server::application::spawn_activity_projection;
+use crate::server::domain::configuration::chunking_configuration::{
+    make_chunking_configuration_projector, ChunkingConfigurationCatalog,
+};
 use crate::server::domain::configuration::defaults::{
     make_configuration_defaults_projector, ConfigurationDefaults,
 };
@@ -27,6 +30,9 @@ use crate::server::domain::configuration::embedding_model::{
 };
 use crate::server::domain::configuration::generation_model::{
     make_generation_model_projector, GenerationModelCatalog,
+};
+use crate::server::domain::configuration::pipeline_configuration::{
+    make_pipeline_configuration_projector, PipelineConfigurationCatalog,
 };
 use crate::server::domain::configuration::sweep_template::{SweepTemplate, SweepTemplateProjector};
 use crate::server::domain::configuration::vector_index::{
@@ -145,11 +151,32 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
         Arc::clone(&event_bus),
         &mut wakeups,
     );
+    spawn_driver::<ChunkingConfigurationCatalog, ()>(
+        Arc::clone(&wirings.chunking_configuration.event_store),
+        vec![Arc::new(make_chunking_configuration_projector(Arc::clone(
+            &repos.chunking_configuration,
+        )
+            as _))],
+        None,
+        Arc::clone(&checkpoint),
+        Arc::clone(&event_bus),
+        &mut wakeups,
+    );
+    spawn_driver::<PipelineConfigurationCatalog, ()>(
+        Arc::clone(&wirings.pipeline_configuration.event_store),
+        vec![Arc::new(make_pipeline_configuration_projector(Arc::clone(
+            &repos.pipeline_configuration,
+        )
+            as _))],
+        None,
+        Arc::clone(&checkpoint),
+        Arc::clone(&event_bus),
+        &mut wakeups,
+    );
     spawn_driver::<ConfigurationDefaults, ()>(
         Arc::clone(&wirings.defaults.event_store),
         vec![Arc::new(make_configuration_defaults_projector(
-            Arc::clone(&repos.chunking_configuration),
-            Arc::clone(&repos.pipeline_configuration),
+            Arc::clone(&repos.configuration_defaults),
             Arc::clone(&repos.sweep_template),
         ))],
         None,
@@ -385,7 +412,6 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
         Arc::clone(&connector_registry),
         Arc::clone(&services.connector_query_service),
         Arc::clone(&services.connector_import_command_handler),
-        Arc::clone(&clock),
         Arc::clone(&id_generator),
     );
 

@@ -1,5 +1,5 @@
 use leptos::prelude::*;
-use leptos_router::components::A;
+use leptos::task::spawn_local;
 use leptos_router::hooks::{use_params_map, use_query_map};
 
 mod steps;
@@ -11,13 +11,17 @@ use super::shared::{document_type_label, indexing_milestone, indexing_summary, s
 use crate::server_functions::configuration::{
     get_chunking_configurations, get_pipeline_configurations,
 };
-use crate::server_functions::source_document::get_document_detail_by_source_ref;
+use crate::server_functions::source_document::{
+    delete_document, get_document_detail_by_source_ref,
+};
 use crate::shared::contracts::{
     aggregate_type, ChunkingConfigurationDto, IndexingDto, PipelineConfigurationDto,
     SourceDocumentDetailDto, SourceDocumentDto,
 };
 use crate::ui::components::app::event_bus::use_invalidator;
-use crate::ui::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
+use crate::ui::components::primitives::{
+    ActionItem, ActionsMenu, ConfirmDialog, EmptyState, PageHeader, Status, StatusPill, Surface,
+};
 
 #[component]
 pub fn DocumentDetailPage() -> impl IntoView {
@@ -75,6 +79,9 @@ pub fn DocumentDetailPage() -> impl IntoView {
                         }.into_any(),
                         Ok(None) => view! {
                             <UnregisteredDocument source_ref=source_ref.get() />
+                        }.into_any(),
+                        Ok(Some(existing)) if existing.document.deleted => view! {
+                            <DeletedDocument source_ref=source_ref.get() />
                         }.into_any(),
                         Ok(Some(existing)) => view! {
                             <DocumentWorkspace
@@ -198,11 +205,6 @@ fn DocumentWorkspace(
         }
     };
 
-    let evaluate_href = format!(
-        "/evaluate/{}/{}",
-        detail.document.document_type.to_lowercase(),
-        urlencoding::encode(&source_ref),
-    );
     let source_ref_for_step = StoredValue::new(source_ref);
 
     let on_advance_to_chunk = Callback::new(move |_| set_active_step.set(WorkflowStep::Chunk));
@@ -213,6 +215,43 @@ fn DocumentWorkspace(
 
     let header_subtitle = header_subtitle.unwrap_or_default();
 
+    let (confirm_delete_open, set_confirm_delete_open) = signal(false);
+    let (deleting, set_deleting) = signal(false);
+    let (delete_error, set_delete_error) = signal::<Option<String>>(None);
+    let document_id = detail.document.document_id;
+
+    let open_confirm_delete = Callback::new(move |_| {
+        set_delete_error.set(None);
+        set_confirm_delete_open.set(true);
+    });
+    let close_confirm_delete = Callback::new(move |_| set_confirm_delete_open.set(false));
+    let confirm_delete = Callback::new(move |_| {
+        if deleting.get_untracked() {
+            return;
+        }
+        set_deleting.set(true);
+        set_delete_error.set(None);
+        spawn_local(async move {
+            match delete_document(document_id).await {
+                Ok(_) => {
+                    set_deleting.set(false);
+                    set_confirm_delete_open.set(false);
+                }
+                Err(e) => {
+                    set_deleting.set(false);
+                    set_confirm_delete_open.set(false);
+                    set_delete_error.set(Some(format!("{e}")));
+                }
+            }
+        });
+    });
+
+    let actions = vec![ActionItem {
+        label: "Delete document".to_string(),
+        danger: true,
+        on_select: Callback::new(move |_| open_confirm_delete.run(())),
+    }];
+
     view! {
         <div>
             <PageHeader
@@ -222,14 +261,25 @@ fn DocumentWorkspace(
                 actions=Box::new(move || view! {
                     <div class="flex items-center gap-2">
                         <StatusPill label=status_label.clone() kind=status_kind />
-                        <A
-                            href=evaluate_href.clone()
-                            attr:class="btn btn-ghost"
-                        >
-                            "Evaluate →"
-                        </A>
+                        <ActionsMenu items=actions.clone() />
                     </div>
                 }.into_any())
+            />
+
+            {move || delete_error.get().map(|e| view! {
+                <div class="log-line-error text-sm mb-4">{e}</div>
+            })}
+
+            <ConfirmDialog
+                open=confirm_delete_open
+                title="Delete document".to_string()
+                message="This document and all of its indexings will be removed. This cannot be undone.".to_string()
+                confirm_label="Delete document".to_string()
+                confirm_busy_label="Deleting…".to_string()
+                busy=deleting
+                danger=true
+                on_confirm=confirm_delete
+                on_close=close_confirm_delete
             />
 
             <div class="space-y-6">
@@ -419,6 +469,25 @@ fn UnregisteredDocument(source_ref: String) -> impl IntoView {
                 <EmptyState
                     title="Not imported"
                     body="Open the Documents page and import this from a connector, URL, or upload.".to_string()
+                />
+            </Surface>
+        </div>
+    }
+}
+
+#[component]
+fn DeletedDocument(source_ref: String) -> impl IntoView {
+    view! {
+        <div>
+            <PageHeader
+                title=source_ref.clone()
+                eyebrow=format!("Documents / {source_ref}")
+                subtitle="This document has been deleted.".to_string()
+            />
+            <Surface>
+                <EmptyState
+                    title="Deleted"
+                    body="This document was deleted. Re-import it from the Documents page to bring it back.".to_string()
                 />
             </Surface>
         </div>

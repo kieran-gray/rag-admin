@@ -1,3 +1,4 @@
+pub mod actions_menu;
 pub mod confirm_dialog;
 pub mod dialog;
 pub mod empty_filter_state;
@@ -14,6 +15,7 @@ pub mod status_pill;
 pub mod surface;
 pub mod title_cell;
 
+pub use actions_menu::{ActionItem, ActionsMenu};
 pub use confirm_dialog::ConfirmDialog;
 pub use dialog::Dialog;
 pub use empty_filter_state::EmptyFilterState;

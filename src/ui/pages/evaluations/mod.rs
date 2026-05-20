@@ -208,11 +208,13 @@ pub fn EvaluationsPage() -> impl IntoView {
                     })}
                 </Transition>
 
-                <PaginationBar
-                    summary=summary
-                    controls=pagination
-                    on_next=on_next
-                />
+                <Suspense>
+                    <PaginationBar
+                        summary=summary
+                        controls=pagination
+                        on_next=on_next
+                    />
+                </Suspense>
             </Surface>
 
             <NewEvaluationDialog open=launcher_open_signal on_close=close_launcher />

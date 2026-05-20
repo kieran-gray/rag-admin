@@ -17,37 +17,39 @@ impl GenerationModelCatalogCommandHandler {
         Arc::new(Self { processor })
     }
 
-    pub async fn handle(&self, command: GenerationModelCatalogCommand) -> Result<(), AppError> {
+    pub async fn handle_dto(&self, command: GenerationModelCommandDto) -> Result<(), AppError> {
+        self.dispatch(command.into()).await
+    }
+
+    async fn dispatch(&self, command: GenerationModelCatalogCommand) -> Result<(), AppError> {
         self.processor
             .handle(GenerationModelCatalog::singleton_id(), command)
             .await?;
         Ok(())
     }
-
-    pub async fn handle_dto(&self, command: GenerationModelCommandDto) -> Result<(), AppError> {
-        self.handle(from_dto(command)).await
-    }
 }
 
-fn from_dto(dto: GenerationModelCommandDto) -> GenerationModelCatalogCommand {
-    match dto {
-        GenerationModelCommandDto::AddGenerationModel(d) => {
-            GenerationModelCatalogCommand::AddGenerationModel(AddGenerationModel {
-                kind: d.kind,
-                model: d.model,
-            })
-        }
-        GenerationModelCommandDto::UpdateGenerationModel(d) => {
-            GenerationModelCatalogCommand::UpdateGenerationModel(UpdateGenerationModel {
-                model_id: d.model_id,
-                kind: d.kind,
-                model: d.model,
-            })
-        }
-        GenerationModelCommandDto::RemoveGenerationModel(d) => {
-            GenerationModelCatalogCommand::RemoveGenerationModel(RemoveGenerationModel {
-                model_id: d.model_id,
-            })
+impl From<GenerationModelCommandDto> for GenerationModelCatalogCommand {
+    fn from(value: GenerationModelCommandDto) -> Self {
+        match value {
+            GenerationModelCommandDto::AddGenerationModel(d) => {
+                Self::AddGenerationModel(AddGenerationModel {
+                    kind: d.kind,
+                    model: d.model,
+                })
+            }
+            GenerationModelCommandDto::UpdateGenerationModel(d) => {
+                Self::UpdateGenerationModel(UpdateGenerationModel {
+                    model_id: d.model_id,
+                    kind: d.kind,
+                    model: d.model,
+                })
+            }
+            GenerationModelCommandDto::RemoveGenerationModel(d) => {
+                Self::RemoveGenerationModel(RemoveGenerationModel {
+                    model_id: d.model_id,
+                })
+            }
         }
     }
 }

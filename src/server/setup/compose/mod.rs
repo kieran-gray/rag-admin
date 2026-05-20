@@ -13,10 +13,11 @@ use sqlx::PgPool;
 
 use crate::server::application::chat::ChatService;
 use crate::server::application::configuration::{
-    ChunkingConfigurationQueryService, ChunkingConfigurationService, ConfigurationQueryService,
-    EmbeddingModelCatalogCommandHandler, GenerationModelCatalogCommandHandler,
-    PipelineConfigurationQueryService, PipelineConfigurationService, PipelineResolver,
-    SweepTemplateCommandHandler, SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
+    ChunkingConfigurationCatalogCommandHandler, ChunkingConfigurationQueryService,
+    ConfigurationQueryService, EmbeddingModelCatalogCommandHandler,
+    GenerationModelCatalogCommandHandler, PipelineConfigurationCatalogCommandHandler,
+    PipelineConfigurationQueryService, PipelineResolver, SweepTemplateCommandHandler,
+    SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
 };
 use crate::server::application::connector::{
     ConnectorCommandHandler, ConnectorQueryService, ConnectorRegistry,
@@ -55,8 +56,8 @@ pub struct App {
     pub embedding_model_command_handler: Arc<EmbeddingModelCatalogCommandHandler>,
     pub generation_model_command_handler: Arc<GenerationModelCatalogCommandHandler>,
     pub vector_index_command_handler: Arc<VectorIndexCatalogCommandHandler>,
-    pub pipeline_configuration_service: Arc<PipelineConfigurationService>,
-    pub chunking_configuration_service: Arc<ChunkingConfigurationService>,
+    pub pipeline_configuration_command_handler: Arc<PipelineConfigurationCatalogCommandHandler>,
+    pub chunking_configuration_command_handler: Arc<ChunkingConfigurationCatalogCommandHandler>,
     pub sweep_template_command_handler: Arc<SweepTemplateCommandHandler>,
     pub configuration_query_service: Arc<ConfigurationQueryService>,
     pub pipeline_configuration_query_service: Arc<PipelineConfigurationQueryService>,
@@ -136,8 +137,8 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         embedding_model_command_handler: services.embedding_model_command_handler,
         generation_model_command_handler: services.generation_model_command_handler,
         vector_index_command_handler: services.vector_index_command_handler,
-        pipeline_configuration_service: services.pipeline_configuration_service,
-        chunking_configuration_service: services.chunking_configuration_service,
+        pipeline_configuration_command_handler: services.pipeline_configuration_command_handler,
+        chunking_configuration_command_handler: services.chunking_configuration_command_handler,
         sweep_template_command_handler: services.sweep_template_command_handler,
         configuration_query_service: services.configuration_query_service,
         pipeline_configuration_query_service: services.pipeline_configuration_query_service,
@@ -174,8 +175,8 @@ impl App {
         provide_context(Arc::clone(&self.embedding_model_command_handler));
         provide_context(Arc::clone(&self.generation_model_command_handler));
         provide_context(Arc::clone(&self.vector_index_command_handler));
-        provide_context(Arc::clone(&self.pipeline_configuration_service));
-        provide_context(Arc::clone(&self.chunking_configuration_service));
+        provide_context(Arc::clone(&self.pipeline_configuration_command_handler));
+        provide_context(Arc::clone(&self.chunking_configuration_command_handler));
         provide_context(Arc::clone(&self.sweep_template_command_handler));
         provide_context(Arc::clone(&self.configuration_query_service));
         provide_context(Arc::clone(&self.pipeline_configuration_query_service));
@@ -218,8 +219,8 @@ impl App {
             &self.embedding_model_command_handler,
             &self.generation_model_command_handler,
             &self.vector_index_command_handler,
-            &self.chunking_configuration_service,
-            &self.pipeline_configuration_service,
+            &self.chunking_configuration_command_handler,
+            &self.pipeline_configuration_command_handler,
             &self.sweep_template_command_handler,
         )
         .await

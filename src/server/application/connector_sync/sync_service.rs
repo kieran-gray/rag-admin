@@ -6,7 +6,7 @@ use crate::server::application::connector::{ConnectorQueryService, ConnectorRegi
 use crate::server::application::connector_import::ConnectorImportCommandHandler;
 use crate::server::application::connector_sync::command_handler::ConnectorSyncCommandHandler;
 use crate::server::application::connector_sync::query_service::ConnectorSyncQueryService;
-use crate::server::application::ports::{Clock, IdGenerator};
+use crate::server::application::ports::IdGenerator;
 use crate::server::application::AppError;
 use crate::server::domain::connector_sync::DiscoveredItemRecord;
 
@@ -16,7 +16,6 @@ pub struct ConnectorSyncService {
     connector_registry: Arc<ConnectorRegistry>,
     connector_query_service: Arc<ConnectorQueryService>,
     connector_import_command_handler: Arc<ConnectorImportCommandHandler>,
-    clock: Arc<dyn Clock>,
     id_generator: Arc<dyn IdGenerator>,
 }
 
@@ -27,7 +26,6 @@ impl ConnectorSyncService {
         connector_registry: Arc<ConnectorRegistry>,
         connector_query_service: Arc<ConnectorQueryService>,
         connector_import_command_handler: Arc<ConnectorImportCommandHandler>,
-        clock: Arc<dyn Clock>,
         id_generator: Arc<dyn IdGenerator>,
     ) -> Arc<Self> {
         Arc::new(Self {
@@ -36,7 +34,6 @@ impl ConnectorSyncService {
             connector_registry,
             connector_query_service,
             connector_import_command_handler,
-            clock,
             id_generator,
         })
     }
@@ -50,9 +47,7 @@ impl ConnectorSyncService {
         let implementation = self.connector_registry.get(connector.kind())?;
 
         let sync_id = self.id_generator.new_uuid();
-        self.command_handler
-            .start(sync_id, connector_id, self.clock.now())
-            .await?;
+        self.command_handler.start(sync_id, connector_id).await?;
 
         match implementation.list(&connector).await {
             Ok(items) => {
@@ -64,20 +59,14 @@ impl ConnectorSyncService {
                     })
                     .collect();
                 if !records.is_empty() {
-                    self.command_handler
-                        .record_items(sync_id, records, self.clock.now())
-                        .await?;
+                    self.command_handler.record_items(sync_id, records).await?;
                 }
-                self.command_handler
-                    .complete(sync_id, self.clock.now())
-                    .await?;
+                self.command_handler.complete(sync_id).await?;
                 self.backfill_provenance(connector_id, sync_id).await?;
                 Ok(sync_id)
             }
             Err(e) => {
-                self.command_handler
-                    .fail(sync_id, e.to_string(), self.clock.now())
-                    .await?;
+                self.command_handler.fail(sync_id, e.to_string()).await?;
                 Err(e)
             }
         }
@@ -90,13 +79,7 @@ impl ConnectorSyncService {
             .await?;
         for (source_ref_key, document_id) in pairs {
             self.connector_import_command_handler
-                .record(
-                    connector_id,
-                    document_id,
-                    source_ref_key,
-                    Some(sync_id),
-                    self.clock.now(),
-                )
+                .record(connector_id, document_id, source_ref_key, Some(sync_id))
                 .await?;
         }
         Ok(())

@@ -7,8 +7,10 @@ use crate::shared::contracts::{
 use crate::shared::ChunkingConfig;
 
 #[cfg(feature = "ssr")]
+use crate::server::application::indexing::IndexingCommandHandler;
+#[cfg(feature = "ssr")]
 use crate::server::application::source_document::{
-    SourceDocumentIngestService, SourceDocumentQueryService,
+    SourceDocumentCommandHandler, SourceDocumentIngestService, SourceDocumentQueryService,
 };
 #[cfg(feature = "ssr")]
 use crate::server::application::AppError;
@@ -126,7 +128,7 @@ pub async fn request_indexing(
 
 #[server(name = RequeueChunking, prefix = "/api", endpoint = "requeue_chunking")]
 pub async fn requeue_chunking(indexing_id: uuid::Uuid) -> Result<(), ServerFnError> {
-    ctx::<Arc<SourceDocumentIngestService>>()?
+    ctx::<Arc<IndexingCommandHandler>>()?
         .requeue_chunking(indexing_id)
         .await
         .map_err(|e| map_app_error(&e))
@@ -134,7 +136,7 @@ pub async fn requeue_chunking(indexing_id: uuid::Uuid) -> Result<(), ServerFnErr
 
 #[server(name = RequeueEmbedding, prefix = "/api", endpoint = "requeue_embedding")]
 pub async fn requeue_embedding(indexing_id: uuid::Uuid) -> Result<(), ServerFnError> {
-    ctx::<Arc<SourceDocumentIngestService>>()?
+    ctx::<Arc<IndexingCommandHandler>>()?
         .requeue_embedding(indexing_id)
         .await
         .map_err(|e| map_app_error(&e))
@@ -142,7 +144,7 @@ pub async fn requeue_embedding(indexing_id: uuid::Uuid) -> Result<(), ServerFnEr
 
 #[server(name = RequeueIndexing, prefix = "/api", endpoint = "requeue_indexing")]
 pub async fn requeue_indexing(indexing_id: uuid::Uuid) -> Result<(), ServerFnError> {
-    ctx::<Arc<SourceDocumentIngestService>>()?
+    ctx::<Arc<IndexingCommandHandler>>()?
         .requeue_indexing(indexing_id)
         .await
         .map_err(|e| map_app_error(&e))
@@ -170,6 +172,18 @@ pub async fn list_documents_page(
 ) -> Result<DocumentListPageDto, ServerFnError> {
     ctx::<Arc<SourceDocumentQueryService>>()?
         .list_documents_page(query)
+        .await
+        .map_err(|e| map_app_error(&e))
+}
+
+#[server(
+    name = DeleteDocument,
+    prefix = "/api",
+    endpoint = "delete_document"
+)]
+pub async fn delete_document(document_id: uuid::Uuid) -> Result<(), ServerFnError> {
+    ctx::<Arc<SourceDocumentCommandHandler>>()?
+        .delete(document_id)
         .await
         .map_err(|e| map_app_error(&e))
 }

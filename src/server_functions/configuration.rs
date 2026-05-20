@@ -8,10 +8,11 @@ use crate::shared::contracts::{
 
 #[cfg(feature = "ssr")]
 use crate::server::application::configuration::{
-    ChunkingConfigurationQueryService, ChunkingConfigurationService, ConfigurationQueryService,
-    EmbeddingModelCatalogCommandHandler, GenerationModelCatalogCommandHandler,
-    PipelineConfigurationQueryService, PipelineConfigurationService, SweepTemplateCommandHandler,
-    SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
+    ChunkingConfigurationCatalogCommandHandler, ChunkingConfigurationQueryService,
+    ConfigurationQueryService, EmbeddingModelCatalogCommandHandler,
+    GenerationModelCatalogCommandHandler, PipelineConfigurationCatalogCommandHandler,
+    PipelineConfigurationQueryService, SweepTemplateCommandHandler, SweepTemplateQueryService,
+    VectorIndexCatalogCommandHandler,
 };
 #[cfg(feature = "ssr")]
 use crate::server_functions::error::{ctx, map_app_error};
@@ -116,7 +117,7 @@ pub async fn apply_vector_index_command(
 pub async fn apply_pipeline_configuration_command(
     command: PipelineConfigurationCommandDto,
 ) -> Result<(), ServerFnError> {
-    ctx::<Arc<PipelineConfigurationService>>()?
+    ctx::<Arc<PipelineConfigurationCatalogCommandHandler>>()?
         .handle_dto(command)
         .await
         .map_err(|e| map_app_error(&e))
@@ -130,7 +131,7 @@ pub async fn apply_pipeline_configuration_command(
 pub async fn apply_chunking_configuration_command(
     command: ChunkingConfigurationCommandDto,
 ) -> Result<(), ServerFnError> {
-    ctx::<Arc<ChunkingConfigurationService>>()?
+    ctx::<Arc<ChunkingConfigurationCatalogCommandHandler>>()?
         .handle_dto(command)
         .await
         .map_err(|e| map_app_error(&e))

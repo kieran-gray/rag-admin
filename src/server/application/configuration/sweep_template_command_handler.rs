@@ -29,12 +29,6 @@ impl SweepTemplateCommandHandler {
         })
     }
 
-    pub async fn handle(&self, command: SweepTemplateCommand) -> Result<(), AppError> {
-        let stream_id = command.sweep_template_id();
-        self.processor.handle(stream_id, command).await?;
-        Ok(())
-    }
-
     pub async fn handle_dto(&self, command: SweepTemplateCommandDto) -> Result<(), AppError> {
         let cmd = match command {
             SweepTemplateCommandDto::SetDefaultSweepTemplate(d) => {
@@ -63,6 +57,12 @@ impl SweepTemplateCommandHandler {
                 })
             }
         };
-        self.handle(cmd).await
+        self.dispatch(cmd).await
+    }
+
+    async fn dispatch(&self, command: SweepTemplateCommand) -> Result<(), AppError> {
+        let stream_id = command.sweep_template_id();
+        self.processor.handle(stream_id, command).await?;
+        Ok(())
     }
 }

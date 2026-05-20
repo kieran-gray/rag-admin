@@ -58,7 +58,7 @@ impl SourceDocumentQueryService {
 
     pub async fn list(&self) -> Result<Vec<SourceDocumentDto>, AppError> {
         let docs = self.source_document_repository.list().await?;
-        Ok(docs.iter().map(map_doc_to_dto).collect())
+        Ok(docs.iter().map(Into::into).collect())
     }
 
     pub async fn list_documents(&self) -> Result<Vec<DocumentListItemDto>, AppError> {
@@ -89,7 +89,8 @@ impl SourceDocumentQueryService {
                 let connectors = connectors_by_doc
                     .remove(&doc.document_id)
                     .unwrap_or_default();
-                let dto = map_doc_to_dto(doc);
+
+                let dto: SourceDocumentDto = doc.into();
                 DocumentListItemDto {
                     source_ref_key: dto.source_ref_key,
                     document_type: dto.document_type,
@@ -98,7 +99,7 @@ impl SourceDocumentQueryService {
                     latest_version: Some(dto.latest_version),
                     latest_content_hash: Some(dto.latest_content_hash),
                     indexings,
-                    source: source_descriptor_from(&doc.source_ref),
+                    source: (&doc.source_ref).into(),
                     connectors,
                     updated_at: doc.latest_version_occurred_at.clone(),
                 }
@@ -157,8 +158,8 @@ impl SourceDocumentQueryService {
             cursor: query.cursor.as_deref().map(decode_cursor).transpose()?,
             limit: if query.limit == 0 { 25 } else { query.limit },
             search: query.search.clone(),
-            sources: query.sources.iter().map(source_filter_from_dto).collect(),
-            statuses: query.statuses.iter().map(status_filter_from_dto).collect(),
+            sources: query.sources.iter().map(Into::into).collect(),
+            statuses: query.statuses.iter().map(Into::into).collect(),
             document_id_filter,
         };
 
@@ -193,7 +194,8 @@ impl SourceDocumentQueryService {
                 let connectors = connectors_by_doc
                     .remove(&doc.document_id)
                     .unwrap_or_default();
-                let dto = map_doc_to_dto(doc);
+
+                let dto: SourceDocumentDto = doc.into();
                 DocumentListItemDto {
                     source_ref_key: dto.source_ref_key,
                     document_type: dto.document_type,
@@ -202,7 +204,7 @@ impl SourceDocumentQueryService {
                     latest_version: Some(dto.latest_version),
                     latest_content_hash: Some(dto.latest_content_hash),
                     indexings,
-                    source: source_descriptor_from(&doc.source_ref),
+                    source: (&doc.source_ref).into(),
                     connectors,
                     updated_at: entry.updated_at.clone(),
                 }
@@ -213,7 +215,7 @@ impl SourceDocumentQueryService {
         let sources = facets
             .into_iter()
             .map(|(filter, count)| SourceFacetDto {
-                source: source_descriptor_from_filter(&filter),
+                source: (&filter).into(),
                 document_count: count,
             })
             .collect();
@@ -275,7 +277,7 @@ impl SourceDocumentQueryService {
                     .await?;
 
                 Ok(Some(SourceDocumentDetailDto {
-                    document: map_doc_to_dto(&doc),
+                    document: (&doc).into(),
                     indexings: indexings.iter().map(map_indexing_to_dto).collect(),
                 }))
             }
@@ -364,39 +366,62 @@ fn map_indexing_to_dto(i: &IndexingReadModel) -> IndexingDto {
     }
 }
 
-fn source_descriptor_from(source_ref: &SourceRef) -> SourceDescriptorDto {
-    match source_ref {
-        SourceRef::Upload { .. } => SourceDescriptorDto::Upload,
-        SourceRef::Url { url } => SourceDescriptorDto::Url {
-            host: host_from_url(url).unwrap_or_else(|| "unknown".to_string()),
-            url: url.clone(),
-        },
+impl From<&SourceRef> for SourceDescriptorDto {
+    fn from(value: &SourceRef) -> Self {
+        match value {
+            SourceRef::Upload { .. } => SourceDescriptorDto::Upload,
+            SourceRef::Url { url } => SourceDescriptorDto::Url {
+                host: host_from_url(url).unwrap_or_else(|| "unknown".to_string()),
+                url: url.clone(),
+            },
+        }
     }
 }
 
-fn source_descriptor_from_filter(filter: &SourceFilter) -> SourceDescriptorDto {
-    match filter {
-        SourceFilter::Upload => SourceDescriptorDto::Upload,
-        SourceFilter::UrlHost(host) => SourceDescriptorDto::Url {
-            host: host.clone(),
-            url: format!("https://{host}"),
-        },
+impl From<&SourceFilter> for SourceDescriptorDto {
+    fn from(value: &SourceFilter) -> Self {
+        match value {
+            SourceFilter::Upload => SourceDescriptorDto::Upload,
+            SourceFilter::UrlHost(host) => SourceDescriptorDto::Url {
+                host: host.clone(),
+                url: format!("https://{host}"),
+            },
+        }
     }
 }
 
-fn source_filter_from_dto(dto: &SourceFilterDto) -> SourceFilter {
-    match dto {
-        SourceFilterDto::Upload => SourceFilter::Upload,
-        SourceFilterDto::UrlHost { host } => SourceFilter::UrlHost(host.clone()),
+impl From<&SourceFilterDto> for SourceFilter {
+    fn from(value: &SourceFilterDto) -> Self {
+        match value {
+            SourceFilterDto::Upload => SourceFilter::Upload,
+            SourceFilterDto::UrlHost { host } => SourceFilter::UrlHost(host.clone()),
+        }
     }
 }
 
-fn status_filter_from_dto(dto: &DocumentStatusFilterDto) -> DocumentStatusFilter {
-    match dto {
-        DocumentStatusFilterDto::Registered => DocumentStatusFilter::Registered,
-        DocumentStatusFilterDto::InProgress => DocumentStatusFilter::InProgress,
-        DocumentStatusFilterDto::Indexed => DocumentStatusFilter::Indexed,
-        DocumentStatusFilterDto::Failed => DocumentStatusFilter::Failed,
+impl From<&DocumentStatusFilterDto> for DocumentStatusFilter {
+    fn from(value: &DocumentStatusFilterDto) -> Self {
+        match value {
+            DocumentStatusFilterDto::Registered => DocumentStatusFilter::Registered,
+            DocumentStatusFilterDto::InProgress => DocumentStatusFilter::InProgress,
+            DocumentStatusFilterDto::Indexed => DocumentStatusFilter::Indexed,
+            DocumentStatusFilterDto::Failed => DocumentStatusFilter::Failed,
+        }
+    }
+}
+
+impl From<&SourceDocumentReadModel> for SourceDocumentDto {
+    fn from(value: &SourceDocumentReadModel) -> Self {
+        let title = value.latest_metadata.title().to_string();
+        SourceDocumentDto {
+            document_id: value.document_id,
+            document_type: format!("{:?}", value.document_type),
+            source_ref_key: value.source_ref.natural_key(),
+            title,
+            latest_version: value.latest_version_number,
+            latest_content_hash: value.latest_content_hash.as_hex().to_string(),
+            deleted: value.deleted,
+        }
     }
 }
 
@@ -425,18 +450,5 @@ fn host_from_url(url: &str) -> Option<String> {
         None
     } else {
         Some(host.to_lowercase())
-    }
-}
-
-fn map_doc_to_dto(doc: &SourceDocumentReadModel) -> SourceDocumentDto {
-    let title = doc.latest_metadata.title().to_string();
-    SourceDocumentDto {
-        document_id: doc.document_id,
-        document_type: format!("{:?}", doc.document_type),
-        source_ref_key: doc.source_ref.natural_key(),
-        title,
-        latest_version: doc.latest_version_number,
-        latest_content_hash: doc.latest_content_hash.as_hex().to_string(),
-        deleted: doc.deleted,
     }
 }

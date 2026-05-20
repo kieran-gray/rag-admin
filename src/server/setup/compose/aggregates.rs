@@ -7,9 +7,11 @@ use sqlx::PgPool;
 use tokio::sync::Notify;
 
 use crate::server::application::AppError;
+use crate::server::domain::configuration::chunking_configuration::ChunkingConfigurationCatalog;
 use crate::server::domain::configuration::defaults::ConfigurationDefaults;
 use crate::server::domain::configuration::embedding_model::EmbeddingModelCatalog;
 use crate::server::domain::configuration::generation_model::GenerationModelCatalog;
+use crate::server::domain::configuration::pipeline_configuration::PipelineConfigurationCatalog;
 use crate::server::domain::configuration::sweep_template::SweepTemplate;
 use crate::server::domain::configuration::vector_index::VectorIndexCatalog;
 use crate::server::domain::connector::Connector;
@@ -44,6 +46,8 @@ pub struct AggregateWirings {
     pub embedding_model: AggregateWiring<EmbeddingModelCatalog>,
     pub generation_model: AggregateWiring<GenerationModelCatalog>,
     pub vector_index: AggregateWiring<VectorIndexCatalog>,
+    pub chunking_configuration: AggregateWiring<ChunkingConfigurationCatalog>,
+    pub pipeline_configuration: AggregateWiring<PipelineConfigurationCatalog>,
     pub sweep_template: AggregateWiring<SweepTemplate>,
     pub defaults: AggregateWiring<ConfigurationDefaults>,
     pub connector: AggregateWiring<Connector>,
@@ -60,6 +64,8 @@ pub fn build_aggregate_wirings(pool: &PgPool) -> AggregateWirings {
         embedding_model: build_aggregate_wiring::<EmbeddingModelCatalog>(pool),
         generation_model: build_aggregate_wiring::<GenerationModelCatalog>(pool),
         vector_index: build_aggregate_wiring::<VectorIndexCatalog>(pool),
+        chunking_configuration: build_aggregate_wiring::<ChunkingConfigurationCatalog>(pool),
+        pipeline_configuration: build_aggregate_wiring::<PipelineConfigurationCatalog>(pool),
         sweep_template: build_aggregate_wiring::<SweepTemplate>(pool),
         defaults: build_aggregate_wiring::<ConfigurationDefaults>(pool),
         connector: build_aggregate_wiring::<Connector>(pool),

@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::server::application::AppError;
 use crate::server::domain::configuration::chunking_configuration::ChunkingConfigurationRepository;
+use crate::server::domain::configuration::defaults::ConfigurationDefaultsRepository;
 use crate::server::domain::configuration::embedding_model::EmbeddingModelRepository;
 use crate::server::domain::configuration::generation_model::GenerationModelRepository;
 use crate::server::domain::configuration::pipeline_configuration::PipelineConfigurationRepository;
@@ -78,6 +79,7 @@ pub struct PipelineConfigurationQueryService {
     embedding_models: Arc<dyn EmbeddingModelRepository>,
     generation_models: Arc<dyn GenerationModelRepository>,
     vector_indexes: Arc<dyn VectorIndexRepository>,
+    defaults: Arc<dyn ConfigurationDefaultsRepository>,
 }
 
 impl PipelineConfigurationQueryService {
@@ -86,12 +88,14 @@ impl PipelineConfigurationQueryService {
         embedding_models: Arc<dyn EmbeddingModelRepository>,
         generation_models: Arc<dyn GenerationModelRepository>,
         vector_indexes: Arc<dyn VectorIndexRepository>,
+        defaults: Arc<dyn ConfigurationDefaultsRepository>,
     ) -> Arc<Self> {
         Arc::new(Self {
             pipeline_repository,
             embedding_models,
             generation_models,
             vector_indexes,
+            defaults,
         })
     }
 
@@ -100,6 +104,7 @@ impl PipelineConfigurationQueryService {
         let embedding_models = self.embedding_models.load_all().await?;
         let generation_models = self.generation_models.load_all().await?;
         let vector_indexes = self.vector_indexes.load_all().await?;
+        let default_id = self.defaults.load().await?.pipeline_configuration_id;
 
         Ok(pipelines
             .into_iter()
@@ -121,38 +126,46 @@ impl PipelineConfigurationQueryService {
                     .find(|i| i.index_id == pc.vector_index_id)
                     .map(|i| i.name.clone()),
                 vector_index_id: pc.vector_index_id,
-                is_default: pc.is_default,
+                is_default: default_id == Some(pc.pipeline_configuration_id),
             })
             .collect())
+    }
+
+    pub async fn find_default_id(&self) -> Result<Option<Uuid>, AppError> {
+        Ok(self.defaults.load().await?.pipeline_configuration_id)
     }
 }
 
 pub struct ChunkingConfigurationQueryService {
     repository: Arc<dyn ChunkingConfigurationRepository>,
     connector_repository: Arc<dyn ConnectorRepository>,
+    defaults: Arc<dyn ConfigurationDefaultsRepository>,
 }
 
 impl ChunkingConfigurationQueryService {
     pub fn new(
         repository: Arc<dyn ChunkingConfigurationRepository>,
         connector_repository: Arc<dyn ConnectorRepository>,
+        defaults: Arc<dyn ConfigurationDefaultsRepository>,
     ) -> Arc<Self> {
         Arc::new(Self {
             repository,
             connector_repository,
+            defaults,
         })
     }
 
     pub async fn list(&self) -> Result<Vec<ChunkingConfigurationDto>, AppError> {
-        let read_models = self.repository.load_all().await?;
+        let entries = self.repository.load_all().await?;
+        let default_id = self.defaults.load().await?.chunking_configuration_id;
 
-        Ok(read_models
+        Ok(entries
             .into_iter()
             .map(|cc| ChunkingConfigurationDto {
                 chunking_configuration_id: cc.chunking_configuration_id,
                 name: cc.name,
                 config: cc.config,
-                is_default: cc.is_default,
+                is_default: default_id == Some(cc.chunking_configuration_id),
             })
             .collect())
     }
@@ -170,20 +183,19 @@ impl ChunkingConfigurationQueryService {
 
         let chunking_id = match connector.default_chunking_configuration_id {
             Some(id) => id,
-            None => {
-                self.repository
-                    .find_default()
-                    .await?
-                    .ok_or_else(|| {
-                        AppError::Validation(
-                            "no default chunking configured for connector or application".into(),
-                        )
-                    })?
-                    .chunking_configuration_id
-            }
+            None => self
+                .defaults
+                .load()
+                .await?
+                .chunking_configuration_id
+                .ok_or_else(|| {
+                    AppError::Validation(
+                        "no default chunking configured for connector or application".into(),
+                    )
+                })?,
         };
 
-        let read_model = self
+        let entry = self
             .repository
             .find_by_id(chunking_id)
             .await?
@@ -191,7 +203,7 @@ impl ChunkingConfigurationQueryService {
                 AppError::NotFound(format!("chunking configuration {chunking_id} not found"))
             })?;
 
-        Ok(read_model.config)
+        Ok(entry.config)
     }
 }
 

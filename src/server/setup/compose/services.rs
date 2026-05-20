@@ -7,11 +7,12 @@ use crate::server::application::chunking::chunkers::{
 };
 use crate::server::application::chunking::ChunkerRegistry;
 use crate::server::application::configuration::{
-    ChunkingConfigurationQueryService, ChunkingConfigurationService,
+    ChunkingConfigurationCatalogCommandHandler, ChunkingConfigurationQueryService,
     ConfigurationDefaultsCommandHandler, ConfigurationQueryService,
     EmbeddingModelCatalogCommandHandler, GenerationModelCatalogCommandHandler,
-    PipelineConfigurationQueryService, PipelineConfigurationService, PipelineResolver,
-    SweepTemplateCommandHandler, SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
+    PipelineConfigurationCatalogCommandHandler, PipelineConfigurationQueryService,
+    PipelineResolver, SweepTemplateCommandHandler, SweepTemplateQueryService,
+    VectorIndexCatalogCommandHandler,
 };
 use crate::server::application::connector::{ConnectorCommandHandler, ConnectorQueryService};
 use crate::server::application::connector_import::{
@@ -74,8 +75,8 @@ pub struct Services {
     pub evaluation_dataset_command_handler: Arc<EvaluationDatasetCommandHandler>,
     pub evaluation_run_command_handler: Arc<EvaluationRunCommandHandler>,
 
-    pub pipeline_configuration_service: Arc<PipelineConfigurationService>,
-    pub chunking_configuration_service: Arc<ChunkingConfigurationService>,
+    pub pipeline_configuration_command_handler: Arc<PipelineConfigurationCatalogCommandHandler>,
+    pub chunking_configuration_command_handler: Arc<ChunkingConfigurationCatalogCommandHandler>,
 
     pub configuration_query_service: Arc<ConfigurationQueryService>,
     pub pipeline_configuration_query_service: Arc<PipelineConfigurationQueryService>,
@@ -177,6 +178,7 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
     let pipeline_resolver = PipelineResolver::new(
         Arc::clone(&repos.pipeline_configuration),
         Arc::clone(&repos.connector),
+        Arc::clone(&repos.configuration_defaults),
         Arc::clone(&embedding_service),
         Arc::clone(&generation_service),
         Arc::clone(&vector_index_resolver),
@@ -221,12 +223,16 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         Arc::clone(&clock),
         Arc::clone(&id_generator),
     );
-    let connector_import_command_handler =
-        ConnectorImportCommandHandler::new(Arc::clone(&wirings.connector_import.command_processor));
+    let connector_import_command_handler = ConnectorImportCommandHandler::new(
+        Arc::clone(&wirings.connector_import.command_processor),
+        Arc::clone(&clock),
+    );
     let connector_import_query_service =
         ConnectorImportQueryService::new(Arc::clone(&repos.connector_import));
-    let connector_sync_command_handler =
-        ConnectorSyncCommandHandler::new(Arc::clone(&wirings.connector_sync.command_processor));
+    let connector_sync_command_handler = ConnectorSyncCommandHandler::new(
+        Arc::clone(&wirings.connector_sync.command_processor),
+        Arc::clone(&clock),
+    );
     let connector_sync_query_service = ConnectorSyncQueryService::new(
         Arc::clone(&repos.connector_sync),
         Arc::clone(&repos.connector_discovered_item),
@@ -234,19 +240,26 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         Arc::clone(&repos.source_document),
         Arc::clone(&repos.indexing),
     );
-    let source_document_command_handler =
-        SourceDocumentCommandHandler::new(Arc::clone(&wirings.source_document.command_processor));
-    let indexing_command_handler =
-        IndexingCommandHandler::new(Arc::clone(&wirings.indexing.command_processor));
+    let source_document_command_handler = SourceDocumentCommandHandler::new(
+        Arc::clone(&wirings.source_document.command_processor),
+        Arc::clone(&id_generator),
+        Arc::clone(&clock),
+    );
+    let indexing_command_handler = IndexingCommandHandler::new(
+        Arc::clone(&wirings.indexing.command_processor),
+        Arc::clone(&id_generator),
+        Arc::clone(&clock),
+    );
 
-    let pipeline_configuration_service = PipelineConfigurationService::new(
-        Arc::clone(&repos.pipeline_configuration),
+    let pipeline_configuration_command_handler = PipelineConfigurationCatalogCommandHandler::new(
+        Arc::clone(&wirings.pipeline_configuration.command_processor),
         Arc::clone(&repos.embedding_model),
+        Arc::clone(&repos.generation_model),
         Arc::clone(&repos.vector_index),
         Arc::clone(&configuration_defaults_command_handler),
     );
-    let chunking_configuration_service = ChunkingConfigurationService::new(
-        Arc::clone(&repos.chunking_configuration),
+    let chunking_configuration_command_handler = ChunkingConfigurationCatalogCommandHandler::new(
+        Arc::clone(&wirings.chunking_configuration.command_processor),
         Arc::clone(&configuration_defaults_command_handler),
     );
 
@@ -260,10 +273,12 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         Arc::clone(&repos.embedding_model),
         Arc::clone(&repos.generation_model),
         Arc::clone(&repos.vector_index),
+        Arc::clone(&repos.configuration_defaults),
     );
     let chunking_configuration_query_service = ChunkingConfigurationQueryService::new(
         Arc::clone(&repos.chunking_configuration),
         Arc::clone(&repos.connector),
+        Arc::clone(&repos.configuration_defaults),
     );
     let sweep_template_query_service =
         SweepTemplateQueryService::new(Arc::clone(&repos.sweep_template));
@@ -327,8 +342,8 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         indexing_command_handler,
         evaluation_dataset_command_handler,
         evaluation_run_command_handler,
-        pipeline_configuration_service,
-        chunking_configuration_service,
+        pipeline_configuration_command_handler,
+        chunking_configuration_command_handler,
         configuration_query_service,
         pipeline_configuration_query_service,
         chunking_configuration_query_service,

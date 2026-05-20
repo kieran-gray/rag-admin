@@ -1,12 +1,3 @@
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+pub use super::entity::PipelineConfiguration;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PipelineConfigurationReadModel {
-    pub pipeline_configuration_id: Uuid,
-    pub name: String,
-    pub embedding_model_id: Uuid,
-    pub generation_model_id: Uuid,
-    pub vector_index_id: Uuid,
-    pub is_default: bool,
-}
+pub type PipelineConfigurationReadModel = PipelineConfiguration;

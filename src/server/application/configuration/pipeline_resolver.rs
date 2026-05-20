@@ -6,6 +6,7 @@ use crate::server::application::embedding::{EmbeddingService, ResolvedEmbeddingM
 use crate::server::application::indexing::{ResolvedVectorIndex, VectorIndexResolver};
 use crate::server::application::llm::{GenerationService, ResolvedGenerationModel};
 use crate::server::application::AppError;
+use crate::server::domain::configuration::defaults::ConfigurationDefaultsRepository;
 use crate::server::domain::configuration::pipeline_configuration::PipelineConfigurationRepository;
 use crate::server::domain::connector::ConnectorRepository;
 
@@ -21,6 +22,7 @@ pub struct ResolvedPipeline {
 pub struct PipelineResolver {
     pipeline_repository: Arc<dyn PipelineConfigurationRepository>,
     connector_repository: Arc<dyn ConnectorRepository>,
+    defaults: Arc<dyn ConfigurationDefaultsRepository>,
     embedding_service: Arc<EmbeddingService>,
     generation_service: Arc<GenerationService>,
     vector_index_resolver: Arc<VectorIndexResolver>,
@@ -30,6 +32,7 @@ impl PipelineResolver {
     pub fn new(
         pipeline_repository: Arc<dyn PipelineConfigurationRepository>,
         connector_repository: Arc<dyn ConnectorRepository>,
+        defaults: Arc<dyn ConfigurationDefaultsRepository>,
         embedding_service: Arc<EmbeddingService>,
         generation_service: Arc<GenerationService>,
         vector_index_resolver: Arc<VectorIndexResolver>,
@@ -37,6 +40,7 @@ impl PipelineResolver {
         Arc::new(Self {
             pipeline_repository,
             connector_repository,
+            defaults,
             embedding_service,
             generation_service,
             vector_index_resolver,
@@ -56,17 +60,16 @@ impl PipelineResolver {
 
         let pipeline_id = match connector.default_pipeline_configuration_id {
             Some(id) => id,
-            None => {
-                self.pipeline_repository
-                    .find_default()
-                    .await?
-                    .ok_or_else(|| {
-                        AppError::Validation(
-                            "no default pipeline configured for connector or application".into(),
-                        )
-                    })?
-                    .pipeline_configuration_id
-            }
+            None => self
+                .defaults
+                .load()
+                .await?
+                .pipeline_configuration_id
+                .ok_or_else(|| {
+                    AppError::Validation(
+                        "no default pipeline configured for connector or application".into(),
+                    )
+                })?,
         };
 
         self.resolve(pipeline_id).await

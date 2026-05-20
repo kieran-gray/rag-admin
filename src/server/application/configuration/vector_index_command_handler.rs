@@ -17,39 +17,39 @@ impl VectorIndexCatalogCommandHandler {
         Arc::new(Self { processor })
     }
 
-    pub async fn handle(&self, command: VectorIndexCatalogCommand) -> Result<(), AppError> {
+    pub async fn handle_dto(&self, command: VectorIndexCommandDto) -> Result<(), AppError> {
+        self.dispatch(command.into()).await
+    }
+
+    async fn dispatch(&self, command: VectorIndexCatalogCommand) -> Result<(), AppError> {
         self.processor
             .handle(VectorIndexCatalog::singleton_id(), command)
             .await?;
         Ok(())
     }
-
-    pub async fn handle_dto(&self, command: VectorIndexCommandDto) -> Result<(), AppError> {
-        self.handle(from_dto(command)).await
-    }
 }
 
-fn from_dto(dto: VectorIndexCommandDto) -> VectorIndexCatalogCommand {
-    match dto {
-        VectorIndexCommandDto::AddVectorIndex(d) => {
-            VectorIndexCatalogCommand::AddVectorIndex(AddVectorIndex {
+impl From<VectorIndexCommandDto> for VectorIndexCatalogCommand {
+    fn from(value: VectorIndexCommandDto) -> Self {
+        match value {
+            VectorIndexCommandDto::AddVectorIndex(d) => Self::AddVectorIndex(AddVectorIndex {
                 kind: d.kind,
                 name: d.name,
                 dimensions: d.dimensions,
-            })
-        }
-        VectorIndexCommandDto::UpdateVectorIndex(d) => {
-            VectorIndexCatalogCommand::UpdateVectorIndex(UpdateVectorIndex {
-                index_id: d.index_id,
-                kind: d.kind,
-                name: d.name,
-                dimensions: d.dimensions,
-            })
-        }
-        VectorIndexCommandDto::RemoveVectorIndex(d) => {
-            VectorIndexCatalogCommand::RemoveVectorIndex(RemoveVectorIndex {
-                index_id: d.index_id,
-            })
+            }),
+            VectorIndexCommandDto::UpdateVectorIndex(d) => {
+                Self::UpdateVectorIndex(UpdateVectorIndex {
+                    index_id: d.index_id,
+                    kind: d.kind,
+                    name: d.name,
+                    dimensions: d.dimensions,
+                })
+            }
+            VectorIndexCommandDto::RemoveVectorIndex(d) => {
+                Self::RemoveVectorIndex(RemoveVectorIndex {
+                    index_id: d.index_id,
+                })
+            }
         }
     }
 }

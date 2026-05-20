@@ -3,10 +3,11 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::server::application::configuration::{
-    ChunkingConfigurationQueryService, ChunkingConfigurationService, ConfigurationQueryService,
-    EmbeddingModelCatalogCommandHandler, GenerationModelCatalogCommandHandler,
-    PipelineConfigurationQueryService, PipelineConfigurationService, SweepTemplateCommandHandler,
-    SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
+    ChunkingConfigurationCatalogCommandHandler, ChunkingConfigurationQueryService,
+    ConfigurationQueryService, EmbeddingModelCatalogCommandHandler,
+    GenerationModelCatalogCommandHandler, PipelineConfigurationCatalogCommandHandler,
+    PipelineConfigurationQueryService, SweepTemplateCommandHandler, SweepTemplateQueryService,
+    VectorIndexCatalogCommandHandler,
 };
 use crate::shared::contracts::{
     AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto,
@@ -159,15 +160,15 @@ pub async fn seed_if_empty(
     embedding_handler: &Arc<EmbeddingModelCatalogCommandHandler>,
     generation_handler: &Arc<GenerationModelCatalogCommandHandler>,
     vector_index_handler: &Arc<VectorIndexCatalogCommandHandler>,
-    chunking_service: &Arc<ChunkingConfigurationService>,
-    pipeline_service: &Arc<PipelineConfigurationService>,
+    chunking_handler: &Arc<ChunkingConfigurationCatalogCommandHandler>,
+    pipeline_handler: &Arc<PipelineConfigurationCatalogCommandHandler>,
     sweep_template_handler: &Arc<SweepTemplateCommandHandler>,
 ) -> Result<(), String> {
     seed_models_if_empty(configuration_query, embedding_handler, generation_handler).await?;
     seed_vector_indexes_if_empty(configuration_query, vector_index_handler).await?;
-    seed_chunking_configurations_if_empty(chunking_query, configuration_query, chunking_service)
+    seed_chunking_configurations_if_empty(chunking_query, configuration_query, chunking_handler)
         .await?;
-    seed_default_pipeline_if_empty(configuration_query, pipeline_query, pipeline_service).await?;
+    seed_default_pipeline_if_empty(configuration_query, pipeline_query, pipeline_handler).await?;
     seed_default_sweep_template_if_empty(
         chunking_query,
         sweep_template_query,
@@ -180,7 +181,7 @@ pub async fn seed_if_empty(
 async fn seed_default_pipeline_if_empty(
     configuration_query: &Arc<ConfigurationQueryService>,
     pipeline_query: &Arc<PipelineConfigurationQueryService>,
-    pipeline_service: &Arc<PipelineConfigurationService>,
+    pipeline_handler: &Arc<PipelineConfigurationCatalogCommandHandler>,
 ) -> Result<(), String> {
     let existing = pipeline_query.list().await.map_err(|e| e.to_string())?;
     if !existing.is_empty() {
@@ -210,7 +211,7 @@ async fn seed_default_pipeline_if_empty(
         return Ok(());
     };
 
-    pipeline_service
+    pipeline_handler
         .handle_dto(
             PipelineConfigurationCommandDto::CreatePipelineConfiguration(
                 CreatePipelineConfigurationDto {
@@ -342,7 +343,7 @@ async fn seed_vector_indexes_if_empty(
 async fn seed_chunking_configurations_if_empty(
     chunking_query: &Arc<ChunkingConfigurationQueryService>,
     configuration_query: &Arc<ConfigurationQueryService>,
-    chunking_service: &Arc<ChunkingConfigurationService>,
+    chunking_handler: &Arc<ChunkingConfigurationCatalogCommandHandler>,
 ) -> Result<(), String> {
     let existing = chunking_query.list().await.map_err(|e| e.to_string())?;
     if !existing.is_empty() {
@@ -360,7 +361,7 @@ async fn seed_chunking_configurations_if_empty(
 
     for seed in seed_definitions(llm_generation_model_id) {
         let is_default = seed.name == DEFAULT_CHUNKING_NAME;
-        chunking_service
+        chunking_handler
             .handle_dto(
                 ChunkingConfigurationCommandDto::CreateChunkingConfiguration(
                     CreateChunkingConfigurationDto {

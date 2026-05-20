@@ -223,7 +223,7 @@ pub async fn promote_variant_to_chunking_config(
     variant_label: String,
     name: String,
 ) -> Result<Uuid, ServerFnError> {
-    use crate::server::application::configuration::ChunkingConfigurationService;
+    use crate::server::application::configuration::ChunkingConfigurationCatalogCommandHandler;
     use crate::shared::contracts::{
         ChunkingConfigurationCommandDto, CreateChunkingConfigurationDto,
     };
@@ -234,7 +234,7 @@ pub async fn promote_variant_to_chunking_config(
     }
 
     let query = ctx::<Arc<EvaluationQueryService>>()?;
-    let chunking_service = ctx::<Arc<ChunkingConfigurationService>>()?;
+    let chunking_handler = ctx::<Arc<ChunkingConfigurationCatalogCommandHandler>>()?;
 
     let run = query
         .get_run(run_id)
@@ -270,7 +270,7 @@ pub async fn promote_variant_to_chunking_config(
             is_default: false,
         },
     );
-    chunking_service
+    chunking_handler
         .handle_dto(cmd)
         .await
         .map_err(|e| map_app_error(&e))?;

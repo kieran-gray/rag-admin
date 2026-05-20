@@ -17,39 +17,41 @@ impl EmbeddingModelCatalogCommandHandler {
         Arc::new(Self { processor })
     }
 
-    pub async fn handle(&self, command: EmbeddingModelCatalogCommand) -> Result<(), AppError> {
+    pub async fn handle_dto(&self, command: EmbeddingModelCommandDto) -> Result<(), AppError> {
+        self.dispatch(command.into()).await
+    }
+
+    async fn dispatch(&self, command: EmbeddingModelCatalogCommand) -> Result<(), AppError> {
         self.processor
             .handle(EmbeddingModelCatalog::singleton_id(), command)
             .await?;
         Ok(())
     }
-
-    pub async fn handle_dto(&self, command: EmbeddingModelCommandDto) -> Result<(), AppError> {
-        self.handle(from_dto(command)).await
-    }
 }
 
-fn from_dto(dto: EmbeddingModelCommandDto) -> EmbeddingModelCatalogCommand {
-    match dto {
-        EmbeddingModelCommandDto::AddEmbeddingModel(d) => {
-            EmbeddingModelCatalogCommand::AddEmbeddingModel(AddEmbeddingModel {
-                kind: d.kind,
-                model: d.model,
-                dimensions: d.dimensions,
-            })
-        }
-        EmbeddingModelCommandDto::UpdateEmbeddingModel(d) => {
-            EmbeddingModelCatalogCommand::UpdateEmbeddingModel(UpdateEmbeddingModel {
-                model_id: d.model_id,
-                kind: d.kind,
-                model: d.model,
-                dimensions: d.dimensions,
-            })
-        }
-        EmbeddingModelCommandDto::RemoveEmbeddingModel(d) => {
-            EmbeddingModelCatalogCommand::RemoveEmbeddingModel(RemoveEmbeddingModel {
-                model_id: d.model_id,
-            })
+impl From<EmbeddingModelCommandDto> for EmbeddingModelCatalogCommand {
+    fn from(value: EmbeddingModelCommandDto) -> Self {
+        match value {
+            EmbeddingModelCommandDto::AddEmbeddingModel(d) => {
+                Self::AddEmbeddingModel(AddEmbeddingModel {
+                    kind: d.kind,
+                    model: d.model,
+                    dimensions: d.dimensions,
+                })
+            }
+            EmbeddingModelCommandDto::UpdateEmbeddingModel(d) => {
+                Self::UpdateEmbeddingModel(UpdateEmbeddingModel {
+                    model_id: d.model_id,
+                    kind: d.kind,
+                    model: d.model,
+                    dimensions: d.dimensions,
+                })
+            }
+            EmbeddingModelCommandDto::RemoveEmbeddingModel(d) => {
+                Self::RemoveEmbeddingModel(RemoveEmbeddingModel {
+                    model_id: d.model_id,
+                })
+            }
         }
     }
 }

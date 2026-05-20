@@ -7,7 +7,9 @@ use event_sourcing::error::{CommandError, EsError, ProjectionError};
 
 use crate::server::domain::chunk_set::repository::ChunkSetRepositoryError;
 use crate::server::domain::configuration::catalog::CatalogError;
-use crate::server::domain::configuration::defaults::ConfigurationDefaultsError;
+use crate::server::domain::configuration::defaults::{
+    ConfigurationDefaultsError, ConfigurationDefaultsRepositoryError,
+};
 use crate::server::domain::configuration::{
     chunking_configuration::ChunkingConfigurationRepositoryError,
     embedding_model::EmbeddingModelRepositoryError,
@@ -91,13 +93,6 @@ impl From<VectorIndexRepositoryError> for AppError {
 impl From<PipelineConfigurationRepositoryError> for AppError {
     fn from(value: PipelineConfigurationRepositoryError) -> Self {
         match value {
-            PipelineConfigurationRepositoryError::NotFound(_) => {
-                AppError::NotFound(value.to_string())
-            }
-            PipelineConfigurationRepositoryError::NameConflict
-            | PipelineConfigurationRepositoryError::ReferenceViolation(_) => {
-                AppError::Validation(value.to_string())
-            }
             PipelineConfigurationRepositoryError::Internal(_) => {
                 AppError::Internal(value.to_string())
             }
@@ -108,17 +103,16 @@ impl From<PipelineConfigurationRepositoryError> for AppError {
 impl From<ChunkingConfigurationRepositoryError> for AppError {
     fn from(value: ChunkingConfigurationRepositoryError) -> Self {
         match value {
-            ChunkingConfigurationRepositoryError::NotFound(_) => {
-                AppError::NotFound(value.to_string())
-            }
-            ChunkingConfigurationRepositoryError::NameConflict
-            | ChunkingConfigurationRepositoryError::ReferenceViolation(_) => {
-                AppError::Validation(value.to_string())
-            }
             ChunkingConfigurationRepositoryError::Internal(_) => {
                 AppError::Internal(value.to_string())
             }
         }
+    }
+}
+
+impl From<ConfigurationDefaultsRepositoryError> for AppError {
+    fn from(value: ConfigurationDefaultsRepositoryError) -> Self {
+        AppError::Internal(value.to_string())
     }
 }
 
