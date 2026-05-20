@@ -463,6 +463,7 @@ fn document_type_label(doc_type: &str) -> &'static str {
         "Markdown" => "Markdown",
         "PlainText" => "Plain text",
         "WebPage" => "Web page",
+        "Pdf" => "PDF",
         _ => "Document",
     }
 }

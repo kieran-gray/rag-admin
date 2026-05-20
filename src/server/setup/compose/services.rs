@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::server::application::chat::ChatService;
 use crate::server::application::chunking::chunkers::{
-    register_builtin_chunkers, BuiltinChunkerDeps,
+    BertChunker, DarnChunker, LlmChunker, SectionChunker,
 };
 use crate::server::application::chunking::ChunkerRegistry;
 use crate::server::application::configuration::{
@@ -33,7 +33,6 @@ use crate::server::application::source_document::{
     SourceDocumentCommandHandler, SourceDocumentQueryService,
 };
 use crate::server::application::{ActivityRegistry, JobRegistry};
-use crate::server::domain::configuration::generation_model::GenerationModelRepository;
 use crate::server::infrastructure::clients::{CloudflareApi, OllamaApi};
 use crate::server::infrastructure::embedding::{OllamaEmbedder, WorkersAiEmbedder};
 use crate::server::infrastructure::evaluation::{LlmEvaluationGenerator, PgvectorRetriever};
@@ -176,12 +175,15 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         LlmEvaluationGenerator::new(Arc::clone(&generation_service));
     let evaluation_retriever: Arc<dyn Retriever> = Arc::new(PgvectorRetriever::new(pool));
 
-    let chunking_engine = build_chunking_engine(
-        tokenizer,
-        Arc::clone(&markdown_parser),
+    let mut chunker_registry = ChunkerRegistry::new(tokenizer, Arc::clone(&markdown_parser));
+    chunker_registry.add(Arc::new(SectionChunker {}));
+    chunker_registry.add(Arc::new(BertChunker {}));
+    chunker_registry.add(Arc::new(DarnChunker {}));
+    chunker_registry.add(Arc::new(LlmChunker::create(
         Arc::clone(&ollama_generation_client),
         Arc::clone(&repos.generation_model),
-    );
+    )));
+    let chunking_engine = Arc::new(chunker_registry);
 
     let job_registry = Arc::new(JobRegistry::new());
     let activity_registry = Arc::new(ActivityRegistry::new());
@@ -314,21 +316,4 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         job_registry,
         activity_registry,
     })
-}
-
-fn build_chunking_engine(
-    tokenizer: Arc<dyn Tokenizer>,
-    markdown_parser: Arc<dyn MarkdownParser>,
-    generation_client: Arc<dyn GenerationClient>,
-    generation_models: Arc<dyn GenerationModelRepository>,
-) -> Arc<ChunkerRegistry> {
-    let mut chunking_engine = ChunkerRegistry::new(tokenizer, markdown_parser);
-    register_builtin_chunkers(
-        &mut chunking_engine,
-        BuiltinChunkerDeps {
-            generation_client,
-            generation_models,
-        },
-    );
-    Arc::new(chunking_engine)
 }

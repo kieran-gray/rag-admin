@@ -6,36 +6,25 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::server::application::connector::ports::{
-    ConnectorImpl, DiscoveredItem, FetchedDocument,
+use crate::server::application::connector::ports::{ConnectorImpl, DiscoveredItem};
+use crate::server::application::ports::HttpClient;
+use crate::server::application::source_document::ports::{
+    AcquisitionHints, ContentType, RawDocument,
 };
-use crate::server::application::ports::{Clock, HtmlToMarkdown, HttpClient};
 use crate::server::application::AppError;
 use crate::server::domain::connector::{ConnectorConfig, ConnectorKind, SitemapConfig};
 use crate::server::domain::source_document::source_ref::SourceRef;
-use crate::server::domain::source_document::version::{
-    slug_from_url, DocumentMetadata, WebPageMetadata,
-};
+use crate::server::domain::source_document::version::humanize_url;
 
 const MAX_SITEMAP_DEPTH: usize = 4;
 
 pub struct SitemapConnector {
     http: Arc<dyn HttpClient>,
-    html_to_markdown: Arc<dyn HtmlToMarkdown>,
-    clock: Arc<dyn Clock>,
 }
 
 impl SitemapConnector {
-    pub fn new(
-        http: Arc<dyn HttpClient>,
-        html_to_markdown: Arc<dyn HtmlToMarkdown>,
-        clock: Arc<dyn Clock>,
-    ) -> Arc<Self> {
-        Arc::new(Self {
-            http,
-            html_to_markdown,
-            clock,
-        })
+    pub fn new(http: Arc<dyn HttpClient>) -> Arc<Self> {
+        Arc::new(Self { http })
     }
 
     async fn collect_urls(&self, config: &SitemapConfig) -> Result<Vec<String>, AppError> {
@@ -110,7 +99,7 @@ impl ConnectorImpl for SitemapConnector {
         &self,
         config: &ConnectorConfig,
         source_ref: &SourceRef,
-    ) -> Result<FetchedDocument, AppError> {
+    ) -> Result<RawDocument, AppError> {
         let ConnectorConfig::Sitemap(_) = config;
         let SourceRef::Url { url } = source_ref else {
             return Err(AppError::Validation(format!(
@@ -123,18 +112,14 @@ impl ConnectorImpl for SitemapConnector {
             return Err(AppError::Upstream(format!("GET {url} returned {status}")));
         }
 
-        let extracted = self.html_to_markdown.convert(&body)?;
-        let title = extracted.title.unwrap_or_else(|| humanize_url(url));
-
-        Ok(FetchedDocument {
+        Ok(RawDocument {
             source_ref: source_ref.clone(),
-            content: extracted.markdown.into_bytes(),
-            metadata: DocumentMetadata::WebPage(WebPageMetadata {
-                title,
-                slug: slug_from_url(url),
-                source_url: url.clone(),
-                fetched_at: self.clock.now(),
-            }),
+            bytes: body.into_bytes(),
+            content_type: ContentType::Html,
+            hints: AcquisitionHints {
+                source_url: Some(url.clone()),
+                ..AcquisitionHints::default()
+            },
         })
     }
 }
@@ -246,20 +231,6 @@ fn matches_pattern(url: &str, pattern: &str) -> bool {
     url.contains(pattern)
 }
 
-fn humanize_url(url: &str) -> String {
-    let trimmed = url.trim_end_matches('/');
-    let after_scheme = trimmed.find("//").map(|i| i + 2).unwrap_or(0);
-    let host_and_path = trimmed.get(after_scheme..).unwrap_or(trimmed);
-    if let Some(slash) = host_and_path.find('/') {
-        let path = host_and_path.get(slash..).unwrap_or("");
-        let path = path.trim_start_matches('/');
-        if !path.is_empty() {
-            return path.to_string();
-        }
-    }
-    url.to_string()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -343,12 +314,4 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn humanize_url_extracts_path() {
-        assert_eq!(
-            humanize_url("https://example.com/blog/my-post/"),
-            "blog/my-post"
-        );
-        assert_eq!(humanize_url("https://example.com"), "https://example.com");
-    }
 }

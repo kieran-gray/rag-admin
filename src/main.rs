@@ -6,6 +6,7 @@
     reason = "main: startup failures cannot be handled, so panicking is the appropriate response"
 )]
 async fn main() {
+    use axum::extract::DefaultBodyLimit;
     use axum::routing::{get, post};
     use axum::Router;
     use leptos::prelude::*;
@@ -37,7 +38,10 @@ async fn main() {
         .route("/api/job/logs/{job_id}", get(job_logs_handler))
         .route("/api/events/ws", get(events_ws_handler))
         .route("/api/health", get(health_check))
-        .route("/api/source_documents/upload", post(upload_document))
+        .route(
+            "/api/source_documents/upload",
+            post(upload_document).layer(DefaultBodyLimit::max(32 * 1024 * 1024)),
+        )
         .leptos_routes_with_context(
             &leptos_options,
             routes,

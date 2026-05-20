@@ -11,6 +11,7 @@ pub mod indexing;
 pub mod kv;
 pub mod llm;
 pub mod markdown;
+pub mod pdf;
 pub mod source_document;
 pub mod sql;
 pub mod time;

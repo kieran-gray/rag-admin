@@ -1,14 +1,11 @@
 use std::collections::HashSet;
-use std::path::Path;
 use std::sync::Arc;
 
 use uuid::Uuid;
 
 use crate::server::application::configuration::PipelineResolver;
-use crate::server::application::connector::{
-    ports::FetchedDocument as ConnectorFetched, ConnectorQueryService, ConnectorRegistry,
-};
-use crate::server::application::ports::{Clock, HtmlToMarkdown, HttpClient, IdGenerator};
+use crate::server::application::connector::{ConnectorQueryService, ConnectorRegistry};
+use crate::server::application::ports::{Clock, HttpClient, IdGenerator};
 use crate::server::application::AppError;
 use crate::server::domain::connector::ConnectorConfig;
 use crate::server::domain::indexing::commands::{
@@ -20,14 +17,15 @@ use crate::server::domain::source_document::commands::{
 use crate::server::domain::source_document::document_type::DocumentType;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::server::domain::source_document::source_ref::SourceRef;
-use crate::server::domain::source_document::version::{
-    slug_from_url, ContentHash, DocumentMetadata, PlainMetadata, WebPageMetadata,
-};
+use crate::server::domain::source_document::version::{ContentHash, DocumentMetadata};
 use crate::shared::contracts::connector::ConnectorDiscoveredItemDto;
 use crate::shared::contracts::SourceDocumentDto;
 use crate::shared::ChunkingConfig;
 
-use super::{command_handler::SourceDocumentCommandHandler, ports::BlobStore};
+use super::ports::{
+    AcquisitionHints, BlobStore, ContentType, NormalizedDocument, RawDocument,
+};
+use super::{command_handler::SourceDocumentCommandHandler, DocumentNormalizerRegistry};
 use crate::server::application::indexing::command_handler::IndexingCommandHandler;
 
 pub struct SourceDocumentIngestServiceDeps {
@@ -39,7 +37,7 @@ pub struct SourceDocumentIngestServiceDeps {
     pub connector_query_service: Arc<ConnectorQueryService>,
     pub pipeline_resolver: Arc<PipelineResolver>,
     pub http_client: Arc<dyn HttpClient>,
-    pub html_to_markdown: Arc<dyn HtmlToMarkdown>,
+    pub normalizer_registry: Arc<DocumentNormalizerRegistry>,
     pub clock: Arc<dyn Clock>,
     pub id_generator: Arc<dyn IdGenerator>,
 }
@@ -53,7 +51,7 @@ pub struct SourceDocumentIngestService {
     connector_query_service: Arc<ConnectorQueryService>,
     pipeline_resolver: Arc<PipelineResolver>,
     http_client: Arc<dyn HttpClient>,
-    html_to_markdown: Arc<dyn HtmlToMarkdown>,
+    normalizer_registry: Arc<DocumentNormalizerRegistry>,
     clock: Arc<dyn Clock>,
     id_generator: Arc<dyn IdGenerator>,
 }
@@ -69,7 +67,7 @@ impl SourceDocumentIngestService {
             connector_query_service: deps.connector_query_service,
             pipeline_resolver: deps.pipeline_resolver,
             http_client: deps.http_client,
-            html_to_markdown: deps.html_to_markdown,
+            normalizer_registry: deps.normalizer_registry,
             clock: deps.clock,
             id_generator: deps.id_generator,
         })
@@ -110,8 +108,9 @@ impl SourceDocumentIngestService {
     ) -> Result<SourceDocumentDto, AppError> {
         let connector = self.load_connector_config(connector_id).await?;
         let implementation = self.connector_registry.get(connector.kind())?;
-        let fetched = implementation.fetch(&connector, &source_ref).await?;
-        self.persist_fetched(fetched).await
+        let raw = implementation.fetch(&connector, &source_ref).await?;
+        let normalized = self.normalizer_registry.normalize(raw).await?;
+        self.persist_document(normalized).await
     }
 
     pub async fn import_upload(
@@ -119,23 +118,20 @@ impl SourceDocumentIngestService {
         bytes: Vec<u8>,
         filename: String,
     ) -> Result<SourceDocumentDto, AppError> {
-        let document_type = document_type_from_filename(&filename);
-        let title = derive_title_from_filename(&filename);
-        let metadata = match document_type {
-            DocumentType::Markdown => DocumentMetadata::Markdown(PlainMetadata { title }),
-            DocumentType::PlainText => DocumentMetadata::PlainText(PlainMetadata { title }),
-            DocumentType::WebPage => {
-                return Err(AppError::Validation(format!(
-                    "uploads cannot create {document_type:?}; supported types are Markdown and PlainText"
-                )));
-            }
+        let content_type = ContentType::from_filename(&filename);
+        let raw = RawDocument {
+            source_ref: SourceRef::Upload {
+                upload_id: self.id_generator.new_uuid(),
+            },
+            bytes,
+            content_type,
+            hints: AcquisitionHints {
+                filename: Some(filename),
+                ..AcquisitionHints::default()
+            },
         };
-
-        let source_ref = SourceRef::Upload {
-            upload_id: self.id_generator.new_uuid(),
-        };
-        self.persist_document(source_ref, document_type, bytes, metadata)
-            .await
+        let normalized = self.normalizer_registry.normalize(raw).await?;
+        self.persist_document(normalized).await
     }
 
     pub async fn import_url(&self, url: String) -> Result<SourceDocumentDto, AppError> {
@@ -149,23 +145,18 @@ impl SourceDocumentIngestService {
             return Err(AppError::Upstream(format!("GET {url} returned {status}")));
         }
 
-        let extracted = self.html_to_markdown.convert(&body)?;
-        let title = extracted.title.unwrap_or_else(|| url.clone());
-
-        let metadata = DocumentMetadata::WebPage(WebPageMetadata {
-            title,
-            slug: slug_from_url(&url),
-            source_url: url.clone(),
-            fetched_at: self.clock.now(),
-        });
-
-        self.persist_document(
-            SourceRef::Url { url },
-            DocumentType::WebPage,
-            extracted.markdown.into_bytes(),
-            metadata,
-        )
-        .await
+        let raw = RawDocument {
+            source_ref: SourceRef::Url { url: url.clone() },
+            bytes: body.into_bytes(),
+            content_type: ContentType::Html,
+            hints: AcquisitionHints {
+                source_url: Some(url),
+                fetched_at: Some(self.clock.now()),
+                ..AcquisitionHints::default()
+            },
+        };
+        let normalized = self.normalizer_registry.normalize(raw).await?;
+        self.persist_document(normalized).await
     }
 
     async fn load_connector_config(&self, connector_id: Uuid) -> Result<ConnectorConfig, AppError> {
@@ -175,31 +166,17 @@ impl SourceDocumentIngestService {
             .ok_or_else(|| AppError::NotFound(format!("connector {connector_id} not found")))
     }
 
-    async fn persist_fetched(
-        &self,
-        fetched: ConnectorFetched,
-    ) -> Result<SourceDocumentDto, AppError> {
-        let document_type = match &fetched.metadata {
-            DocumentMetadata::WebPage(_) => DocumentType::WebPage,
-            DocumentMetadata::Markdown(_) => DocumentType::Markdown,
-            DocumentMetadata::PlainText(_) => DocumentType::PlainText,
-        };
-        self.persist_document(
-            fetched.source_ref,
-            document_type,
-            fetched.content,
-            fetched.metadata,
-        )
-        .await
-    }
-
     async fn persist_document(
         &self,
-        source_ref: SourceRef,
-        document_type: DocumentType,
-        content: Vec<u8>,
-        metadata: DocumentMetadata,
+        normalized: NormalizedDocument,
     ) -> Result<SourceDocumentDto, AppError> {
+        let NormalizedDocument {
+            source_ref,
+            document_type,
+            content,
+            metadata,
+        } = normalized;
+
         let occurred_at = self.clock.now();
         let content_hash = self.blob_store.put(&content).await?;
 
@@ -328,27 +305,6 @@ impl SourceDocumentIngestService {
             )
             .await
     }
-}
-
-fn document_type_from_filename(filename: &str) -> DocumentType {
-    let ext = Path::new(filename)
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(str::to_ascii_lowercase)
-        .unwrap_or_default();
-    match ext.as_str() {
-        "md" | "markdown" => DocumentType::Markdown,
-        _ => DocumentType::PlainText,
-    }
-}
-
-fn derive_title_from_filename(filename: &str) -> String {
-    Path::new(filename)
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .map(str::to_string)
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| filename.to_string())
 }
 
 fn map_to_dto(

@@ -14,8 +14,9 @@ use crate::server::application::evaluation::run::{
 use crate::server::application::indexing::{IndexingEffect, IndexingEffectExecutor};
 use crate::server::application::ports::HtmlToMarkdown;
 use crate::server::application::ports::{Clock, HttpClient, IdGenerator};
+use crate::server::application::source_document::ports::PdfToMarkdown;
 use crate::server::application::source_document::{
-    SourceDocumentIngestService, SourceDocumentIngestServiceDeps,
+    DocumentNormalizerRegistry, SourceDocumentIngestService, SourceDocumentIngestServiceDeps,
 };
 use crate::server::application::spawn_activity_projection;
 use crate::server::domain::configuration::defaults::{
@@ -49,6 +50,10 @@ use crate::server::infrastructure::event_sourcing::{
 };
 use crate::server::infrastructure::html::HtmdConverter;
 use crate::server::infrastructure::http::ReqwestHttpClient;
+use crate::server::infrastructure::pdf::PdfExtractConverter;
+use crate::server::infrastructure::source_document::{
+    HtmlNormalizer, MarkdownNormalizer, PdfNormalizer, PlainTextNormalizer,
+};
 use crate::server::setup::compose::aggregates::{spawn_driver, AggregateWirings};
 use crate::server::setup::compose::repositories::Repositories;
 use crate::server::setup::compose::services::Services;
@@ -314,14 +319,22 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
     let html_to_markdown: Arc<dyn HtmlToMarkdown> = HtmdConverter::new();
     let http_port: Arc<dyn HttpClient> = Arc::clone(&http) as Arc<dyn HttpClient>;
 
-    let sitemap_connector: Arc<dyn ConnectorImpl> = SitemapConnector::new(
-        Arc::clone(&http_port),
-        Arc::clone(&html_to_markdown),
-        Arc::clone(&clock),
-    );
+    let sitemap_connector: Arc<dyn ConnectorImpl> = SitemapConnector::new(Arc::clone(&http_port));
     let mut connector_registry = ConnectorRegistry::new();
     connector_registry.register(sitemap_connector);
     let connector_registry = Arc::new(connector_registry);
+
+    let pdf_to_markdown: Arc<dyn PdfToMarkdown> = PdfExtractConverter::new();
+
+    let mut normalizer_registry = DocumentNormalizerRegistry::new();
+    normalizer_registry.register(MarkdownNormalizer::new());
+    normalizer_registry.register(PlainTextNormalizer::new());
+    normalizer_registry.register(HtmlNormalizer::new(
+        Arc::clone(&html_to_markdown),
+        Arc::clone(&clock),
+    ));
+    normalizer_registry.register(PdfNormalizer::new(pdf_to_markdown));
+    let normalizer_registry = Arc::new(normalizer_registry);
 
     let source_document_ingest_service =
         SourceDocumentIngestService::new(SourceDocumentIngestServiceDeps {
@@ -333,7 +346,7 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
             connector_query_service: Arc::clone(&services.connector_query_service),
             pipeline_resolver: Arc::clone(&services.pipeline_resolver),
             http_client: http_port,
-            html_to_markdown,
+            normalizer_registry,
             clock,
             id_generator,
         });

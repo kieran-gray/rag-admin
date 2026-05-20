@@ -5,6 +5,7 @@ pub enum DocumentType {
     Markdown,
     PlainText,
     WebPage,
+    Pdf,
 }
 
 impl DocumentType {
@@ -13,6 +14,7 @@ impl DocumentType {
             DocumentType::Markdown => "Markdown",
             DocumentType::PlainText => "Plain text",
             DocumentType::WebPage => "Web page",
+            DocumentType::Pdf => "PDF",
         }
     }
 }

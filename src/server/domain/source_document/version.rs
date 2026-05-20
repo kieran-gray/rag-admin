@@ -36,6 +36,13 @@ pub struct WebPageMetadata {
     pub fetched_at: Timestamp,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PdfMetadata {
+    pub title: String,
+    #[serde(default)]
+    pub original_filename: Option<String>,
+}
+
 pub fn slug_from_url(url: &str) -> String {
     let trimmed = url.trim().trim_end_matches('/');
     let after_scheme = trimmed.find("//").map(|i| i + 2).unwrap_or(0);
@@ -50,12 +57,27 @@ pub fn slug_from_url(url: &str) -> String {
     }
 }
 
+pub fn humanize_url(url: &str) -> String {
+    let trimmed = url.trim_end_matches('/');
+    let after_scheme = trimmed.find("//").map(|i| i + 2).unwrap_or(0);
+    let host_and_path = trimmed.get(after_scheme..).unwrap_or(trimmed);
+    if let Some(slash) = host_and_path.find('/') {
+        let path = host_and_path.get(slash..).unwrap_or("");
+        let path = path.trim_start_matches('/');
+        if !path.is_empty() {
+            return path.to_string();
+        }
+    }
+    url.to_string()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum DocumentMetadata {
     Markdown(PlainMetadata),
     PlainText(PlainMetadata),
     WebPage(WebPageMetadata),
+    Pdf(PdfMetadata),
 }
 
 impl DocumentMetadata {
@@ -63,12 +85,15 @@ impl DocumentMetadata {
         match self {
             DocumentMetadata::Markdown(m) | DocumentMetadata::PlainText(m) => &m.title,
             DocumentMetadata::WebPage(m) => &m.title,
+            DocumentMetadata::Pdf(m) => &m.title,
         }
     }
 
     pub fn slug(&self) -> Option<&str> {
         match self {
-            DocumentMetadata::Markdown(_) | DocumentMetadata::PlainText(_) => None,
+            DocumentMetadata::Markdown(_)
+            | DocumentMetadata::PlainText(_)
+            | DocumentMetadata::Pdf(_) => None,
             DocumentMetadata::WebPage(m) => Some(&m.slug),
         }
     }
@@ -103,5 +128,14 @@ mod tests {
     fn slug_from_url_falls_back_when_no_path() {
         assert_eq!(slug_from_url("https://kgdev.me"), "https://kgdev.me");
         assert_eq!(slug_from_url("https://kgdev.me/"), "https://kgdev.me");
+    }
+
+    #[test]
+    fn humanize_url_extracts_path() {
+        assert_eq!(
+            humanize_url("https://example.com/blog/my-post/"),
+            "blog/my-post"
+        );
+        assert_eq!(humanize_url("https://example.com"), "https://example.com");
     }
 }

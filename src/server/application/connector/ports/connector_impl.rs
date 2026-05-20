@@ -1,19 +1,13 @@
 use async_trait::async_trait;
 
+use crate::server::application::source_document::ports::RawDocument;
 use crate::server::application::AppError;
 use crate::server::domain::connector::{ConnectorConfig, ConnectorKind};
 use crate::server::domain::source_document::source_ref::SourceRef;
-use crate::server::domain::source_document::version::DocumentMetadata;
 
 pub struct DiscoveredItem {
     pub source_ref: SourceRef,
     pub title: String,
-}
-
-pub struct FetchedDocument {
-    pub source_ref: SourceRef,
-    pub content: Vec<u8>,
-    pub metadata: DocumentMetadata,
 }
 
 #[async_trait]
@@ -26,5 +20,5 @@ pub trait ConnectorImpl: Send + Sync {
         &self,
         config: &ConnectorConfig,
         source_ref: &SourceRef,
-    ) -> Result<FetchedDocument, AppError>;
+    ) -> Result<RawDocument, AppError>;
 }

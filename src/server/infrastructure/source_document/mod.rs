@@ -1,8 +1,10 @@
+pub mod normalizers;
 pub mod postgres_blob_store;
 pub mod postgres_chunk_set_repository;
 pub mod postgres_embedding_set_repository;
 pub mod postgres_source_document_repository;
 
+pub use normalizers::{HtmlNormalizer, MarkdownNormalizer, PdfNormalizer, PlainTextNormalizer};
 pub use postgres_blob_store::PostgresBlobStore;
 pub use postgres_chunk_set_repository::PostgresChunkSetRepository;
 pub use postgres_embedding_set_repository::PostgresEmbeddingSetRepository;

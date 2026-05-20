@@ -222,14 +222,14 @@ fn UploadPane(on_imported: Callback<SourceDocumentDto>) -> impl IntoView {
                         }}
                     </div>
                     <div class="upload-dropzone-secondary">
-                        ".md, .markdown, .txt"
+                        ".md, .markdown, .txt, .html, .pdf"
                     </div>
                     {move || selected_name.get().map(|n| view! {
                         <div class="upload-dropzone-selected">{format!("Selected: {n}")}</div>
                     })}
                     <input
                         type="file"
-                        accept=".md,.markdown,.txt,text/markdown,text/plain"
+                        accept=".md,.markdown,.txt,.html,.htm,.pdf,text/markdown,text/plain,text/html,application/pdf"
                         class="hidden"
                         node_ref=file_input
                         on:change=move |ev| {
