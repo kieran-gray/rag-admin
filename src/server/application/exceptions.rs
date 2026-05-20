@@ -1,6 +1,5 @@
 use std::error::Error as StdError;
 
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use event_sourcing::error::{CommandError, EsError, ProjectionError};
@@ -36,8 +35,9 @@ use crate::server::domain::indexing::{
 use crate::server::domain::source_document::{
     exceptions::SourceDocumentError, repository::SourceDocumentRepositoryError,
 };
+use crate::shared::contracts::{ApiError, ApiErrorKind};
 
-#[derive(Debug, Error, Serialize, Deserialize)]
+#[derive(Debug, Error)]
 pub enum AppError {
     #[error("not found: {0}")]
     NotFound(String),
@@ -49,6 +49,24 @@ pub enum AppError {
     Io(String),
     #[error("internal error: {0}")]
     Internal(String),
+}
+
+impl From<&AppError> for ApiError {
+    fn from(err: &AppError) -> Self {
+        let (kind, message) = match err {
+            AppError::NotFound(m) => (ApiErrorKind::NotFound, m.clone()),
+            AppError::Validation(m) => (ApiErrorKind::Validation, m.clone()),
+            AppError::Upstream(m) => (ApiErrorKind::Upstream, m.clone()),
+            AppError::Io(m) | AppError::Internal(m) => (ApiErrorKind::Internal, m.clone()),
+        };
+        Self { kind, message }
+    }
+}
+
+impl From<AppError> for ApiError {
+    fn from(err: AppError) -> Self {
+        Self::from(&err)
+    }
 }
 
 impl From<CatalogError> for AppError {

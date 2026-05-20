@@ -1,4 +1,4 @@
-use crate::shared::{ChunkingVariant, EvaluationResultSplit};
+use crate::server::domain::evaluation::value_objects::{ChunkingVariant, EvaluationResultSplit};
 use event_sourcing::job_queue::{IdempotencyKey, NewJob};
 use event_sourcing::policy::{HasPolicies, PolicyContext, PolicyFn};
 
@@ -34,20 +34,18 @@ fn fanout_on_run_requested(
                 pipeline_configuration_id: event.pipeline_configuration_id,
                 document_id: event.document_id,
                 document_version: event.document_version,
-                optimization: optimization.clone().into(),
+                optimization: optimization.clone(),
                 scoring_policy: event.scoring_policy,
             }),
         }];
     }
 
-    let options: Vec<_> = event.options.iter().cloned().map(Into::into).collect();
-    let autotune = event.autotune_request.clone().map(Into::into);
+    let autotune = event.autotune_request.clone();
 
     event
         .variants
         .iter()
         .cloned()
-        .map(Into::into)
         .map(|variant: ChunkingVariant| {
             let discriminator = format!("execute_variant:{}", variant.label);
             NewJob {
@@ -62,7 +60,7 @@ fn fanout_on_run_requested(
                     document_version: event.document_version,
                     variant_label: variant.label,
                     variant_config: variant.config,
-                    options: options.clone(),
+                    options: event.options.clone(),
                     autotune_request: autotune.clone(),
                     scoring_policy: event.scoring_policy,
                 }),

@@ -2,9 +2,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::server::domain::evaluation::run::scoring_policy::ScoringPolicy;
-use crate::shared::{
-    ChunkingConfig, EvaluationAutotuneRequest, EvaluationRunOptions, OptimizationConfig,
+use crate::server::domain::evaluation::value_objects::{
+    EvaluationAutotuneRequest, EvaluationRunOptions, OptimizationConfig,
 };
+use crate::server::domain::shared::value_objects::ChunkingConfig;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecuteVariantEffect {

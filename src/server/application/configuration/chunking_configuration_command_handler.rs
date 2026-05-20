@@ -40,7 +40,7 @@ impl ChunkingConfigurationCatalogCommandHandler {
                         ChunkingConfigurationCatalogCommand::AddChunkingConfiguration(
                             AddChunkingConfiguration {
                                 name: d.name,
-                                config: d.config,
+                                config: d.config.into(),
                             },
                         ),
                     )
@@ -58,7 +58,7 @@ impl ChunkingConfigurationCatalogCommandHandler {
                         UpdateChunkingConfiguration {
                             chunking_configuration_id: d.chunking_configuration_id,
                             name: d.name,
-                            config: d.config,
+                            config: d.config.into(),
                         },
                     ),
                 )

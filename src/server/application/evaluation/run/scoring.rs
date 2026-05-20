@@ -22,6 +22,7 @@ use crate::server::domain::evaluation::run::events::RetrievalTraceEntry;
 use crate::server::domain::evaluation::scoring::{
     bootstrap_ci, mean, precision_omega, score_question, score_trick_question, std_dev,
 };
+use crate::server::domain::shared::value_objects::ChunkingConfig as DomainChunkingConfig;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::shared::{
     ChunkingConfig, EvaluationMetrics, EvaluationRunOptions, EvaluationScorePolicy,
@@ -240,15 +241,15 @@ impl TrialScorer {
         plain_text: &str,
         config: &ChunkingConfig,
     ) -> Result<(Uuid, Vec<Chunk>), AppError> {
+        let domain_config: DomainChunkingConfig = (*config).into();
         let existing = self
             .chunk_set_repository
             .list_for_document(document_id)
             .await?;
 
-        if let Some(cs) = existing
-            .iter()
-            .find(|cs| cs.document_version == document_version && cs.chunking_config == *config)
-        {
+        if let Some(cs) = existing.iter().find(|cs| {
+            cs.document_version == document_version && cs.chunking_config == domain_config
+        }) {
             let chunks = self
                 .chunk_set_repository
                 .load_chunks(cs.chunk_set_id)
@@ -282,7 +283,7 @@ impl TrialScorer {
             chunk_set_id,
             document_id,
             document_version,
-            chunking_config: *config,
+            chunking_config: domain_config,
             created_at: occurred_at.to_string(),
         };
         self.chunk_set_repository

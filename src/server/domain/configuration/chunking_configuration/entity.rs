@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::server::domain::configuration::catalog::{CatalogEntry, CatalogError};
-use crate::shared::ChunkingConfig;
+use crate::server::domain::shared::value_objects::ChunkingConfig;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChunkingConfiguration {

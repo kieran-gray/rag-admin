@@ -8,7 +8,7 @@ use crate::server::domain::configuration::chunking_configuration::{
     ChunkingConfiguration, ChunkingConfigurationReadModel, ChunkingConfigurationRepository,
     ChunkingConfigurationRepositoryError,
 };
-use crate::shared::ChunkingConfig;
+use crate::server::domain::shared::value_objects::ChunkingConfig;
 use event_sourcing::error::ProjectionError;
 
 pub struct PostgresChunkingConfigurationRepository {

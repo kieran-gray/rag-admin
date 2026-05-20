@@ -112,7 +112,7 @@ impl Aggregate for Indexing {
                     document_id: cmd.document_id,
                     pipeline_configuration_id: cmd.pipeline_configuration_id,
                     document_version: cmd.document_version,
-                    chunking_config: cmd.chunking_config.into(),
+                    chunking_config: cmd.chunking_config,
                     request_id: cmd.request_id,
                     auto_advance: cmd.auto_advance,
                     occurred_at: cmd.occurred_at,
@@ -264,8 +264,8 @@ mod tests {
     use super::*;
     use crate::server::domain::indexing::commands::*;
     use crate::server::domain::indexing::events::*;
+    use crate::server::domain::shared::value_objects::{ChunkingConfig, SectionChunkingConfig};
     use crate::server::domain::shared::Timestamp;
-    use crate::shared::{ChunkingConfig, SectionChunkingConfig};
 
     fn now() -> Timestamp {
         "2024-01-01T00:00:00Z".into()

@@ -3,7 +3,6 @@ pub mod commands;
 pub mod effects;
 pub mod events;
 pub mod exceptions;
-pub mod fingerprint;
 pub mod policies;
 pub mod projector;
 pub mod read_model;

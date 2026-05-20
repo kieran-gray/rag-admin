@@ -8,6 +8,7 @@ use axum::Json;
 
 use crate::server::application::source_document::SourceDocumentIngestService;
 use crate::server::application::AppError;
+use crate::shared::contracts::ApiError;
 use crate::shared::contracts::SourceDocumentDto;
 
 pub async fn upload_document(
@@ -60,13 +61,13 @@ impl UploadError {
 
 impl From<AppError> for UploadError {
     fn from(err: AppError) -> Self {
-        let (status, message) = match err {
-            AppError::Validation(m) => (StatusCode::BAD_REQUEST, m),
-            AppError::NotFound(m) => (StatusCode::NOT_FOUND, m),
-            AppError::Upstream(m) => (StatusCode::BAD_GATEWAY, m),
-            AppError::Io(m) | AppError::Internal(m) => (StatusCode::INTERNAL_SERVER_ERROR, m),
-        };
-        Self { status, message }
+        let api_error = ApiError::from(err);
+        let status = StatusCode::from_u16(api_error.http_status())
+            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        Self {
+            status,
+            message: api_error.message,
+        }
     }
 }
 

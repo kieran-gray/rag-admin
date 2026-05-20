@@ -162,7 +162,7 @@ mod tests {
         AddChunkingConfiguration, RemoveChunkingConfiguration, UpdateChunkingConfiguration,
     };
     use super::*;
-    use crate::shared::{ChunkingConfig, SectionChunkingConfig};
+    use crate::server::domain::shared::value_objects::{ChunkingConfig, SectionChunkingConfig};
 
     fn add_cmd(name: &str) -> ChunkingConfigurationCatalogCommand {
         ChunkingConfigurationCatalogCommand::AddChunkingConfiguration(AddChunkingConfiguration {

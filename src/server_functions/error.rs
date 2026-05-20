@@ -11,6 +11,7 @@ mod ssr {
 
     use crate::server::application::AppError;
     use crate::server::setup::SetupError;
+    use crate::shared::contracts::ApiError;
 
     pub fn ctx<T: Clone + 'static>() -> Result<T, ServerFnError> {
         use_context::<T>()
@@ -18,14 +19,12 @@ mod ssr {
     }
 
     pub fn map_app_error(err: &AppError) -> ServerFnError {
-        let status = match &err {
-            AppError::NotFound(_) => StatusCode::NOT_FOUND,
-            AppError::Validation(_) => StatusCode::BAD_REQUEST,
-            AppError::Upstream(_) => StatusCode::BAD_GATEWAY,
-            AppError::Io(_) | AppError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        };
-        set_status(status);
-        ServerFnError::new(err.to_string())
+        let api_error = ApiError::from(err);
+        set_status(
+            StatusCode::from_u16(api_error.http_status())
+                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+        );
+        ServerFnError::new(api_error.message)
     }
 
     pub fn map_setup_error(err: &SetupError) -> ServerFnError {

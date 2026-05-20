@@ -9,13 +9,13 @@ use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::AppError;
 use crate::server::domain::evaluation::run::aggregate::EvaluationRun;
 use crate::server::domain::evaluation::run::commands::{EvaluationRunCommand, RequestRun};
-use crate::server::domain::evaluation::run::fingerprint::RunFingerprint;
 use crate::server::domain::evaluation::run::scoring_policy::ScoringPolicy;
+use crate::server::domain::evaluation::value_objects::RunFingerprint;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::shared::contracts::{
     EvaluationJobInfo, RunEvaluationRequestDto, RunOptimizationRequestDto,
 };
-use crate::shared::{ChunkingVariant, EvaluationRunOptions, OptimizationConfig};
+use crate::shared::OptimizationConfig;
 use event_sourcing::CommandProcessor;
 
 pub struct EvaluationRunCommandHandler {
@@ -136,7 +136,7 @@ impl EvaluationRunCommandHandler {
                     variants: Vec::new(),
                     options: Vec::new(),
                     autotune_request: None,
-                    optimization: Some(request.optimization),
+                    optimization: Some(request.optimization.into()),
                     scoring_policy: ScoringPolicy::default(),
                     fingerprint,
                     occurred_at: self.clock.now(),
@@ -184,9 +184,9 @@ impl EvaluationRunCommandHandler {
                     pipeline_configuration_id: request.pipeline_configuration_id,
                     document_id: dataset.document_id,
                     document_version: dataset.document_version,
-                    variants: request.variants,
-                    options: request.options,
-                    autotune_request: request.autotune,
+                    variants: request.variants.into_iter().map(Into::into).collect(),
+                    options: request.options.into_iter().map(Into::into).collect(),
+                    autotune_request: request.autotune.map(Into::into),
                     optimization: None,
                     scoring_policy: ScoringPolicy::default(),
                     fingerprint,
@@ -213,8 +213,8 @@ impl EvaluationRunCommandHandler {
             .clone()
             .ok_or_else(|| AppError::Validation("run was not an optimization run".to_string()))?;
         let optimization = OptimizationConfig {
-            budget: original.budget,
-            scope: original.scope,
+            budget: original.budget.into(),
+            scope: original.scope.into(),
             judges_enabled: original.judges_enabled,
             seed: None,
         };
@@ -246,10 +246,10 @@ impl EvaluationRunCommandHandler {
                     pipeline_configuration_id: run.pipeline_configuration_id,
                     document_id: run.document_id,
                     document_version: run.document_version,
-                    variants: Vec::<ChunkingVariant>::new(),
-                    options: Vec::<EvaluationRunOptions>::new(),
+                    variants: Vec::new(),
+                    options: Vec::new(),
                     autotune_request: None,
-                    optimization: Some(optimization),
+                    optimization: Some(optimization.into()),
                     scoring_policy: ScoringPolicy::default(),
                     fingerprint,
                     occurred_at: self.clock.now(),

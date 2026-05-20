@@ -6,9 +6,10 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::server::application::evaluation::ports::LlmJudge;
+use crate::server::domain::evaluation::value_objects::OptimizationBudget;
 use crate::shared::{
     evaluation_score, ChunkingConfig, EvaluationMetrics, EvaluationResultSplit,
-    EvaluationRunOptions, OptimizationBudget, OptimizationScope,
+    EvaluationRunOptions, OptimizationScope,
 };
 use event_sourcing::command_processor::CommandProcessor;
 use event_sourcing::event_store::EventStore;
@@ -110,7 +111,8 @@ impl OptimizeRunEffectExecutor {
             OptimizationBudget::Thorough => SearchBudget::Thorough,
             OptimizationBudget::Exhaustive => SearchBudget::Exhaustive,
         };
-        let space = build_default_search_space(effect.optimization.scope);
+        let scope_shared: OptimizationScope = effect.optimization.scope.into();
+        let space = build_default_search_space(scope_shared);
         let seed = effect
             .optimization
             .seed
@@ -291,12 +293,12 @@ impl OptimizeRunEffectExecutor {
                                             trial.trial_id,
                                             rung_num,
                                         ),
-                                        variant_config: prepared.config,
-                                        options: options.clone(),
-                                        split: EvaluationResultSplit::Tuning,
+                                        variant_config: prepared.config.into(),
+                                        options: options.clone().into(),
+                                        split: EvaluationResultSplit::Tuning.into(),
                                         chunk_set_id: prepared.chunk_set_id,
                                         embedding_set_id: prepared.embedding_set_id,
-                                        metrics: m.clone(),
+                                        metrics: m.clone().into(),
                                         retrieval_traces: t.clone(),
                                         selected: false,
                                         occurred_at: self.clock.now(),
@@ -450,12 +452,12 @@ impl OptimizeRunEffectExecutor {
                     EvaluationRunCommand::ScoreVariant(ScoreVariant {
                         run_id: effect.run_id,
                         variant_label: encoding::trial_validation_label(*trial_id),
-                        variant_config: config,
-                        options,
-                        split: EvaluationResultSplit::Validation,
+                        variant_config: config.into(),
+                        options: options.into(),
+                        split: EvaluationResultSplit::Validation.into(),
                         chunk_set_id,
                         embedding_set_id,
-                        metrics,
+                        metrics: metrics.into(),
                         retrieval_traces: traces,
                         selected: false,
                         occurred_at: self.clock.now(),
@@ -525,12 +527,12 @@ impl OptimizeRunEffectExecutor {
                                     EvaluationRunCommand::ScoreVariant(ScoreVariant {
                                         run_id: effect.run_id,
                                         variant_label: encoding::trial_holdout_label(trial_id),
-                                        variant_config: config,
-                                        options,
-                                        split: EvaluationResultSplit::Holdout,
+                                        variant_config: config.into(),
+                                        options: options.into(),
+                                        split: EvaluationResultSplit::Holdout.into(),
                                         chunk_set_id,
                                         embedding_set_id,
-                                        metrics: metrics.clone(),
+                                        metrics: metrics.clone().into(),
                                         retrieval_traces: traces,
                                         selected: true,
                                         occurred_at: self.clock.now(),
@@ -554,7 +556,7 @@ impl OptimizeRunEffectExecutor {
                     EvaluationRunCommand::SelectChampion(SelectChampion {
                         run_id: effect.run_id,
                         trial_id,
-                        holdout_metrics: metrics,
+                        holdout_metrics: metrics.into(),
                         occurred_at: self.clock.now(),
                     }),
                 )

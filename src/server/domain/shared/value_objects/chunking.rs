@@ -2,21 +2,22 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::shared::{
-    BertChunkingConfig, ChunkingConfig, DarnChunkingConfig, DarnGranularity, LlmChunkingConfig,
-    SectionChunkingConfig,
+    BertChunkingConfig as BertChunkingConfigDto, ChunkingConfig as ChunkingConfigDto,
+    DarnChunkingConfig as DarnChunkingConfigDto, DarnGranularity as DarnGranularityDto,
+    LlmChunkingConfig as LlmChunkingConfigDto, SectionChunkingConfig as SectionChunkingConfigDto,
 };
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
-pub enum ChunkingConfigPayload {
-    Bert(BertChunkingConfigPayload),
-    Section(SectionChunkingConfigPayload),
-    Llm(LlmChunkingConfigPayload),
-    Darn(DarnChunkingConfigPayload),
+pub enum ChunkingConfig {
+    Bert(BertChunkingConfig),
+    Section(SectionChunkingConfig),
+    Llm(LlmChunkingConfig),
+    Darn(DarnChunkingConfig),
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-pub struct BertChunkingConfigPayload {
+pub struct BertChunkingConfig {
     #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
     pub target_tokens: u32,
     #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
@@ -26,13 +27,13 @@ pub struct BertChunkingConfigPayload {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-pub struct SectionChunkingConfigPayload {
+pub struct SectionChunkingConfig {
     #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
     pub max_section_tokens: u32,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-pub struct LlmChunkingConfigPayload {
+pub struct LlmChunkingConfig {
     #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
     pub target_tokens: u32,
     #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
@@ -41,24 +42,35 @@ pub struct LlmChunkingConfigPayload {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-pub struct DarnChunkingConfigPayload {
+pub struct DarnChunkingConfig {
     #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
     pub max_chunk_size: u32,
     #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
     pub overlap: u32,
     #[serde(default)]
-    pub granularity: DarnGranularityPayload,
+    pub granularity: DarnGranularity,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
-pub enum DarnGranularityPayload {
+pub enum DarnGranularity {
     #[default]
     Characters,
     Tokens,
 }
 
-impl From<ChunkingConfig> for ChunkingConfigPayload {
+impl From<ChunkingConfigDto> for ChunkingConfig {
+    fn from(value: ChunkingConfigDto) -> Self {
+        match value {
+            ChunkingConfigDto::Bert(c) => Self::Bert(c.into()),
+            ChunkingConfigDto::Section(c) => Self::Section(c.into()),
+            ChunkingConfigDto::Llm(c) => Self::Llm(c.into()),
+            ChunkingConfigDto::Darn(c) => Self::Darn(c.into()),
+        }
+    }
+}
+
+impl From<ChunkingConfig> for ChunkingConfigDto {
     fn from(value: ChunkingConfig) -> Self {
         match value {
             ChunkingConfig::Bert(c) => Self::Bert(c.into()),
@@ -69,18 +81,17 @@ impl From<ChunkingConfig> for ChunkingConfigPayload {
     }
 }
 
-impl From<ChunkingConfigPayload> for ChunkingConfig {
-    fn from(value: ChunkingConfigPayload) -> Self {
-        match value {
-            ChunkingConfigPayload::Bert(c) => Self::Bert(c.into()),
-            ChunkingConfigPayload::Section(c) => Self::Section(c.into()),
-            ChunkingConfigPayload::Llm(c) => Self::Llm(c.into()),
-            ChunkingConfigPayload::Darn(c) => Self::Darn(c.into()),
+impl From<BertChunkingConfigDto> for BertChunkingConfig {
+    fn from(c: BertChunkingConfigDto) -> Self {
+        Self {
+            target_tokens: c.target_tokens,
+            overlap_tokens: c.overlap_tokens,
+            min_tokens: c.min_tokens,
         }
     }
 }
 
-impl From<BertChunkingConfig> for BertChunkingConfigPayload {
+impl From<BertChunkingConfig> for BertChunkingConfigDto {
     fn from(c: BertChunkingConfig) -> Self {
         Self {
             target_tokens: c.target_tokens,
@@ -90,17 +101,15 @@ impl From<BertChunkingConfig> for BertChunkingConfigPayload {
     }
 }
 
-impl From<BertChunkingConfigPayload> for BertChunkingConfig {
-    fn from(c: BertChunkingConfigPayload) -> Self {
+impl From<SectionChunkingConfigDto> for SectionChunkingConfig {
+    fn from(c: SectionChunkingConfigDto) -> Self {
         Self {
-            target_tokens: c.target_tokens,
-            overlap_tokens: c.overlap_tokens,
-            min_tokens: c.min_tokens,
+            max_section_tokens: c.max_section_tokens,
         }
     }
 }
 
-impl From<SectionChunkingConfig> for SectionChunkingConfigPayload {
+impl From<SectionChunkingConfig> for SectionChunkingConfigDto {
     fn from(c: SectionChunkingConfig) -> Self {
         Self {
             max_section_tokens: c.max_section_tokens,
@@ -108,15 +117,17 @@ impl From<SectionChunkingConfig> for SectionChunkingConfigPayload {
     }
 }
 
-impl From<SectionChunkingConfigPayload> for SectionChunkingConfig {
-    fn from(c: SectionChunkingConfigPayload) -> Self {
+impl From<LlmChunkingConfigDto> for LlmChunkingConfig {
+    fn from(c: LlmChunkingConfigDto) -> Self {
         Self {
-            max_section_tokens: c.max_section_tokens,
+            target_tokens: c.target_tokens,
+            micro_chunk_tokens: c.micro_chunk_tokens,
+            generation_model_id: c.generation_model_id,
         }
     }
 }
 
-impl From<LlmChunkingConfig> for LlmChunkingConfigPayload {
+impl From<LlmChunkingConfig> for LlmChunkingConfigDto {
     fn from(c: LlmChunkingConfig) -> Self {
         Self {
             target_tokens: c.target_tokens,
@@ -126,17 +137,17 @@ impl From<LlmChunkingConfig> for LlmChunkingConfigPayload {
     }
 }
 
-impl From<LlmChunkingConfigPayload> for LlmChunkingConfig {
-    fn from(c: LlmChunkingConfigPayload) -> Self {
+impl From<DarnChunkingConfigDto> for DarnChunkingConfig {
+    fn from(c: DarnChunkingConfigDto) -> Self {
         Self {
-            target_tokens: c.target_tokens,
-            micro_chunk_tokens: c.micro_chunk_tokens,
-            generation_model_id: c.generation_model_id,
+            max_chunk_size: c.max_chunk_size,
+            overlap: c.overlap,
+            granularity: c.granularity.into(),
         }
     }
 }
 
-impl From<DarnChunkingConfig> for DarnChunkingConfigPayload {
+impl From<DarnChunkingConfig> for DarnChunkingConfigDto {
     fn from(c: DarnChunkingConfig) -> Self {
         Self {
             max_chunk_size: c.max_chunk_size,
@@ -146,30 +157,20 @@ impl From<DarnChunkingConfig> for DarnChunkingConfigPayload {
     }
 }
 
-impl From<DarnChunkingConfigPayload> for DarnChunkingConfig {
-    fn from(c: DarnChunkingConfigPayload) -> Self {
-        Self {
-            max_chunk_size: c.max_chunk_size,
-            overlap: c.overlap,
-            granularity: c.granularity.into(),
+impl From<DarnGranularityDto> for DarnGranularity {
+    fn from(g: DarnGranularityDto) -> Self {
+        match g {
+            DarnGranularityDto::Characters => Self::Characters,
+            DarnGranularityDto::Tokens => Self::Tokens,
         }
     }
 }
 
-impl From<DarnGranularity> for DarnGranularityPayload {
+impl From<DarnGranularity> for DarnGranularityDto {
     fn from(g: DarnGranularity) -> Self {
         match g {
             DarnGranularity::Characters => Self::Characters,
             DarnGranularity::Tokens => Self::Tokens,
-        }
-    }
-}
-
-impl From<DarnGranularityPayload> for DarnGranularity {
-    fn from(g: DarnGranularityPayload) -> Self {
-        match g {
-            DarnGranularityPayload::Characters => Self::Characters,
-            DarnGranularityPayload::Tokens => Self::Tokens,
         }
     }
 }
@@ -181,33 +182,33 @@ mod tests {
 
     #[test]
     fn section_round_trips_through_existing_wire_format() {
-        let core = ChunkingConfig::Section(SectionChunkingConfig {
+        let core = ChunkingConfigDto::Section(SectionChunkingConfigDto {
             max_section_tokens: 512,
         });
-        let payload: ChunkingConfigPayload = core.into();
-        let wire = serde_json::to_value(&payload).unwrap();
+        let domain: ChunkingConfig = core.into();
+        let wire = serde_json::to_value(&domain).unwrap();
         assert_eq!(wire, json!({"section": {"max_section_tokens": 512}}));
 
-        let decoded: ChunkingConfigPayload = serde_json::from_value(wire).unwrap();
-        let back: ChunkingConfig = decoded.into();
+        let decoded: ChunkingConfig = serde_json::from_value(wire).unwrap();
+        let back: ChunkingConfigDto = decoded.into();
         assert_eq!(back, core);
     }
 
     #[test]
     fn legacy_section_json_deserialises() {
         let legacy = json!({"section": {"max_section_tokens": 512}});
-        let payload: ChunkingConfigPayload = serde_json::from_value(legacy).unwrap();
-        assert!(matches!(payload, ChunkingConfigPayload::Section(_)));
+        let domain: ChunkingConfig = serde_json::from_value(legacy).unwrap();
+        assert!(matches!(domain, ChunkingConfig::Section(_)));
     }
 
     #[test]
     fn legacy_darn_json_with_default_granularity() {
         let legacy = json!({"darn": {"max_chunk_size": 500, "overlap": 50}});
-        let payload: ChunkingConfigPayload = serde_json::from_value(legacy).unwrap();
-        if let ChunkingConfigPayload::Darn(c) = payload {
+        let domain: ChunkingConfig = serde_json::from_value(legacy).unwrap();
+        if let ChunkingConfig::Darn(c) = domain {
             assert_eq!(c.max_chunk_size, 500);
             assert_eq!(c.overlap, 50);
-            assert_eq!(c.granularity, DarnGranularityPayload::Characters);
+            assert_eq!(c.granularity, DarnGranularity::Characters);
         } else {
             panic!("expected darn variant");
         }
@@ -217,8 +218,8 @@ mod tests {
     fn legacy_string_encoded_u32_still_parses() {
         let legacy =
             json!({"bert": {"target_tokens": "384", "overlap_tokens": "64", "min_tokens": "96"}});
-        let payload: ChunkingConfigPayload = serde_json::from_value(legacy).unwrap();
-        if let ChunkingConfigPayload::Bert(c) = payload {
+        let domain: ChunkingConfig = serde_json::from_value(legacy).unwrap();
+        if let ChunkingConfig::Bert(c) = domain {
             assert_eq!(c.target_tokens, 384);
         } else {
             panic!("expected bert variant");
@@ -228,16 +229,16 @@ mod tests {
     #[test]
     fn round_trip_all_variants() {
         let cases = [
-            ChunkingConfig::Bert(BertChunkingConfig::default()),
-            ChunkingConfig::Section(SectionChunkingConfig::default()),
-            ChunkingConfig::Llm(LlmChunkingConfig::default()),
-            ChunkingConfig::Darn(DarnChunkingConfig::default()),
+            ChunkingConfigDto::Bert(BertChunkingConfigDto::default()),
+            ChunkingConfigDto::Section(SectionChunkingConfigDto::default()),
+            ChunkingConfigDto::Llm(LlmChunkingConfigDto::default()),
+            ChunkingConfigDto::Darn(DarnChunkingConfigDto::default()),
         ];
         for original in cases {
-            let payload: ChunkingConfigPayload = original.into();
-            let wire = serde_json::to_string(&payload).unwrap();
-            let decoded: ChunkingConfigPayload = serde_json::from_str(&wire).unwrap();
-            let restored: ChunkingConfig = decoded.into();
+            let domain: ChunkingConfig = original.into();
+            let wire = serde_json::to_string(&domain).unwrap();
+            let decoded: ChunkingConfig = serde_json::from_str(&wire).unwrap();
+            let restored: ChunkingConfigDto = decoded.into();
             assert_eq!(restored, original);
         }
     }

@@ -164,7 +164,7 @@ impl ChunkingConfigurationQueryService {
             .map(|cc| ChunkingConfigurationDto {
                 chunking_configuration_id: cc.chunking_configuration_id,
                 name: cc.name,
-                config: cc.config,
+                config: cc.config.into(),
                 is_default: default_id == Some(cc.chunking_configuration_id),
             })
             .collect())
@@ -203,7 +203,7 @@ impl ChunkingConfigurationQueryService {
                 AppError::NotFound(format!("chunking configuration {chunking_id} not found"))
             })?;
 
-        Ok(entry.config)
+        Ok(entry.config.into())
     }
 }
 

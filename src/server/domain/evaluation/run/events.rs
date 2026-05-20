@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::server::domain::shared::event_payloads::{
-    ChunkingConfigPayload, ChunkingVariantPayload, EvaluationAutotuneRequestPayload,
-    EvaluationMetricsPayload, EvaluationResultSplitPayload, EvaluationRunOptionsPayload,
-    OptimizationConfigPayload, RunFingerprintPayload,
+use crate::server::domain::evaluation::value_objects::{
+    ChunkingVariant, EvaluationAutotuneRequest, EvaluationMetrics, EvaluationResultSplit,
+    EvaluationRunOptions, OptimizationConfig, RunFingerprint,
 };
+use crate::server::domain::shared::value_objects::ChunkingConfig;
 use crate::server::domain::shared::Timestamp;
 
 use super::scoring_policy::ScoringPolicy;
@@ -28,12 +28,12 @@ pub struct RunRequested {
     pub pipeline_configuration_id: Uuid,
     pub document_id: Uuid,
     pub document_version: u32,
-    pub variants: Vec<ChunkingVariantPayload>,
-    pub options: Vec<EvaluationRunOptionsPayload>,
-    pub autotune_request: Option<EvaluationAutotuneRequestPayload>,
-    pub optimization: Option<OptimizationConfigPayload>,
+    pub variants: Vec<ChunkingVariant>,
+    pub options: Vec<EvaluationRunOptions>,
+    pub autotune_request: Option<EvaluationAutotuneRequest>,
+    pub optimization: Option<OptimizationConfig>,
     pub scoring_policy: ScoringPolicy,
-    pub fingerprint: RunFingerprintPayload,
+    pub fingerprint: RunFingerprint,
     pub occurred_at: Timestamp,
 }
 
@@ -50,12 +50,12 @@ pub struct VariantPrepared {
 pub struct VariantScored {
     pub run_id: Uuid,
     pub variant_label: String,
-    pub variant_config: ChunkingConfigPayload,
-    pub options: EvaluationRunOptionsPayload,
-    pub split: EvaluationResultSplitPayload,
+    pub variant_config: ChunkingConfig,
+    pub options: EvaluationRunOptions,
+    pub split: EvaluationResultSplit,
     pub chunk_set_id: Uuid,
     pub embedding_set_id: Uuid,
-    pub metrics: EvaluationMetricsPayload,
+    pub metrics: EvaluationMetrics,
     pub retrieval_traces: Vec<RetrievalTraceEntry>,
     pub selected: bool,
     pub occurred_at: Timestamp,
@@ -82,7 +82,7 @@ pub struct RungAdvanced {
 pub struct ChampionSelected {
     pub run_id: Uuid,
     pub trial_id: u32,
-    pub holdout_metrics: EvaluationMetricsPayload,
+    pub holdout_metrics: EvaluationMetrics,
     pub occurred_at: Timestamp,
 }
 

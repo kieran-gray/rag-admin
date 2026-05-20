@@ -266,7 +266,7 @@ pub async fn promote_variant_to_chunking_config(
     let cmd = ChunkingConfigurationCommandDto::CreateChunkingConfiguration(
         CreateChunkingConfigurationDto {
             name: chosen_name,
-            config: chosen.variant_config,
+            config: chosen.variant_config.into(),
             is_default: false,
         },
     );
@@ -432,10 +432,10 @@ fn map_run_to_dto(
         })
         .map(|v| BestVariantDto {
             label: v.variant_label.clone(),
-            config: v.variant_config,
-            options: v.options.clone(),
+            config: v.variant_config.into(),
+            options: v.options.clone().into(),
             score: policy.score(&v.metrics()),
-            metrics: v.metrics(),
+            metrics: v.metrics().into(),
         });
 
     let failure_reason = match &run.status {

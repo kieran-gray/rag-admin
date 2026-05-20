@@ -13,12 +13,12 @@ use crate::server::domain::evaluation::run::repository::{
     RunListQuery, RunStatusFilter,
 };
 use crate::server::domain::evaluation::run::scoring_policy::{ScoringPolicy, ScoringWeights};
-use crate::server::domain::shared::Timestamp;
-use crate::server::infrastructure::shared::sql::timestamps::to_offset_datetime;
-use crate::shared::{
+use crate::server::domain::evaluation::value_objects::{
     ChunkingVariant, EvaluationAutotuneRequest, EvaluationResultSplit, EvaluationRunOptions,
     OptimizationConfig,
 };
+use crate::server::domain::shared::Timestamp;
+use crate::server::infrastructure::shared::sql::timestamps::to_offset_datetime;
 
 pub struct PostgresEvaluationRunRepository {
     pool: PgPool,

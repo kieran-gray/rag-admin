@@ -18,9 +18,10 @@ use crate::server::domain::evaluation::run::effects::{ExecuteVariantEffect, Fina
 use crate::server::domain::evaluation::run::events::RetrievalTraceEntry;
 use crate::server::domain::evaluation::run::repository::EvaluationRunRepository;
 use crate::server::domain::evaluation::split::{seed_from_uuid, split_questions, DatasetSplit};
+use crate::server::domain::evaluation::value_objects::EvaluationResultSplit as DomainEvaluationResultSplit;
 use crate::shared::{
-    evaluation_score, ChunkingConfig, EvaluationAutotuneRequest, EvaluationMetrics,
-    EvaluationResultSplit, EvaluationRunOptions,
+    evaluation_score, ChunkingConfig, EvaluationAutotuneRequest as EvaluationAutotuneRequestDto,
+    EvaluationMetrics, EvaluationResultSplit, EvaluationRunOptions,
 };
 use event_sourcing::command_processor::CommandProcessor;
 use event_sourcing::AggregateRepository;
@@ -46,7 +47,7 @@ struct EvaluationPlan {
 impl EvaluationPlan {
     fn for_run(
         run_id: Uuid,
-        autotune: Option<&EvaluationAutotuneRequest>,
+        autotune: Option<&EvaluationAutotuneRequestDto>,
         question_count: usize,
     ) -> Result<Self, AppError> {
         match autotune {
@@ -138,15 +139,18 @@ impl ExecuteVariantEffectExecutor {
         effect: &ExecuteVariantEffect,
         job: Arc<Job>,
     ) -> Result<(), AppError> {
+        let variant_config_shared: ChunkingConfig = effect.variant_config.into();
+        let options_shared: Vec<EvaluationRunOptions> =
+            effect.options.iter().cloned().map(Into::into).collect();
+        let autotune_shared: Option<EvaluationAutotuneRequestDto> =
+            effect.autotune_request.clone().map(Into::into);
+
         let ctx = self
             .trial_scorer
             .load_run_context(effect.dataset_id, effect.pipeline_configuration_id)
             .await?;
-        let plan = EvaluationPlan::for_run(
-            effect.run_id,
-            effect.autotune_request.as_ref(),
-            ctx.questions.len(),
-        )?;
+        let plan =
+            EvaluationPlan::for_run(effect.run_id, autotune_shared.as_ref(), ctx.questions.len())?;
 
         job.emit(
             InternalLogEvent::info(format!("Preparing variant '{}'…", effect.variant_label))
@@ -156,7 +160,7 @@ impl ExecuteVariantEffectExecutor {
 
         let prepared = self
             .trial_scorer
-            .prepare_variant(&ctx, effect.variant_label.clone(), effect.variant_config)
+            .prepare_variant(&ctx, effect.variant_label.clone(), variant_config_shared)
             .await?;
 
         self.command_processor
@@ -196,11 +200,11 @@ impl ExecuteVariantEffectExecutor {
 
         let already_scored = self.scored_keys_for_variant(effect.run_id).await?;
 
-        for options in &effect.options {
+        for options in &options_shared {
             let key = ScoredVariantKey {
                 variant_label: effect.variant_label.clone(),
-                options: options.clone(),
-                split: plan.primary_split,
+                options: options.clone().into(),
+                split: plan.primary_split.into(),
             };
             if already_scored.contains(&key) {
                 continue;
@@ -254,12 +258,12 @@ impl ExecuteVariantEffectExecutor {
                 EvaluationRunCommand::ScoreVariant(ScoreVariant {
                     run_id,
                     variant_label: variant.label.clone(),
-                    variant_config: variant.config,
-                    options: options.clone(),
-                    split,
+                    variant_config: variant.config.into(),
+                    options: options.clone().into(),
+                    split: split.into(),
                     chunk_set_id: variant.chunk_set_id,
                     embedding_set_id: variant.embedding_set_id,
-                    metrics,
+                    metrics: metrics.into(),
                     retrieval_traces,
                     selected,
                     occurred_at: self.clock.now(),
@@ -334,28 +338,31 @@ impl FinalizeRunEffectExecutor {
             .await?;
 
         if effect.autotune_request.is_some() {
+            let autotune_shared: Option<EvaluationAutotuneRequestDto> =
+                effect.autotune_request.clone().map(Into::into);
             let ctx = self
                 .trial_scorer
                 .load_run_context(effect.dataset_id, effect.pipeline_configuration_id)
                 .await?;
             let plan = EvaluationPlan::for_run(
                 effect.run_id,
-                effect.autotune_request.as_ref(),
+                autotune_shared.as_ref(),
                 ctx.questions.len(),
             )?;
 
+            let primary_split_domain: DomainEvaluationResultSplit = plan.primary_split.into();
             let primary_combos: Vec<ScoredCombo> = variant_results
                 .iter()
-                .filter(|r| r.split == plan.primary_split)
+                .filter(|r| r.split == primary_split_domain)
                 .map(|r| {
-                    let metrics = r.metrics();
+                    let metrics_dto: EvaluationMetrics = r.metrics().into();
                     ScoredCombo {
                         variant_label: r.variant_label.clone(),
-                        variant_config: r.variant_config,
+                        variant_config: r.variant_config.into(),
                         chunk_set_id: r.chunk_set_id,
                         embedding_set_id: r.embedding_set_id,
-                        options: r.options.clone(),
-                        score: evaluation_score(&metrics),
+                        options: r.options.clone().into(),
+                        score: evaluation_score(&metrics_dto),
                     }
                 })
                 .collect();
@@ -377,10 +384,15 @@ impl FinalizeRunEffectExecutor {
                 &plan.holdout_indices,
             );
 
+            let holdout_split_domain: DomainEvaluationResultSplit =
+                EvaluationResultSplit::Holdout.into();
             let already_scored: BTreeSet<_> = variant_results
                 .iter()
-                .filter(|r| r.split == EvaluationResultSplit::Holdout)
-                .map(|r| (r.variant_label.clone(), r.options.clone()))
+                .filter(|r| r.split == holdout_split_domain)
+                .map(|r| {
+                    let opts: EvaluationRunOptions = r.options.clone().into();
+                    (r.variant_label.clone(), opts)
+                })
                 .collect();
 
             for (rank, combo) in leaders.iter().enumerate() {
@@ -413,12 +425,12 @@ impl FinalizeRunEffectExecutor {
                         EvaluationRunCommand::ScoreVariant(ScoreVariant {
                             run_id: effect.run_id,
                             variant_label: combo.variant_label.clone(),
-                            variant_config: combo.variant_config,
-                            options: combo.options.clone(),
-                            split: EvaluationResultSplit::Holdout,
+                            variant_config: combo.variant_config.into(),
+                            options: combo.options.clone().into(),
+                            split: EvaluationResultSplit::Holdout.into(),
                             chunk_set_id: combo.chunk_set_id,
                             embedding_set_id: combo.embedding_set_id,
-                            metrics,
+                            metrics: metrics.into(),
                             retrieval_traces: traces,
                             selected: rank == 0,
                             occurred_at: self.clock.now(),

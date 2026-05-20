@@ -1,16 +1,18 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::server::domain::evaluation::value_objects::{
+    ChunkingVariant, EvaluationAutotuneRequest, EvaluationMetrics, EvaluationResultSplit,
+    EvaluationRunOptions, OptimizationConfig, RunFingerprint,
+};
+use crate::server::domain::shared::value_objects::ChunkingConfig;
 use crate::server::domain::shared::Timestamp;
 use crate::shared::{
-    ChunkingConfig, ChunkingVariant, EvaluationAutotuneRequest, EvaluationMetrics,
-    EvaluationQuestionResult, EvaluationResultSplit, EvaluationRunOptions, EvaluationVariantResult,
-    OptimizationConfig,
+    EvaluationMetrics as EvaluationMetricsDto, EvaluationQuestionResult, EvaluationVariantResult,
 };
 
 use super::{
-    aggregate::EvaluationRunStatus, events::RetrievalTraceEntry, fingerprint::RunFingerprint,
-    scoring_policy::ScoringPolicy,
+    aggregate::EvaluationRunStatus, events::RetrievalTraceEntry, scoring_policy::ScoringPolicy,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -136,11 +138,12 @@ impl From<EvaluationVariantResultDto> for EvaluationVariantResult {
             variant: ChunkingVariant {
                 label: v.variant_label,
                 config: v.variant_config,
-            },
-            options: v.options,
-            split: v.split,
+            }
+            .into(),
+            options: v.options.into(),
+            split: v.split.into(),
             selected: v.selected,
-            metrics: EvaluationMetrics {
+            metrics: EvaluationMetricsDto {
                 recall_mean: v.recall_mean,
                 recall_std: v.recall_std,
                 precision_mean: v.precision_mean,

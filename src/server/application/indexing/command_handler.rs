@@ -46,7 +46,7 @@ impl IndexingCommandHandler {
             document_id: input.document_id,
             pipeline_configuration_id: input.pipeline_configuration_id,
             document_version: input.document_version,
-            chunking_config: input.chunking_config,
+            chunking_config: input.chunking_config.into(),
             request_id: self.id_generator.new_uuid(),
             auto_advance: input.auto_advance,
             occurred_at: self.clock.now(),

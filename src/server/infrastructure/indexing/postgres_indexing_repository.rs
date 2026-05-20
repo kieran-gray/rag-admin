@@ -7,7 +7,7 @@ use crate::server::domain::indexing::{
     repository::{IndexingRepository, IndexingRepositoryError},
     status::{IndexingStatus, IngestStage},
 };
-use crate::shared::ChunkingConfig;
+use crate::server::domain::shared::value_objects::ChunkingConfig;
 
 pub struct PostgresIndexingRepository {
     pool: PgPool,

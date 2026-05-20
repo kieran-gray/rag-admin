@@ -149,9 +149,7 @@ mod tests {
         IngestionRetried,
     };
     use crate::server::domain::indexing::status::{IndexingStatus, IngestStage};
-    use crate::server::domain::shared::event_payloads::{
-        ChunkingConfigPayload, SectionChunkingConfigPayload,
-    };
+    use crate::server::domain::shared::value_objects::{ChunkingConfig, SectionChunkingConfig};
 
     fn indexing(auto_advance: bool) -> Indexing {
         Indexing {
@@ -186,7 +184,7 @@ mod tests {
             document_id: Uuid::new_v4(),
             pipeline_configuration_id: Uuid::new_v4(),
             document_version: 1,
-            chunking_config: ChunkingConfigPayload::Section(SectionChunkingConfigPayload {
+            chunking_config: ChunkingConfig::Section(SectionChunkingConfig {
                 max_section_tokens: 512,
             }),
             request_id: Uuid::new_v4(),

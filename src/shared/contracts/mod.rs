@@ -3,6 +3,7 @@ pub mod aggregate_types;
 pub mod chat;
 pub mod configuration;
 pub mod connector;
+pub mod error;
 pub mod evaluation;
 pub mod events;
 pub mod ingest;
@@ -33,6 +34,7 @@ pub use connector::{
     ConnectorSyncSummaryDto, RegisterConnectorDto, RenameConnectorDto, SetConnectorDefaultsDto,
     SitemapConfigDto, UnregisterConnectorDto, UpdateConnectorConfigDto,
 };
+pub use error::{ApiError, ApiErrorKind};
 pub use evaluation::{
     BestVariantDto, EvaluationDatasetDto, EvaluationDatasetSummaryDto, EvaluationJobInfo,
     EvaluationQuestionDto, EvaluationReferenceDto, EvaluationRunDto, EvaluationRunSummaryDto,

@@ -30,6 +30,7 @@ use crate::server::domain::indexing::repository::IndexingRepository;
 use crate::server::domain::indexing::status::IngestStage;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::server::domain::VectorRecord;
+use crate::shared::ChunkingConfig as ChunkingConfigDto;
 use event_sourcing::command_processor::CommandProcessor;
 use event_sourcing::process_manager::{EffectError, EffectExecutor};
 
@@ -229,24 +230,22 @@ impl IndexingEffectExecutor {
             ))
         })?;
 
+        let chunking_dto: ChunkingConfigDto = indexing.chunking_config.into();
         job.emit(
             InternalLogEvent::info(format!(
                 "Chunking '{}' with {}",
                 document.latest_content_hash.as_hex(),
-                indexing.chunking_config.describe(),
+                chunking_dto.describe(),
             ))
             .with_meta("indexing_id", json!(indexing_id.to_string()))
             .with_meta("document_id", json!(indexing.document_id.to_string()))
-            .with_meta(
-                "chunking_config",
-                json!(indexing.chunking_config.describe()),
-            ),
+            .with_meta("chunking_config", json!(chunking_dto.describe())),
         )
         .await;
 
         let chunk_outputs = self
             .chunker_registry
-            .chunk_markdown(&indexing.chunking_config, &markdown)
+            .chunk_markdown(&chunking_dto, &markdown)
             .await
             .map_err(|e| AppError::Internal(format!("chunking failed: {e}")))?;
 

@@ -6,3 +6,4 @@ pub mod ranking;
 pub mod run;
 pub mod scoring;
 pub mod split;
+pub mod value_objects;

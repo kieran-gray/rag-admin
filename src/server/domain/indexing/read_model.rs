@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::shared::ChunkingConfig;
+use crate::server::domain::shared::value_objects::ChunkingConfig;
 
 use super::status::IndexingStatus;
 

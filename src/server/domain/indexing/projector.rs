@@ -40,7 +40,7 @@ impl Projector<IndexingEvent> for IndexingProjector {
                     let read_model = match self.repository.load(indexing_id).await? {
                         Some(mut m) => {
                             m.document_version = e.document_version;
-                            m.chunking_config = e.chunking_config.into();
+                            m.chunking_config = e.chunking_config;
                             m.chunk_set_id = None;
                             m.embedding_set_id = None;
                             m.status = IndexingStatus::Pending;
@@ -53,7 +53,7 @@ impl Projector<IndexingEvent> for IndexingProjector {
                             document_id: e.document_id,
                             pipeline_configuration_id: e.pipeline_configuration_id,
                             document_version: e.document_version,
-                            chunking_config: e.chunking_config.into(),
+                            chunking_config: e.chunking_config,
                             chunk_set_id: None,
                             embedding_set_id: None,
                             status: IndexingStatus::Pending,
@@ -147,9 +147,7 @@ mod tests {
         IngestionRetried,
     };
     use crate::server::domain::indexing::repository::IndexingRepositoryError;
-    use crate::server::domain::shared::event_payloads::{
-        ChunkingConfigPayload, SectionChunkingConfigPayload,
-    };
+    use crate::server::domain::shared::value_objects::{ChunkingConfig, SectionChunkingConfig};
 
     #[derive(Default)]
     struct InMemIndexingRepo {
@@ -204,8 +202,8 @@ mod tests {
         }
     }
 
-    fn chunking_payload() -> ChunkingConfigPayload {
-        ChunkingConfigPayload::Section(SectionChunkingConfigPayload {
+    fn chunking_payload() -> ChunkingConfig {
+        ChunkingConfig::Section(SectionChunkingConfig {
             max_section_tokens: 512,
         })
     }
