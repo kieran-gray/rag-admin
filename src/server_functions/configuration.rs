@@ -7,13 +7,7 @@ use crate::shared::contracts::{
 };
 
 #[cfg(feature = "ssr")]
-use crate::server::application::configuration::{
-    ChunkingConfigurationCatalogCommandHandler, ChunkingConfigurationQueryService,
-    ConfigurationQueryService, EmbeddingModelCatalogCommandHandler,
-    GenerationModelCatalogCommandHandler, PipelineConfigurationCatalogCommandHandler,
-    PipelineConfigurationQueryService, SweepTemplateCommandHandler, SweepTemplateQueryService,
-    VectorIndexCatalogCommandHandler,
-};
+use crate::server::setup::compose::catalog::CatalogServices;
 #[cfg(feature = "ssr")]
 use crate::server_functions::error::{ctx, map_app_error};
 #[cfg(feature = "ssr")]
@@ -25,7 +19,8 @@ use std::sync::Arc;
     endpoint = "get_configuration"
 )]
 pub async fn get_configuration() -> Result<ConfigurationDto, ServerFnError> {
-    ctx::<Arc<ConfigurationQueryService>>()?
+    ctx::<Arc<CatalogServices>>()?
+        .configuration_query_service
         .get()
         .await
         .map_err(|e| map_app_error(&e))
@@ -37,7 +32,8 @@ pub async fn get_configuration() -> Result<ConfigurationDto, ServerFnError> {
     endpoint = "get_pipeline_configurations"
 )]
 pub async fn get_pipeline_configurations() -> Result<Vec<PipelineConfigurationDto>, ServerFnError> {
-    ctx::<Arc<PipelineConfigurationQueryService>>()?
+    ctx::<Arc<CatalogServices>>()?
+        .pipeline_configuration_query_service
         .list()
         .await
         .map_err(|e| map_app_error(&e))
@@ -49,7 +45,8 @@ pub async fn get_pipeline_configurations() -> Result<Vec<PipelineConfigurationDt
     endpoint = "get_chunking_configurations"
 )]
 pub async fn get_chunking_configurations() -> Result<Vec<ChunkingConfigurationDto>, ServerFnError> {
-    ctx::<Arc<ChunkingConfigurationQueryService>>()?
+    ctx::<Arc<CatalogServices>>()?
+        .chunking_configuration_query_service
         .list()
         .await
         .map_err(|e| map_app_error(&e))
@@ -61,7 +58,8 @@ pub async fn get_chunking_configurations() -> Result<Vec<ChunkingConfigurationDt
     endpoint = "get_sweep_templates"
 )]
 pub async fn get_sweep_templates() -> Result<Vec<SweepTemplateDto>, ServerFnError> {
-    ctx::<Arc<SweepTemplateQueryService>>()?
+    ctx::<Arc<CatalogServices>>()?
+        .sweep_template_query_service
         .list()
         .await
         .map_err(|e| map_app_error(&e))
@@ -75,7 +73,8 @@ pub async fn get_sweep_templates() -> Result<Vec<SweepTemplateDto>, ServerFnErro
 pub async fn apply_embedding_model_command(
     command: EmbeddingModelCommandDto,
 ) -> Result<(), ServerFnError> {
-    ctx::<Arc<EmbeddingModelCatalogCommandHandler>>()?
+    ctx::<Arc<CatalogServices>>()?
+        .embedding_model_command_handler
         .handle_dto(command)
         .await
         .map_err(|e| map_app_error(&e))
@@ -89,7 +88,8 @@ pub async fn apply_embedding_model_command(
 pub async fn apply_generation_model_command(
     command: GenerationModelCommandDto,
 ) -> Result<(), ServerFnError> {
-    ctx::<Arc<GenerationModelCatalogCommandHandler>>()?
+    ctx::<Arc<CatalogServices>>()?
+        .generation_model_command_handler
         .handle_dto(command)
         .await
         .map_err(|e| map_app_error(&e))
@@ -103,7 +103,8 @@ pub async fn apply_generation_model_command(
 pub async fn apply_vector_index_command(
     command: VectorIndexCommandDto,
 ) -> Result<(), ServerFnError> {
-    ctx::<Arc<VectorIndexCatalogCommandHandler>>()?
+    ctx::<Arc<CatalogServices>>()?
+        .vector_index_command_handler
         .handle_dto(command)
         .await
         .map_err(|e| map_app_error(&e))
@@ -117,7 +118,8 @@ pub async fn apply_vector_index_command(
 pub async fn apply_pipeline_configuration_command(
     command: PipelineConfigurationCommandDto,
 ) -> Result<(), ServerFnError> {
-    ctx::<Arc<PipelineConfigurationCatalogCommandHandler>>()?
+    ctx::<Arc<CatalogServices>>()?
+        .pipeline_configuration_command_handler
         .handle_dto(command)
         .await
         .map_err(|e| map_app_error(&e))
@@ -131,7 +133,8 @@ pub async fn apply_pipeline_configuration_command(
 pub async fn apply_chunking_configuration_command(
     command: ChunkingConfigurationCommandDto,
 ) -> Result<(), ServerFnError> {
-    ctx::<Arc<ChunkingConfigurationCatalogCommandHandler>>()?
+    ctx::<Arc<CatalogServices>>()?
+        .chunking_configuration_command_handler
         .handle_dto(command)
         .await
         .map_err(|e| map_app_error(&e))
@@ -145,7 +148,8 @@ pub async fn apply_chunking_configuration_command(
 pub async fn apply_sweep_template_command(
     command: SweepTemplateCommandDto,
 ) -> Result<(), ServerFnError> {
-    ctx::<Arc<SweepTemplateCommandHandler>>()?
+    ctx::<Arc<CatalogServices>>()?
+        .sweep_template_command_handler
         .handle_dto(command)
         .await
         .map_err(|e| map_app_error(&e))

@@ -3,9 +3,9 @@ use leptos::prelude::*;
 use crate::shared::EmbedResult;
 
 #[cfg(feature = "ssr")]
-use crate::server::application::configuration::ConfigurationQueryService;
+use crate::server::setup::compose::catalog::CatalogServices;
 #[cfg(feature = "ssr")]
-use crate::server::application::embedding::EmbeddingService;
+use crate::server::setup::compose::platform::PlatformServices;
 #[cfg(feature = "ssr")]
 use crate::server_functions::error::{ctx, map_app_error};
 #[cfg(feature = "ssr")]
@@ -17,7 +17,8 @@ pub async fn embed_texts(
     text_a: String,
     text_b: String,
 ) -> Result<EmbedResult, ServerFnError> {
-    let configuration = ctx::<Arc<ConfigurationQueryService>>()?
+    let configuration = ctx::<Arc<CatalogServices>>()?
+        .configuration_query_service
         .get()
         .await
         .map_err(|e| map_app_error(&e))?;
@@ -32,7 +33,8 @@ pub async fn embed_texts(
             ))
         })?;
 
-    ctx::<Arc<EmbeddingService>>()?
+    ctx::<Arc<PlatformServices>>()?
+        .embedding_service
         .embed_texts(embedding_model_id, &text_a, &text_b)
         .await
         .map_err(|e| map_app_error(&e))

@@ -5,9 +5,11 @@ use crate::shared::contracts::{
 };
 
 #[cfg(feature = "ssr")]
-use crate::server::application::connector_sync::{
-    BulkImportService, ConnectorSyncQueryService, ConnectorSyncService, ItemStatus,
-};
+use crate::server::application::connector_sync::ItemStatus;
+#[cfg(feature = "ssr")]
+use crate::server::setup::compose::connector::ConnectorServices;
+#[cfg(feature = "ssr")]
+use crate::server::setup::compose::ingestion::IngestionServices;
 #[cfg(feature = "ssr")]
 use crate::server_functions::error::{ctx, map_app_error};
 #[cfg(feature = "ssr")]
@@ -21,7 +23,8 @@ use std::sync::Arc;
     endpoint = "run_connector_sync"
 )]
 pub async fn run_connector_sync(connector_id: uuid::Uuid) -> Result<uuid::Uuid, ServerFnError> {
-    ctx::<Arc<ConnectorSyncService>>()?
+    ctx::<Arc<ConnectorServices>>()?
+        .connector_sync_service
         .run_sync(connector_id)
         .await
         .map_err(|e| map_app_error(&e))
@@ -36,7 +39,8 @@ pub async fn list_connector_syncs(
     connector_id: uuid::Uuid,
     limit: u32,
 ) -> Result<Vec<ConnectorSyncSummaryDto>, ServerFnError> {
-    let summaries = ctx::<Arc<ConnectorSyncQueryService>>()?
+    let summaries = ctx::<Arc<ConnectorServices>>()?
+        .connector_sync_query_service
         .list_syncs(connector_id, limit)
         .await
         .map_err(|e| map_app_error(&e))?;
@@ -62,7 +66,8 @@ pub async fn list_connector_syncs(
 pub async fn list_connector_discovered(
     connector_id: uuid::Uuid,
 ) -> Result<Vec<ConnectorDiscoveredItemViewDto>, ServerFnError> {
-    let items = ctx::<Arc<ConnectorSyncQueryService>>()?
+    let items = ctx::<Arc<ConnectorServices>>()?
+        .connector_sync_query_service
         .list_discovered(connector_id)
         .await
         .map_err(|e| map_app_error(&e))?;
@@ -95,7 +100,8 @@ pub async fn bulk_import_from_connector(
     source_ref_keys: Vec<String>,
     index_after_import: bool,
 ) -> Result<BulkImportResultDto, ServerFnError> {
-    let result = ctx::<Arc<BulkImportService>>()?
+    let result = ctx::<Arc<IngestionServices>>()?
+        .bulk_import_service
         .bulk_import(connector_id, source_ref_keys, None, index_after_import)
         .await
         .map_err(|e| map_app_error(&e))?;

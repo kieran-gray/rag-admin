@@ -1,8 +1,15 @@
 pub mod aggregates;
+pub mod catalog;
+pub mod chat;
+pub mod connector;
+pub mod evaluation;
+pub mod indexing;
+pub mod ingestion;
+pub mod platform;
 pub mod repositories;
-pub mod services;
-pub mod workflows;
+pub mod retrieval;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use axum::Extension;
@@ -10,79 +17,38 @@ use axum::Router;
 use leptos::context::provide_context;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
+use tokio::sync::Notify;
 
-use crate::server::application::chat::ChatService;
-use crate::server::application::configuration::{
-    ChunkingConfigurationCatalogCommandHandler, ChunkingConfigurationQueryService,
-    ConfigurationQueryService, EmbeddingModelCatalogCommandHandler,
-    GenerationModelCatalogCommandHandler, PipelineConfigurationCatalogCommandHandler,
-    PipelineConfigurationQueryService, PipelineResolver, SweepTemplateCommandHandler,
-    SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
-};
-use crate::server::application::connector::{
-    ConnectorCommandHandler, ConnectorQueryService, ConnectorRegistry,
-};
-use crate::server::application::connector_sync::{
-    BulkImportService, ConnectorSyncQueryService, ConnectorSyncService,
-};
-use crate::server::application::embedding::EmbeddingService;
-use crate::server::application::evaluation::query_service::EvaluationQueryService;
-use crate::server::application::evaluation::{
-    EvaluationDatasetCommandHandler, EvaluationRunCommandHandler,
-};
-use crate::server::application::indexing::VectorIndexResolver;
-use crate::server::application::llm::GenerationService;
 use crate::server::application::ports::{Clock, IdGenerator};
-use crate::server::application::retrieval::RetrievalService;
-use crate::server::application::source_document::{
-    SourceDocumentIngestService, SourceDocumentQueryService,
-};
-use crate::server::application::{ActivityRegistry, JobRegistry};
 use crate::server::infrastructure::shared::clients::{CloudflareApi, OllamaApi};
+use crate::server::infrastructure::shared::event_sourcing::spawn_postgres_event_listener;
 use crate::server::infrastructure::shared::http::ReqwestHttpClient;
 use crate::server::infrastructure::shared::id::UuidGenerator;
 use crate::server::infrastructure::shared::time::SystemClock;
 use crate::server::setup::config::Config;
 use crate::server::setup::exceptions::SetupError;
 use crate::server::setup::seed::seed_if_empty;
-use event_sourcing::event_bus::EventBus;
 
 use self::aggregates::build_aggregate_wirings;
+use self::catalog::{CatalogDeps, CatalogServices};
+use self::chat::{ChatDeps, ChatServices};
+use self::connector::{ConnectorDeps, ConnectorServices};
+use self::evaluation::{EvaluationDeps, EvaluationServices};
+use self::indexing::{IndexingDeps, IndexingServices};
+use self::ingestion::{IngestionDeps, IngestionServices};
+use self::platform::{PlatformDeps, PlatformServices};
 use self::repositories::build_repositories;
-use self::services::{build_services, ServicesDeps};
-use self::workflows::{launch_workflows, WorkflowsDeps};
+use self::retrieval::{RetrievalDeps, RetrievalServices};
 
 pub struct App {
-    pub embedding_model_command_handler: Arc<EmbeddingModelCatalogCommandHandler>,
-    pub generation_model_command_handler: Arc<GenerationModelCatalogCommandHandler>,
-    pub vector_index_command_handler: Arc<VectorIndexCatalogCommandHandler>,
-    pub pipeline_configuration_command_handler: Arc<PipelineConfigurationCatalogCommandHandler>,
-    pub chunking_configuration_command_handler: Arc<ChunkingConfigurationCatalogCommandHandler>,
-    pub sweep_template_command_handler: Arc<SweepTemplateCommandHandler>,
-    pub configuration_query_service: Arc<ConfigurationQueryService>,
-    pub pipeline_configuration_query_service: Arc<PipelineConfigurationQueryService>,
-    pub chunking_configuration_query_service: Arc<ChunkingConfigurationQueryService>,
-    pub sweep_template_query_service: Arc<SweepTemplateQueryService>,
-    pub evaluation_dataset_command_handler: Arc<EvaluationDatasetCommandHandler>,
-    pub evaluation_run_command_handler: Arc<EvaluationRunCommandHandler>,
-    pub evaluation_query_service: Arc<EvaluationQueryService>,
-    pub embedding_service: Arc<EmbeddingService>,
-    pub generation_service: Arc<GenerationService>,
-    pub pipeline_resolver: Arc<PipelineResolver>,
-    pub vector_index_resolver: Arc<VectorIndexResolver>,
-    pub job_registry: Arc<JobRegistry>,
-    pub activity_registry: Arc<ActivityRegistry>,
-    pub source_document_ingest_service: Arc<SourceDocumentIngestService>,
-    pub source_document_query_service: Arc<SourceDocumentQueryService>,
-    pub retrieval_service: Arc<RetrievalService>,
-    pub chat_service: Arc<ChatService>,
-    pub connector_command_handler: Arc<ConnectorCommandHandler>,
-    pub connector_query_service: Arc<ConnectorQueryService>,
-    pub connector_registry: Arc<ConnectorRegistry>,
-    pub connector_sync_service: Arc<ConnectorSyncService>,
-    pub connector_sync_query_service: Arc<ConnectorSyncQueryService>,
-    pub bulk_import_service: Arc<BulkImportService>,
-    pub event_bus: Arc<EventBus>,
+    pub platform: Arc<PlatformServices>,
+    pub catalog: Arc<CatalogServices>,
+    pub connector: Arc<ConnectorServices>,
+    pub indexing: Arc<IndexingServices>,
+    pub ingestion: Arc<IngestionServices>,
+    pub retrieval: Arc<RetrievalServices>,
+    pub chat: Arc<ChatServices>,
+    pub evaluation: Arc<EvaluationServices>,
 }
 
 pub async fn bootstrap() -> Result<App, SetupError> {
@@ -103,67 +69,121 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         config.ollama.base_url.clone(),
     ));
 
-    let event_bus = Arc::new(EventBus::new());
-
     let repos = build_repositories(&pool, &config, &cf_api)?;
     let wirings = build_aggregate_wirings(&pool);
 
-    let services = build_services(ServicesDeps {
+    let platform = PlatformServices::build(PlatformDeps {
         config: &config,
-        pool: pool.clone(),
-        clock: Arc::clone(&clock),
-        id_generator: Arc::clone(&id_generator),
         http: Arc::clone(&http),
         cf_api: Arc::clone(&cf_api),
         ollama_api: Arc::clone(&ollama_api),
         repos: &repos,
-        wirings: &wirings,
-    })
-    .await?;
-
-    let workflows = launch_workflows(WorkflowsDeps {
-        config: &config,
-        pool,
-        http,
-        clock,
-        id_generator,
-        event_bus: Arc::clone(&event_bus),
-        repos: &repos,
-        services: &services,
-        wirings: &wirings,
     })?;
 
+    let mut wakeups: HashMap<String, Arc<Notify>> = HashMap::new();
+
+    let catalog = CatalogServices::build(CatalogDeps {
+        pool: pool.clone(),
+        id_generator: Arc::clone(&id_generator),
+        cf_api: Arc::clone(&cf_api),
+        repos: &repos,
+        wirings: &wirings,
+        embedding_service: Arc::clone(&platform.embedding_service),
+        generation_service: Arc::clone(&platform.generation_service),
+        event_bus: Arc::clone(&platform.event_bus),
+        wakeups: &mut wakeups,
+    })?;
+
+    let connector = ConnectorServices::build(ConnectorDeps {
+        clock: Arc::clone(&clock),
+        id_generator: Arc::clone(&id_generator),
+        http: Arc::clone(&http),
+        repos: &repos,
+        wirings: &wirings,
+        event_bus: Arc::clone(&platform.event_bus),
+        wakeups: &mut wakeups,
+    })?;
+
+    let indexing = IndexingServices::build(IndexingDeps {
+        pool: pool.clone(),
+        clock: Arc::clone(&clock),
+        id_generator: Arc::clone(&id_generator),
+        repos: &repos,
+        wirings: &wirings,
+        event_bus: Arc::clone(&platform.event_bus),
+        job_registry: Arc::clone(&platform.job_registry),
+        activity_registry: Arc::clone(&platform.activity_registry),
+        chunker_registry: Arc::clone(&platform.chunker_registry),
+        embedding_service: Arc::clone(&platform.embedding_service),
+        vector_index_resolver: Arc::clone(&catalog.vector_index_resolver),
+        pipeline_resolver: Arc::clone(&catalog.pipeline_resolver),
+        kv_store: Arc::clone(&repos.kv_store),
+        wakeups: &mut wakeups,
+    })?;
+
+    let ingestion = IngestionServices::build(IngestionDeps {
+        clock: Arc::clone(&clock),
+        id_generator: Arc::clone(&id_generator),
+        http: Arc::clone(&http),
+        repos: &repos,
+        wirings: &wirings,
+        event_bus: Arc::clone(&platform.event_bus),
+        markdown_parser: Arc::clone(&platform.markdown_parser),
+        pipeline_resolver: Arc::clone(&catalog.pipeline_resolver),
+        chunking_configuration_query_service: Arc::clone(
+            &catalog.chunking_configuration_query_service,
+        ),
+        connector_registry: Arc::clone(&connector.connector_registry),
+        connector_query_service: Arc::clone(&connector.connector_query_service),
+        connector_import_command_handler: Arc::clone(&connector.connector_import_command_handler),
+        connector_import_query_service: Arc::clone(&connector.connector_import_query_service),
+        indexing_command_handler: Arc::clone(&indexing.indexing_command_handler),
+        wakeups: &mut wakeups,
+    })?;
+
+    let retrieval = RetrievalServices::build(RetrievalDeps {
+        repos: &repos,
+        pipeline_resolver: Arc::clone(&catalog.pipeline_resolver),
+        embedding_service: Arc::clone(&platform.embedding_service),
+        vector_index_resolver: Arc::clone(&catalog.vector_index_resolver),
+    })?;
+
+    let chat = ChatServices::build(ChatDeps {
+        repos: &repos,
+        pipeline_resolver: Arc::clone(&catalog.pipeline_resolver),
+        embedding_service: Arc::clone(&platform.embedding_service),
+        vector_index_resolver: Arc::clone(&catalog.vector_index_resolver),
+        generation_service: Arc::clone(&platform.generation_service),
+    })?;
+
+    let evaluation = EvaluationServices::build(EvaluationDeps {
+        pool: pool.clone(),
+        clock: Arc::clone(&clock),
+        id_generator: Arc::clone(&id_generator),
+        repos: &repos,
+        wirings: &wirings,
+        event_bus: Arc::clone(&platform.event_bus),
+        job_registry: Arc::clone(&platform.job_registry),
+        activity_registry: Arc::clone(&platform.activity_registry),
+        chunker_registry: Arc::clone(&platform.chunker_registry),
+        embedding_service: Arc::clone(&platform.embedding_service),
+        generation_service: Arc::clone(&platform.generation_service),
+        pipeline_resolver: Arc::clone(&catalog.pipeline_resolver),
+        source_document_query_service: Arc::clone(&ingestion.source_document_query_service),
+        wakeups: &mut wakeups,
+    })?;
+
+    spawn_postgres_event_listener(pool, wakeups);
+
     let app = App {
-        embedding_model_command_handler: services.embedding_model_command_handler,
-        generation_model_command_handler: services.generation_model_command_handler,
-        vector_index_command_handler: services.vector_index_command_handler,
-        pipeline_configuration_command_handler: services.pipeline_configuration_command_handler,
-        chunking_configuration_command_handler: services.chunking_configuration_command_handler,
-        sweep_template_command_handler: services.sweep_template_command_handler,
-        configuration_query_service: services.configuration_query_service,
-        pipeline_configuration_query_service: services.pipeline_configuration_query_service,
-        chunking_configuration_query_service: services.chunking_configuration_query_service,
-        sweep_template_query_service: services.sweep_template_query_service,
-        evaluation_dataset_command_handler: services.evaluation_dataset_command_handler,
-        evaluation_run_command_handler: services.evaluation_run_command_handler,
-        evaluation_query_service: services.evaluation_query_service,
-        embedding_service: services.embedding_service,
-        generation_service: services.generation_service,
-        pipeline_resolver: services.pipeline_resolver,
-        vector_index_resolver: services.vector_index_resolver,
-        job_registry: services.job_registry,
-        activity_registry: services.activity_registry,
-        source_document_ingest_service: workflows.source_document_ingest_service,
-        source_document_query_service: services.source_document_query_service,
-        retrieval_service: services.retrieval_service,
-        chat_service: services.chat_service,
-        connector_command_handler: services.connector_command_handler,
-        connector_query_service: services.connector_query_service,
-        connector_registry: workflows.connector_registry,
-        connector_sync_service: workflows.connector_sync_service,
-        connector_sync_query_service: services.connector_sync_query_service,
-        bulk_import_service: workflows.bulk_import_service,
-        event_bus,
+        platform: Arc::new(platform),
+        catalog: Arc::new(catalog),
+        connector: Arc::new(connector),
+        indexing: Arc::new(indexing),
+        ingestion: Arc::new(ingestion),
+        retrieval: Arc::new(retrieval),
+        chat: Arc::new(chat),
+        evaluation: Arc::new(evaluation),
     };
 
     app.seed_if_empty().await;
@@ -172,56 +192,37 @@ pub async fn bootstrap() -> Result<App, SetupError> {
 
 impl App {
     pub fn provide_contexts(&self) {
-        provide_context(Arc::clone(&self.embedding_model_command_handler));
-        provide_context(Arc::clone(&self.generation_model_command_handler));
-        provide_context(Arc::clone(&self.vector_index_command_handler));
-        provide_context(Arc::clone(&self.pipeline_configuration_command_handler));
-        provide_context(Arc::clone(&self.chunking_configuration_command_handler));
-        provide_context(Arc::clone(&self.sweep_template_command_handler));
-        provide_context(Arc::clone(&self.configuration_query_service));
-        provide_context(Arc::clone(&self.pipeline_configuration_query_service));
-        provide_context(Arc::clone(&self.chunking_configuration_query_service));
-        provide_context(Arc::clone(&self.sweep_template_query_service));
-        provide_context(Arc::clone(&self.evaluation_dataset_command_handler));
-        provide_context(Arc::clone(&self.evaluation_run_command_handler));
-        provide_context(Arc::clone(&self.evaluation_query_service));
-        provide_context(Arc::clone(&self.embedding_service));
-        provide_context(Arc::clone(&self.generation_service));
-        provide_context(Arc::clone(&self.pipeline_resolver));
-        provide_context(Arc::clone(&self.vector_index_resolver));
-        provide_context(Arc::clone(&self.job_registry));
-        provide_context(Arc::clone(&self.activity_registry));
-        provide_context(Arc::clone(&self.source_document_ingest_service));
-        provide_context(Arc::clone(&self.source_document_query_service));
-        provide_context(Arc::clone(&self.retrieval_service));
-        provide_context(Arc::clone(&self.chat_service));
-        provide_context(Arc::clone(&self.connector_command_handler));
-        provide_context(Arc::clone(&self.connector_query_service));
-        provide_context(Arc::clone(&self.connector_registry));
-        provide_context(Arc::clone(&self.connector_sync_service));
-        provide_context(Arc::clone(&self.connector_sync_query_service));
-        provide_context(Arc::clone(&self.bulk_import_service));
+        provide_context(Arc::clone(&self.platform));
+        provide_context(Arc::clone(&self.catalog));
+        provide_context(Arc::clone(&self.connector));
+        provide_context(Arc::clone(&self.indexing));
+        provide_context(Arc::clone(&self.ingestion));
+        provide_context(Arc::clone(&self.retrieval));
+        provide_context(Arc::clone(&self.chat));
+        provide_context(Arc::clone(&self.evaluation));
     }
 
     pub fn apply_axum_extensions(&self, router: Router) -> Router {
         router
-            .layer(Extension(Arc::clone(&self.event_bus)))
-            .layer(Extension(Arc::clone(&self.job_registry)))
-            .layer(Extension(Arc::clone(&self.source_document_ingest_service)))
+            .layer(Extension(Arc::clone(&self.platform.event_bus)))
+            .layer(Extension(Arc::clone(&self.platform.job_registry)))
+            .layer(Extension(Arc::clone(
+                &self.ingestion.source_document_ingest_service,
+            )))
     }
 
     async fn seed_if_empty(&self) {
         if let Err(e) = seed_if_empty(
-            &self.chunking_configuration_query_service,
-            &self.sweep_template_query_service,
-            &self.configuration_query_service,
-            &self.pipeline_configuration_query_service,
-            &self.embedding_model_command_handler,
-            &self.generation_model_command_handler,
-            &self.vector_index_command_handler,
-            &self.chunking_configuration_command_handler,
-            &self.pipeline_configuration_command_handler,
-            &self.sweep_template_command_handler,
+            &self.catalog.chunking_configuration_query_service,
+            &self.catalog.sweep_template_query_service,
+            &self.catalog.configuration_query_service,
+            &self.catalog.pipeline_configuration_query_service,
+            &self.catalog.embedding_model_command_handler,
+            &self.catalog.generation_model_command_handler,
+            &self.catalog.vector_index_command_handler,
+            &self.catalog.chunking_configuration_command_handler,
+            &self.catalog.pipeline_configuration_command_handler,
+            &self.catalog.sweep_template_command_handler,
         )
         .await
         {

@@ -12,11 +12,7 @@ use crate::shared::contracts::{
 use crate::shared::contracts::{RunStatusFacetDto, RunStatusFilterDto};
 
 #[cfg(feature = "ssr")]
-use crate::server::application::evaluation::query_service::EvaluationQueryService;
-#[cfg(feature = "ssr")]
-use crate::server::application::evaluation::{
-    EvaluationDatasetCommandHandler, EvaluationRunCommandHandler, StartDatasetGenerationRequest,
-};
+use crate::server::application::evaluation::StartDatasetGenerationRequest;
 #[cfg(feature = "ssr")]
 use crate::server::application::source_document::SourceDocumentQueryService;
 #[cfg(feature = "ssr")]
@@ -27,6 +23,10 @@ use crate::server::domain::evaluation::run::read_model::EvaluationRunReadModel;
 use crate::server::domain::evaluation::run::repository::{
     RunListCursor, RunListQuery, RunStatusFilter,
 };
+#[cfg(feature = "ssr")]
+use crate::server::setup::compose::evaluation::EvaluationServices;
+#[cfg(feature = "ssr")]
+use crate::server::setup::compose::ingestion::IngestionServices;
 #[cfg(feature = "ssr")]
 use crate::server_functions::error::{ctx, map_app_error};
 #[cfg(feature = "ssr")]
@@ -44,7 +44,8 @@ use std::sync::Arc;
 pub async fn get_datasets_for_document(
     document_id: Uuid,
 ) -> Result<Vec<EvaluationDatasetSummaryDto>, ServerFnError> {
-    let datasets = ctx::<Arc<EvaluationQueryService>>()?
+    let datasets = ctx::<Arc<EvaluationServices>>()?
+        .evaluation_query_service
         .list_datasets_for_document(document_id)
         .await
         .map_err(|e| map_app_error(&e))?;
@@ -63,7 +64,8 @@ pub async fn get_datasets_for_document(
 
 #[server(name = GetDataset, prefix = "/api", endpoint = "get_dataset")]
 pub async fn get_dataset(dataset_id: Uuid) -> Result<Option<EvaluationDatasetDto>, ServerFnError> {
-    let query = ctx::<Arc<EvaluationQueryService>>()?;
+    let services = ctx::<Arc<EvaluationServices>>()?;
+    let query = &services.evaluation_query_service;
 
     let dataset = query
         .get_dataset(dataset_id)
@@ -111,7 +113,8 @@ pub async fn start_generate_synthetic_dataset(
     excerpt_similarity_threshold_milli: u32,
     duplicate_similarity_threshold_milli: u32,
 ) -> Result<EvaluationJobInfo, ServerFnError> {
-    ctx::<Arc<EvaluationDatasetCommandHandler>>()?
+    ctx::<Arc<EvaluationServices>>()?
+        .evaluation_dataset_command_handler
         .start_generation(StartDatasetGenerationRequest {
             document_id,
             pipeline_configuration_id,
@@ -126,7 +129,8 @@ pub async fn start_generate_synthetic_dataset(
 
 #[server(name = RenameDataset, prefix = "/api", endpoint = "rename_dataset")]
 pub async fn rename_dataset(dataset_id: Uuid, label: String) -> Result<(), ServerFnError> {
-    ctx::<Arc<EvaluationDatasetCommandHandler>>()?
+    ctx::<Arc<EvaluationServices>>()?
+        .evaluation_dataset_command_handler
         .rename(dataset_id, label)
         .await
         .map_err(|e| map_app_error(&e))
@@ -134,7 +138,8 @@ pub async fn rename_dataset(dataset_id: Uuid, label: String) -> Result<(), Serve
 
 #[server(name = DeleteDataset, prefix = "/api", endpoint = "delete_dataset")]
 pub async fn delete_dataset(dataset_id: Uuid) -> Result<(), ServerFnError> {
-    ctx::<Arc<EvaluationDatasetCommandHandler>>()?
+    ctx::<Arc<EvaluationServices>>()?
+        .evaluation_dataset_command_handler
         .delete(dataset_id)
         .await
         .map_err(|e| map_app_error(&e))
@@ -142,7 +147,8 @@ pub async fn delete_dataset(dataset_id: Uuid) -> Result<(), ServerFnError> {
 
 #[server(name = CancelDatasetGeneration, prefix = "/api", endpoint = "cancel_dataset_generation")]
 pub async fn cancel_dataset_generation(dataset_id: Uuid) -> Result<(), ServerFnError> {
-    ctx::<Arc<EvaluationDatasetCommandHandler>>()?
+    ctx::<Arc<EvaluationServices>>()?
+        .evaluation_dataset_command_handler
         .cancel_generation(dataset_id)
         .await
         .map_err(|e| map_app_error(&e))
@@ -156,7 +162,8 @@ pub async fn cancel_dataset_generation(dataset_id: Uuid) -> Result<(), ServerFnE
 pub async fn start_run_optimization(
     request: RunOptimizationRequestDto,
 ) -> Result<EvaluationJobInfo, ServerFnError> {
-    ctx::<Arc<EvaluationRunCommandHandler>>()?
+    ctx::<Arc<EvaluationServices>>()?
+        .evaluation_run_command_handler
         .start_optimization(request)
         .await
         .map_err(|e| map_app_error(&e))
@@ -170,7 +177,8 @@ pub async fn start_run_optimization(
 pub async fn start_run_evaluation(
     request: RunEvaluationRequestDto,
 ) -> Result<EvaluationJobInfo, ServerFnError> {
-    ctx::<Arc<EvaluationRunCommandHandler>>()?
+    ctx::<Arc<EvaluationServices>>()?
+        .evaluation_run_command_handler
         .start_run(request)
         .await
         .map_err(|e| map_app_error(&e))
@@ -184,7 +192,8 @@ pub async fn start_run_evaluation(
 pub async fn get_runs_for_document(
     document_id: Uuid,
 ) -> Result<Vec<EvaluationRunSummaryDto>, ServerFnError> {
-    let runs = ctx::<Arc<EvaluationQueryService>>()?
+    let runs = ctx::<Arc<EvaluationServices>>()?
+        .evaluation_query_service
         .list_runs_for_document(document_id)
         .await
         .map_err(|e| map_app_error(&e))?;
@@ -207,7 +216,8 @@ pub async fn get_runs_for_document(
     endpoint = "replicate_optimization_run"
 )]
 pub async fn replicate_optimization_run(run_id: Uuid) -> Result<Uuid, ServerFnError> {
-    ctx::<Arc<EvaluationRunCommandHandler>>()?
+    ctx::<Arc<EvaluationServices>>()?
+        .evaluation_run_command_handler
         .replicate_optimization(run_id)
         .await
         .map_err(|e| map_app_error(&e))
@@ -223,7 +233,7 @@ pub async fn promote_variant_to_chunking_config(
     variant_label: String,
     name: String,
 ) -> Result<Uuid, ServerFnError> {
-    use crate::server::application::configuration::ChunkingConfigurationCatalogCommandHandler;
+    use crate::server::setup::compose::catalog::CatalogServices;
     use crate::shared::contracts::{
         ChunkingConfigurationCommandDto, CreateChunkingConfigurationDto,
     };
@@ -233,8 +243,10 @@ pub async fn promote_variant_to_chunking_config(
         return Err(ServerFnError::new("variant_label is required".to_string()));
     }
 
-    let query = ctx::<Arc<EvaluationQueryService>>()?;
-    let chunking_handler = ctx::<Arc<ChunkingConfigurationCatalogCommandHandler>>()?;
+    let services = ctx::<Arc<EvaluationServices>>()?;
+    let query = &services.evaluation_query_service;
+    let catalog = ctx::<Arc<CatalogServices>>()?;
+    let chunking_handler = &catalog.chunking_configuration_command_handler;
 
     let run = query
         .get_run(run_id)
@@ -280,7 +292,8 @@ pub async fn promote_variant_to_chunking_config(
 
 #[server(name = GetRun, prefix = "/api", endpoint = "get_run")]
 pub async fn get_run(run_id: Uuid) -> Result<Option<EvaluationRunDto>, ServerFnError> {
-    let run = ctx::<Arc<EvaluationQueryService>>()?
+    let run = ctx::<Arc<EvaluationServices>>()?
+        .evaluation_query_service
         .get_run(run_id)
         .await
         .map_err(|e| map_app_error(&e))?;
@@ -297,15 +310,17 @@ pub async fn get_run(run_id: Uuid) -> Result<Option<EvaluationRunDto>, ServerFnE
 #[server(name = GetRecentRuns, prefix = "/api", endpoint = "get_recent_runs")]
 pub async fn get_recent_runs(limit: u32) -> Result<Vec<RecentEvaluationRunDto>, ServerFnError> {
     let limit = limit.clamp(1, 100);
-    let query = ctx::<Arc<EvaluationQueryService>>()?;
-    let documents = ctx::<Arc<SourceDocumentQueryService>>()?;
+    let services = ctx::<Arc<EvaluationServices>>()?;
+    let query = &services.evaluation_query_service;
+    let ingestion = ctx::<Arc<IngestionServices>>()?;
+    let documents = &ingestion.source_document_query_service;
 
     let runs = query
         .list_recent_runs(limit)
         .await
         .map_err(|e| map_app_error(&e))?;
 
-    let doc_index = build_doc_index(&documents).await?;
+    let doc_index = build_doc_index(documents).await?;
 
     Ok(runs.iter().map(|r| map_run_to_dto(r, &doc_index)).collect())
 }
@@ -338,15 +353,17 @@ pub async fn get_evaluation_runs_page(
             .collect(),
     };
 
-    let svc = ctx::<Arc<EvaluationQueryService>>()?;
-    let documents = ctx::<Arc<SourceDocumentQueryService>>()?;
+    let services = ctx::<Arc<EvaluationServices>>()?;
+    let svc = &services.evaluation_query_service;
+    let ingestion = ctx::<Arc<IngestionServices>>()?;
+    let documents = &ingestion.source_document_query_service;
 
     let page = svc
         .list_runs_page(domain_query)
         .await
         .map_err(|e| map_app_error(&e))?;
 
-    let doc_index = build_doc_index(&documents).await?;
+    let doc_index = build_doc_index(documents).await?;
 
     let items = page
         .items
