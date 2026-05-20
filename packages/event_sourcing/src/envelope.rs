@@ -41,3 +41,49 @@ impl<E: Serialize> EventEnvelope<E> {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::expect_used)]
+
+    use super::*;
+    use serde::{Deserialize, Serialize};
+    use uuid::Uuid;
+
+    #[derive(Serialize, Deserialize)]
+    #[serde(tag = "type")]
+    enum Ev {
+        Happened,
+    }
+
+    fn env(sequence: i64, log_position: i64) -> EventEnvelope<Ev> {
+        EventEnvelope {
+            event: Ev::Happened,
+            metadata: EventMetadata {
+                stream_id: Uuid::nil(),
+                aggregate_type: "agg".into(),
+                sequence,
+                log_position,
+                event_type: "Happened".into(),
+                occurred_at: "2024-01-01T00:00:00Z".into(),
+            },
+        }
+    }
+
+    #[test]
+    fn to_published_copies_all_metadata_fields() {
+        let p = env(3, 99).to_published().expect("publish");
+        assert_eq!(p.stream_id, Uuid::nil());
+        assert_eq!(p.aggregate_type, "agg");
+        assert_eq!(p.sequence, 3);
+        assert_eq!(p.log_position, 99);
+        assert_eq!(p.event_type, "Happened");
+        assert_eq!(p.occurred_at, "2024-01-01T00:00:00Z");
+    }
+
+    #[test]
+    fn to_published_serializes_event_payload() {
+        let p = env(1, 1).to_published().expect("publish");
+        assert_eq!(p.event_data["type"], "Happened");
+    }
+}

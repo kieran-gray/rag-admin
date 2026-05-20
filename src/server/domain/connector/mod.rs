@@ -9,13 +9,13 @@ pub mod repository;
 
 pub use aggregate::Connector;
 pub use commands::{
-    ConnectorCommand, RegisterConnector, RenameConnector, UnregisterConnector,
-    UpdateConnectorConfig,
+    ConnectorCommand, RegisterConnector, RenameConnector, SetConnectorDefaults,
+    UnregisterConnector, UpdateConnectorConfig,
 };
 pub use config::{ConnectorConfig, ConnectorKind, SitemapConfig};
 pub use events::{
-    ConnectorConfigUpdated, ConnectorEvent, ConnectorRegistered, ConnectorRenamed,
-    ConnectorUnregistered,
+    ConnectorConfigUpdated, ConnectorDefaultsSet, ConnectorEvent, ConnectorRegistered,
+    ConnectorRenamed, ConnectorUnregistered,
 };
 pub use exceptions::ConnectorError;
 pub use projector::ConnectorProjector;

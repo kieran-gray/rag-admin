@@ -7,7 +7,7 @@ use crate::shared::contracts::{
     VectorIndexCommandDto,
 };
 use crate::shared::reference_data::{AiProviderKind, VectorStoreKind};
-use crate::ui::components::primitives::Dialog;
+use crate::ui::components::primitives::{Dialog, InlineStatusMessage};
 
 use super::widgets::{AiKindSelect, LabelledInput, LabelledNum, VectorKindSelect};
 use super::{dispatch_catalog_command, CatalogCommand, DeleteTarget, RegistryForm};
@@ -18,7 +18,7 @@ pub(super) fn RegistryFormDialog(
     set_form: WriteSignal<Option<RegistryForm>>,
     busy: ReadSignal<bool>,
     set_busy: WriteSignal<bool>,
-    set_status: WriteSignal<Option<(bool, String)>>,
+    set_status: WriteSignal<Option<InlineStatusMessage>>,
     set_refresh: WriteSignal<u32>,
 ) -> impl IntoView {
     let (dialog_error, set_dialog_error) = signal::<Option<String>>(None);
@@ -175,7 +175,7 @@ pub(super) fn RegistryDeleteDialog(
     set_target: WriteSignal<Option<DeleteTarget>>,
     busy: ReadSignal<bool>,
     set_busy: WriteSignal<bool>,
-    set_status: WriteSignal<Option<(bool, String)>>,
+    set_status: WriteSignal<Option<InlineStatusMessage>>,
     set_refresh: WriteSignal<u32>,
 ) -> impl IntoView {
     let close = Callback::new(move |_| set_target.set(None));

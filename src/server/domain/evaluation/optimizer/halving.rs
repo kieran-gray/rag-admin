@@ -155,4 +155,71 @@ mod tests {
             OptimizationBudget::Exhaustive.describe()
         );
     }
+
+    #[test]
+    fn fraction_apply_to_zero_returns_one() {
+        assert_eq!(Fraction::Quarter.apply(0), 1);
+        assert_eq!(Fraction::Half.apply(0), 1);
+        assert_eq!(Fraction::Full.apply(0), 1);
+    }
+
+    #[test]
+    fn fraction_apply_to_one_returns_one() {
+        assert_eq!(Fraction::Quarter.apply(1), 1);
+        assert_eq!(Fraction::Half.apply(1), 1);
+        assert_eq!(Fraction::Full.apply(1), 1);
+    }
+
+    #[test]
+    fn fraction_quarter_uses_ceiling_division() {
+        assert_eq!(Fraction::Quarter.apply(3), 1);
+        assert_eq!(Fraction::Quarter.apply(5), 2);
+        assert_eq!(Fraction::Quarter.apply(8), 2);
+        assert_eq!(Fraction::Quarter.apply(9), 3);
+    }
+
+    #[test]
+    fn survivors_returns_at_most_input_size() {
+        let scored = vec![(0u32, 0.5), (1, 0.7)];
+        assert_eq!(survivors(&scored, 10).len(), 2);
+        assert!(survivors(&[], 5).is_empty());
+    }
+
+    #[test]
+    fn survivors_with_nan_does_not_panic_and_keeps_others() {
+        let scored = vec![(0u32, f32::NAN), (1, 0.5), (2, 0.9)];
+        let result = survivors(&scored, 2);
+        assert_eq!(result.len(), 2);
+        assert!(result.contains(&2), "highest finite score must survive");
+    }
+
+    #[test]
+    fn survivors_with_take_zero_returns_empty() {
+        let scored = vec![(0u32, 0.1), (1, 0.9)];
+        assert!(survivors(&scored, 0).is_empty());
+    }
+
+    #[test]
+    fn schedule_question_counts_grow_through_rungs() {
+        let s = SearchBudget::Thorough.schedule();
+        let counts: Vec<usize> = s.iter().map(|r| r.question_count(40)).collect();
+        assert_eq!(counts, vec![10, 20, 40, 40]);
+    }
+
+    #[test]
+    fn schedule_trial_count_decreases_monotonically_within_budget() {
+        for budget in [
+            SearchBudget::Quick,
+            SearchBudget::Thorough,
+            SearchBudget::Exhaustive,
+        ] {
+            let s = budget.schedule();
+            for w in s.windows(2) {
+                assert!(
+                    w[0].trials >= w[1].trials,
+                    "trial counts must be non-increasing through rungs for {budget:?}",
+                );
+            }
+        }
+    }
 }

@@ -73,3 +73,36 @@ where
 
     async fn cancel_partition(&self, queue: &str, partition_key: Uuid) -> Result<u64, EsError>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+
+    #[test]
+    fn idempotency_key_encodes_all_three_components() {
+        let id = Uuid::nil();
+        assert_eq!(
+            IdempotencyKey::new(id, 7, "emit").as_str(),
+            "00000000-0000-0000-0000-000000000000:7:emit",
+        );
+    }
+
+    #[test]
+    fn same_inputs_yield_equal_keys() {
+        let id = Uuid::nil();
+        assert_eq!(
+            IdempotencyKey::new(id, 1, "x").as_str(),
+            IdempotencyKey::new(id, 1, "x").as_str(),
+        );
+    }
+
+    #[test]
+    fn different_discriminators_are_distinct() {
+        let id = Uuid::nil();
+        assert_ne!(
+            IdempotencyKey::new(id, 1, "a").as_str(),
+            IdempotencyKey::new(id, 1, "b").as_str(),
+        );
+    }
+}

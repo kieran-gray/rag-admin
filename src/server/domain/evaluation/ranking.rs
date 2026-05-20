@@ -99,4 +99,29 @@ mod tests {
         let v = vec![e(0.8, 0.7, 0.85), e(0.6, 0.55, 0.70)];
         assert_eq!(equivalence_class(&v), vec![0, 1]);
     }
+
+    #[test]
+    fn ties_in_score_keep_first_as_leader() {
+        let v = vec![e(0.5, 0.45, 0.55), e(0.5, 0.45, 0.55), e(0.5, 0.45, 0.55)];
+        assert_eq!(equivalence_class(&v), vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn entries_strictly_below_leader_ci_excluded_even_with_ties() {
+        let v = vec![e(0.9, 0.85, 0.95), e(0.5, 0.45, 0.55), e(0.5, 0.45, 0.55)];
+        assert_eq!(equivalence_class(&v), vec![0]);
+    }
+
+    #[test]
+    fn nan_score_does_not_panic_and_first_treated_as_leader() {
+        let v = vec![e(f32::NAN, 0.0, 1.0), e(0.5, 0.4, 0.6)];
+        let class = equivalence_class(&v);
+        assert!(class.contains(&0), "leader index must be present");
+    }
+
+    #[test]
+    fn class_includes_self_when_ci_within_leader_band() {
+        let v = vec![e(0.6, 0.3, 0.9), e(0.55, 0.5, 0.6)];
+        assert_eq!(equivalence_class(&v), vec![0, 1]);
+    }
 }

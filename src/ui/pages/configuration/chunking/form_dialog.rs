@@ -10,7 +10,7 @@ use crate::shared::{
     BertChunkingConfig, ChunkingConfig, DarnChunkingConfig, DarnGranularity, LlmChunkingConfig,
     SectionChunkingConfig,
 };
-use crate::ui::components::primitives::Dialog;
+use crate::ui::components::primitives::{Dialog, InlineStatusMessage};
 use crate::ui::pages::configuration::commands::{
     parse_uuid_or_none, run_chunking_configuration_command,
 };
@@ -25,7 +25,7 @@ pub(super) fn ChunkingFormDialog(
     set_form_mode: WriteSignal<Option<FormMode>>,
     busy: ReadSignal<bool>,
     set_busy: WriteSignal<bool>,
-    set_status: WriteSignal<Option<(bool, String)>>,
+    set_status: WriteSignal<Option<InlineStatusMessage>>,
     set_refresh: WriteSignal<u32>,
 ) -> impl IntoView {
     let config = StoredValue::new(config);

@@ -28,11 +28,19 @@ pub struct UnregisterConnector {
     pub occurred_at: Timestamp,
 }
 
+pub struct SetConnectorDefaults {
+    pub connector_id: Uuid,
+    pub pipeline_configuration_id: Option<Uuid>,
+    pub chunking_configuration_id: Option<Uuid>,
+    pub occurred_at: Timestamp,
+}
+
 pub enum ConnectorCommand {
     RegisterConnector(RegisterConnector),
     RenameConnector(RenameConnector),
     UpdateConnectorConfig(UpdateConnectorConfig),
     UnregisterConnector(UnregisterConnector),
+    SetConnectorDefaults(SetConnectorDefaults),
 }
 
 impl ConnectorCommand {
@@ -42,6 +50,7 @@ impl ConnectorCommand {
             ConnectorCommand::RenameConnector(cmd) => cmd.connector_id,
             ConnectorCommand::UpdateConnectorConfig(cmd) => cmd.connector_id,
             ConnectorCommand::UnregisterConnector(cmd) => cmd.connector_id,
+            ConnectorCommand::SetConnectorDefaults(cmd) => cmd.connector_id,
         }
     }
 }

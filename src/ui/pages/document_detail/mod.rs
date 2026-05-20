@@ -6,7 +6,7 @@ mod steps;
 
 use steps::{ChunkStep, ConfigSelection, DocumentStep, EmbedStep, IndexStep};
 
-use super::shared::short_hash;
+use super::shared::{document_type_label, indexing_milestone, indexing_summary, short_hash};
 
 use crate::server_functions::configuration::{
     get_chunking_configurations, get_pipeline_configurations,
@@ -380,7 +380,7 @@ fn initial_step(indexings: &[IndexingDto]) -> WorkflowStep {
     if live.is_empty() {
         return WorkflowStep::Document;
     }
-    let most_advanced = live.iter().copied().max_by_key(|ix| milestone_rank(ix));
+    let most_advanced = live.iter().copied().max_by_key(|ix| indexing_milestone(ix));
     match most_advanced {
         None => WorkflowStep::Document,
         Some(ix) if ix.status.contains("Indexed") => WorkflowStep::Index,
@@ -402,70 +402,8 @@ fn derive_header(
         doc.latest_version,
         short_hash(&doc.latest_content_hash),
     ));
-    let status = derive_status(indexings, doc.latest_version);
-    (eyebrow, title, subtitle, status)
-}
-
-fn derive_status(indexings: &[IndexingDto], latest_version: u32) -> (Status, String) {
-    let live: Vec<&IndexingDto> = indexings.iter().filter(|ix| !ix.removed).collect();
-    if live.is_empty() {
-        return (Status::Stale, "Not indexed".to_string());
-    }
-    if live.iter().any(|i| i.status.contains("Failed")) {
-        return (Status::Fail, "Has failures".to_string());
-    }
-
-    let indexed: Vec<&IndexingDto> = live
-        .iter()
-        .copied()
-        .filter(|i| i.status.contains("Indexed"))
-        .collect();
-
-    if !indexed.is_empty() {
-        let any_stale = indexed.iter().any(|i| i.document_version < latest_version);
-        return if any_stale {
-            (
-                Status::Pending,
-                format!("Indexed · stale (v{latest_version})"),
-            )
-        } else if indexed.len() == 1 {
-            (Status::Ok, "Indexed".to_string())
-        } else {
-            (Status::Ok, format!("Indexed × {}", indexed.len()))
-        };
-    }
-
-    let Some(most_advanced) = live.iter().copied().max_by_key(|ix| milestone_rank(ix)) else {
-        return (Status::Stale, "Not indexed".to_string());
-    };
-
-    match (most_advanced.chunk_set_id, most_advanced.embedding_set_id) {
-        (None, _) => (Status::Pending, "Chunking…".to_string()),
-        (Some(_), None) => (Status::Info, "Chunked".to_string()),
-        (Some(_), Some(_)) => (Status::Info, "Embedded".to_string()),
-    }
-}
-
-fn milestone_rank(ix: &IndexingDto) -> u8 {
-    if ix.status.contains("Indexed") {
-        4
-    } else if ix.embedding_set_id.is_some() {
-        3
-    } else if ix.chunk_set_id.is_some() {
-        2
-    } else {
-        1
-    }
-}
-
-fn document_type_label(doc_type: &str) -> &'static str {
-    match doc_type {
-        "Markdown" => "Markdown",
-        "PlainText" => "Plain text",
-        "WebPage" => "Web page",
-        "Pdf" => "PDF",
-        _ => "Document",
-    }
+    let summary = indexing_summary(indexings, Some(doc.latest_version));
+    (eyebrow, title, subtitle, (summary.status, summary.label))
 }
 
 #[component]

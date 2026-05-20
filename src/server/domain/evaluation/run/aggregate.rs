@@ -722,6 +722,177 @@ mod tests {
     }
 
     #[test]
+    fn expected_score_count_no_autotune_equals_variant_option_combos() {
+        let run_id = Uuid::new_v4();
+        let dataset_id = Uuid::new_v4();
+        let events = vec![make_run_requested_event(run_id, dataset_id)];
+        let run = EvaluationRun::from_events(&events).unwrap();
+        assert_eq!(run.expected_score_count(), 1);
+    }
+
+    #[test]
+    fn expected_optimization_counts_match_score_count_for_each_budget() {
+        use super::super::commands::RequestRun;
+        use crate::server::domain::evaluation::optimizer::SearchBudget;
+        use crate::shared::OptimizationBudget;
+        use crate::shared::OptimizationConfig;
+
+        for budget in [
+            OptimizationBudget::Quick,
+            OptimizationBudget::Thorough,
+            OptimizationBudget::Exhaustive,
+        ] {
+            let run_id = Uuid::new_v4();
+            let dataset_id = Uuid::new_v4();
+            let cmd = EvaluationRunCommand::RequestRun(RequestRun {
+                run_id,
+                dataset_id,
+                pipeline_configuration_id: Uuid::new_v4(),
+                document_id: Uuid::new_v4(),
+                document_version: 1,
+                variants: vec![],
+                options: vec![],
+                autotune_request: None,
+                optimization: Some(OptimizationConfig {
+                    budget,
+                    ..OptimizationConfig::default()
+                }),
+                scoring_policy: ScoringPolicy::default(),
+                fingerprint: test_fingerprint(),
+                occurred_at: "2024-01-01T00:00:00Z".into(),
+            });
+            let events = EvaluationRun::handle_command(None, cmd).unwrap();
+            let run = EvaluationRun::from_events(&events).unwrap();
+
+            let (tuning, validation, holdout) =
+                run.expected_optimization_counts().expect("optimization");
+            assert_eq!(run.expected_score_count(), tuning + validation + holdout);
+
+            let budget: SearchBudget = match budget {
+                OptimizationBudget::Quick => SearchBudget::Quick,
+                OptimizationBudget::Thorough => SearchBudget::Thorough,
+                OptimizationBudget::Exhaustive => SearchBudget::Exhaustive,
+            };
+            let expected_tuning: u32 = budget.schedule().iter().map(|r| r.trials as u32).sum();
+            assert_eq!(tuning, expected_tuning);
+            assert_eq!(validation, budget.holdout_top_n() as u32);
+            assert_eq!(holdout, 1);
+        }
+    }
+
+    #[test]
+    fn expected_score_count_with_autotune_request_adds_holdout() {
+        use super::super::commands::RequestRun;
+        use crate::shared::{ChunkingVariant, EvaluationAutotuneRequest};
+
+        let run_id = Uuid::new_v4();
+        let dataset_id = Uuid::new_v4();
+        let variants = vec![
+            ChunkingVariant {
+                label: "a".into(),
+                config: section_config(),
+            },
+            ChunkingVariant {
+                label: "b".into(),
+                config: section_config(),
+            },
+        ];
+        let options = vec![EvaluationRunOptions::default()];
+
+        let cmd = EvaluationRunCommand::RequestRun(RequestRun {
+            run_id,
+            dataset_id,
+            pipeline_configuration_id: Uuid::new_v4(),
+            document_id: Uuid::new_v4(),
+            document_version: 1,
+            variants,
+            options,
+            autotune_request: Some(EvaluationAutotuneRequest {
+                tuning_fraction_milli: 700,
+                holdout_top_n: 3,
+            }),
+            optimization: None,
+            scoring_policy: ScoringPolicy::default(),
+            fingerprint: test_fingerprint(),
+            occurred_at: "2024-01-01T00:00:00Z".into(),
+        });
+        let events = EvaluationRun::handle_command(None, cmd).unwrap();
+        let run = EvaluationRun::from_events(&events).unwrap();
+
+        assert_eq!(run.expected_score_count(), 2 + 2);
+    }
+
+    #[test]
+    fn expected_score_count_autotune_holdout_capped_by_combo_count() {
+        use super::super::commands::RequestRun;
+        use crate::shared::{ChunkingVariant, EvaluationAutotuneRequest};
+
+        let run_id = Uuid::new_v4();
+        let dataset_id = Uuid::new_v4();
+        let variants = vec![ChunkingVariant {
+            label: "a".into(),
+            config: section_config(),
+        }];
+        let options = vec![EvaluationRunOptions::default()];
+
+        let cmd = EvaluationRunCommand::RequestRun(RequestRun {
+            run_id,
+            dataset_id,
+            pipeline_configuration_id: Uuid::new_v4(),
+            document_id: Uuid::new_v4(),
+            document_version: 1,
+            variants,
+            options,
+            autotune_request: Some(EvaluationAutotuneRequest {
+                tuning_fraction_milli: 700,
+                holdout_top_n: 99,
+            }),
+            optimization: None,
+            scoring_policy: ScoringPolicy::default(),
+            fingerprint: test_fingerprint(),
+            occurred_at: "2024-01-01T00:00:00Z".into(),
+        });
+        let events = EvaluationRun::handle_command(None, cmd).unwrap();
+        let run = EvaluationRun::from_events(&events).unwrap();
+
+        assert_eq!(run.expected_score_count(), 1 + 1);
+    }
+
+    #[test]
+    fn evaluation_run_status_round_trips_through_string_form() {
+        for status in [
+            EvaluationRunStatus::Pending,
+            EvaluationRunStatus::Running {
+                variants_completed: 4,
+            },
+            EvaluationRunStatus::Completed,
+            EvaluationRunStatus::Failed {
+                reason: "boom".into(),
+            },
+        ] {
+            let s = status.as_str();
+            let vc = if let EvaluationRunStatus::Running { variants_completed } = &status {
+                *variants_completed
+            } else {
+                0
+            };
+            let reason = if let EvaluationRunStatus::Failed { reason } = &status {
+                Some(reason.clone())
+            } else {
+                None
+            };
+            let back = EvaluationRunStatus::from_parts(s, vc, reason).expect("parse");
+            assert_eq!(format!("{back:?}"), format!("{status:?}"));
+        }
+    }
+
+    #[test]
+    fn evaluation_run_status_from_unknown_string_fails() {
+        let err = EvaluationRunStatus::from_parts("nope", 0, None).unwrap_err();
+        assert!(err.contains("unknown"));
+    }
+
+    #[test]
     fn fail_run_is_idempotent() {
         use super::super::commands::FailRun;
         let run_id = Uuid::new_v4();

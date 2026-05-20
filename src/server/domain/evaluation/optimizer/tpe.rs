@@ -648,6 +648,150 @@ mod tests {
     }
 
     #[test]
+    fn partition_by_fitness_with_one_observation_yields_at_least_one_good() {
+        let obs = vec![make_obs(0, HashMap::new(), 0.5)];
+        let (good, bad) = partition_by_fitness(&obs, GAMMA);
+        assert_eq!(good.len(), 1);
+        assert!(bad.is_empty());
+    }
+
+    #[test]
+    fn partition_by_fitness_with_two_observations_splits_one_and_one() {
+        let obs = vec![
+            make_obs(0, HashMap::new(), 0.3),
+            make_obs(1, HashMap::new(), 0.9),
+        ];
+        let (good, bad) = partition_by_fitness(&obs, GAMMA);
+        assert_eq!(good.len(), 1);
+        assert_eq!(bad.len(), 1);
+        assert_eq!(good[0].trial_id, 1);
+        assert_eq!(bad[0].trial_id, 0);
+    }
+
+    #[test]
+    fn partition_by_fitness_with_empty_history_returns_empty() {
+        let (good, bad) = partition_by_fitness(&[], GAMMA);
+        assert!(good.is_empty());
+        assert!(bad.is_empty());
+    }
+
+    #[test]
+    fn density_numeric_empty_subset_returns_baseline() {
+        let param = Parameter::Float {
+            name: "x".into(),
+            low: 0.0,
+            high: 1.0,
+            log_scale: false,
+        };
+        let d = density_of(&[], &param, &Value::Float(0.5));
+        assert!(d > 0.0, "should not return zero (would break log-ratio)");
+        assert!(d <= 1e-3, "baseline density should be tiny: {d}");
+    }
+
+    #[test]
+    fn density_categorical_uniform_on_empty_subset() {
+        let param = Parameter::Categorical {
+            name: "k".into(),
+            values: vec!["a".into(), "b".into(), "c".into()],
+        };
+        let a = density_of(&[], &param, &Value::String("a".into()));
+        let b = density_of(&[], &param, &Value::String("b".into()));
+        let c = density_of(&[], &param, &Value::String("c".into()));
+        assert!((a - b).abs() < 1e-9);
+        assert!((b - c).abs() < 1e-9);
+        assert!(
+            (a - 1.0 / 3.0).abs() < 1e-9,
+            "uniform prior should be 1/K, got {a}"
+        );
+    }
+
+    #[test]
+    fn density_numeric_log_scale_rejects_nonpositive_query() {
+        let param = Parameter::Float {
+            name: "x".into(),
+            low: 0.1,
+            high: 10.0,
+            log_scale: true,
+        };
+        let mut p = HashMap::new();
+        p.insert("x".into(), Value::Float(1.0));
+        let obs = vec![make_obs(0, p, 0.5)];
+        let d = density_of(&obs, &param, &Value::Float(0.0));
+        assert!(
+            d <= 1e-3,
+            "non-positive query on log-scale should return baseline: {d}"
+        );
+    }
+
+    #[test]
+    fn density_numeric_increases_with_observation_count_at_observed_value() {
+        let param = Parameter::Float {
+            name: "x".into(),
+            low: 0.0,
+            high: 1.0,
+            log_scale: false,
+        };
+        let small: Vec<Observation> = (0..3)
+            .map(|i| {
+                let mut p = HashMap::new();
+                p.insert("x".into(), Value::Float(0.5));
+                make_obs(i, p, 0.8)
+            })
+            .collect();
+        let large: Vec<Observation> = (0..30)
+            .map(|i| {
+                let mut p = HashMap::new();
+                p.insert("x".into(), Value::Float(0.5));
+                make_obs(i, p, 0.8)
+            })
+            .collect();
+        let d_small = density_of(&small, &param, &Value::Float(0.5));
+        let d_large = density_of(&large, &param, &Value::Float(0.5));
+        assert!(
+            d_large > d_small,
+            "density should be sharper with more observations (KDE bandwidth shrinks)"
+        );
+    }
+
+    #[test]
+    fn proposals_during_warmup_are_independent_of_history() {
+        let mut tpe = Tpe::new(space(), 7);
+        let mut prior_history = Vec::new();
+        for i in 0..(WARMUP_TRIALS as u32 - 1) {
+            let mut params = HashMap::new();
+            params.insert("top_k".into(), Value::Int(15));
+            params.insert("min_score".into(), Value::Float(0.7));
+            prior_history.push(make_obs(i, params, 0.9));
+        }
+        tpe.observe(&prior_history);
+
+        let trials = tpe.propose(2);
+        assert!(trials.iter().all(|t| {
+            let k = t.params["top_k"].as_int().unwrap();
+            let s = t.params["min_score"].as_float().unwrap();
+            (1..=20).contains(&k) && (0.0..=1.0).contains(&s)
+        }));
+    }
+
+    #[test]
+    fn skip_trial_ids_advances_counter() {
+        let mut tpe = Tpe::new(space(), 7);
+        tpe.skip_trial_ids(100);
+        let trials = tpe.propose(2);
+        assert_eq!(trials[0].trial_id, 100);
+        assert_eq!(trials[1].trial_id, 101);
+    }
+
+    #[test]
+    fn skip_trial_ids_does_not_rewind() {
+        let mut tpe = Tpe::new(space(), 7);
+        let _ = tpe.propose(5);
+        tpe.skip_trial_ids(3);
+        let next = tpe.propose(1);
+        assert_eq!(next[0].trial_id, 5);
+    }
+
+    #[test]
     fn tpe_converges_on_categorical_bias() {
         let space = SearchSpace::new(vec![Parameter::Categorical {
             name: "strategy".into(),

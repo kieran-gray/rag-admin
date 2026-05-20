@@ -10,7 +10,7 @@ use crate::shared::contracts::{
     GenerationModelDto, VectorIndexCommandDto, VectorIndexDto,
 };
 use crate::ui::components::app::event_bus::use_invalidator;
-use crate::ui::components::primitives::{PageHeader, Surface};
+use crate::ui::components::primitives::{InlineStatusMessage, PageHeader, Surface};
 use crate::ui::pages::configuration::commands::{
     run_embedding_model_command, run_generation_model_command, run_vector_index_command,
 };
@@ -57,7 +57,7 @@ pub(super) fn dispatch_catalog_command<F: FnOnce() + 'static>(
     command: CatalogCommand,
     success_message: &'static str,
     set_busy: WriteSignal<bool>,
-    set_status: WriteSignal<Option<(bool, String)>>,
+    set_status: WriteSignal<Option<InlineStatusMessage>>,
     dialog_status: Option<WriteSignal<Option<String>>>,
     set_refresh: WriteSignal<u32>,
     on_success: F,
@@ -110,7 +110,7 @@ pub fn CatalogPage() -> impl IntoView {
     );
 
     let (busy, set_busy) = signal(false);
-    let (status, set_status) = signal::<Option<(bool, String)>>(None);
+    let (status, set_status) = signal::<Option<InlineStatusMessage>>(None);
 
     view! {
         <div>

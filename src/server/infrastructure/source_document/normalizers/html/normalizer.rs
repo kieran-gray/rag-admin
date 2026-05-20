@@ -3,9 +3,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::server::application::ports::{Clock, HtmlToMarkdown};
+use crate::server::application::ports::Clock;
 use crate::server::application::source_document::ports::{
-    ContentType, DocumentNormalizer, NormalizedDocument, RawDocument,
+    ContentType, DocumentNormalizer, HtmlToMarkdown, NormalizedDocument, RawDocument,
 };
 use crate::server::application::AppError;
 use crate::server::domain::source_document::document_type::DocumentType;
@@ -13,7 +13,7 @@ use crate::server::domain::source_document::version::{
     humanize_url, slug_from_url, DocumentMetadata, PlainMetadata, WebPageMetadata,
 };
 
-use super::title::title_from_hints;
+use super::super::title::title_from_hints;
 
 pub struct HtmlNormalizer {
     html_to_markdown: Arc<dyn HtmlToMarkdown>,

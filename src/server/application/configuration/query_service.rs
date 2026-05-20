@@ -9,10 +9,12 @@ use crate::server::domain::configuration::sweep_template::{
     SweepTemplateRepository, SweepTemplateRepositoryError,
 };
 use crate::server::domain::configuration::vector_index::VectorIndexRepository;
+use crate::server::domain::connector::ConnectorRepository;
 use crate::shared::contracts::{
     ChunkingConfigurationDto, ConfigurationDto, EmbeddingModelDto, GenerationModelDto,
     PipelineConfigurationDto, SweepTemplateDto, VectorIndexDto,
 };
+use crate::shared::ChunkingConfig;
 use uuid::Uuid;
 
 pub struct ConfigurationQueryService {
@@ -127,11 +129,18 @@ impl PipelineConfigurationQueryService {
 
 pub struct ChunkingConfigurationQueryService {
     repository: Arc<dyn ChunkingConfigurationRepository>,
+    connector_repository: Arc<dyn ConnectorRepository>,
 }
 
 impl ChunkingConfigurationQueryService {
-    pub fn new(repository: Arc<dyn ChunkingConfigurationRepository>) -> Arc<Self> {
-        Arc::new(Self { repository })
+    pub fn new(
+        repository: Arc<dyn ChunkingConfigurationRepository>,
+        connector_repository: Arc<dyn ConnectorRepository>,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            repository,
+            connector_repository,
+        })
     }
 
     pub async fn list(&self) -> Result<Vec<ChunkingConfigurationDto>, AppError> {
@@ -146,6 +155,43 @@ impl ChunkingConfigurationQueryService {
                 is_default: cc.is_default,
             })
             .collect())
+    }
+
+    pub async fn resolve_for_connector(
+        &self,
+        connector_id: Uuid,
+    ) -> Result<ChunkingConfig, AppError> {
+        let connector = self
+            .connector_repository
+            .load(connector_id)
+            .await?
+            .filter(|m| !m.deleted)
+            .ok_or_else(|| AppError::NotFound(format!("connector {connector_id} not found")))?;
+
+        let chunking_id = match connector.default_chunking_configuration_id {
+            Some(id) => id,
+            None => {
+                self.repository
+                    .find_default()
+                    .await?
+                    .ok_or_else(|| {
+                        AppError::Validation(
+                            "no default chunking configured for connector or application".into(),
+                        )
+                    })?
+                    .chunking_configuration_id
+            }
+        };
+
+        let read_model = self
+            .repository
+            .find_by_id(chunking_id)
+            .await?
+            .ok_or_else(|| {
+                AppError::NotFound(format!("chunking configuration {chunking_id} not found"))
+            })?;
+
+        Ok(read_model.config)
     }
 }
 

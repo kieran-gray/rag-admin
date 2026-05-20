@@ -1,6 +1,7 @@
 pub mod chat;
 pub mod configuration;
 pub mod connector;
+pub mod connector_sync;
 pub mod embed;
 pub mod error;
 pub mod evaluation;

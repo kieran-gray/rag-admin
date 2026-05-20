@@ -59,3 +59,5 @@ rag-admin/data/evaluations/*
 
 local_docs
 data
+
+lcov.info

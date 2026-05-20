@@ -7,7 +7,7 @@ use crate::shared::contracts::{
     ChunkingConfigurationDto, CreateSweepTemplateDto, DeleteSweepTemplateDto,
     SweepTemplateCommandDto, SweepTemplateDto, UpdateSweepTemplateDto,
 };
-use crate::ui::components::primitives::{Dialog, EmptyState, Surface};
+use crate::ui::components::primitives::{Dialog, EmptyState, InlineStatusMessage, Surface};
 use crate::ui::pages::configuration::commands::run_sweep_template_command;
 
 use super::widgets::LabelledInput;
@@ -145,7 +145,7 @@ pub(super) fn SweepTemplateFormDialog(
     chunking_configs_resource: Resource<Result<Vec<ChunkingConfigurationDto>, String>>,
     busy: ReadSignal<bool>,
     set_busy: WriteSignal<bool>,
-    set_status: WriteSignal<Option<(bool, String)>>,
+    set_status: WriteSignal<Option<InlineStatusMessage>>,
     set_refresh: WriteSignal<u32>,
 ) -> impl IntoView {
     let (name, set_name) = signal(String::new());
@@ -314,7 +314,7 @@ pub(super) fn SweepTemplateDeleteDialog(
     set_target: WriteSignal<Option<SweepTemplateDto>>,
     busy: ReadSignal<bool>,
     set_busy: WriteSignal<bool>,
-    set_status: WriteSignal<Option<(bool, String)>>,
+    set_status: WriteSignal<Option<InlineStatusMessage>>,
     set_refresh: WriteSignal<u32>,
 ) -> impl IntoView {
     let close = Callback::new(move |_| set_target.set(None));

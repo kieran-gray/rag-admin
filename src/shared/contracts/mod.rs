@@ -28,9 +28,10 @@ pub use configuration::{
     UpdateSweepTemplateDto, UpdateVectorIndexDto, VectorIndexCommandDto, VectorIndexDto,
 };
 pub use connector::{
-    ConnectorCommandDto, ConnectorConfigDto, ConnectorDiscoveredItemDto, ConnectorDto,
-    ConnectorKindDto, RegisterConnectorDto, RenameConnectorDto, SitemapConfigDto,
-    UnregisterConnectorDto, UpdateConnectorConfigDto,
+    BulkImportFailureDto, BulkImportResultDto, ConnectorCommandDto, ConnectorConfigDto,
+    ConnectorDiscoveredItemViewDto, ConnectorDto, ConnectorItemStatusDto, ConnectorKindDto,
+    ConnectorSyncSummaryDto, RegisterConnectorDto, RenameConnectorDto, SetConnectorDefaultsDto,
+    SitemapConfigDto, UnregisterConnectorDto, UpdateConnectorConfigDto,
 };
 pub use evaluation::{
     BestVariantDto, EvaluationDatasetDto, EvaluationDatasetSummaryDto, EvaluationJobInfo,
@@ -42,8 +43,8 @@ pub use events::PublishedEvent;
 pub use ingest::{IngestOptions, LogEvent, LogLevel};
 pub use query::{QueryHit, QueryRequest, QueryResult};
 pub use source_document::{
-    ChunkDto, DocumentListItemDto, DocumentListPageDto, DocumentListQueryDto,
-    DocumentStatusFilterDto, IndexingDto, MarkdownBlockDto, MarkdownBlockKindDto,
-    SourceDescriptorDto, SourceDocumentDetailDto, SourceDocumentDto, SourceDocumentMarkdownDto,
-    SourceFacetDto, SourceFilterDto,
+    ChunkDto, ConnectorFacetDto, DocumentConnectorDto, DocumentListItemDto, DocumentListPageDto,
+    DocumentListQueryDto, DocumentStatusFilterDto, IndexingDto, MarkdownBlockDto,
+    MarkdownBlockKindDto, SourceDescriptorDto, SourceDocumentDetailDto, SourceDocumentDto,
+    SourceDocumentMarkdownDto, SourceFacetDto, SourceFilterDto,
 };

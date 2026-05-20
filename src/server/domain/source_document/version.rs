@@ -138,4 +138,67 @@ mod tests {
         );
         assert_eq!(humanize_url("https://example.com"), "https://example.com");
     }
+
+    #[test]
+    fn document_metadata_title_returns_inner_title_for_each_variant() {
+        let md = DocumentMetadata::Markdown(PlainMetadata { title: "md".into() });
+        assert_eq!(md.title(), "md");
+
+        let txt = DocumentMetadata::PlainText(PlainMetadata {
+            title: "txt".into(),
+        });
+        assert_eq!(txt.title(), "txt");
+
+        let web = DocumentMetadata::WebPage(WebPageMetadata {
+            title: "web".into(),
+            source_url: "https://x".into(),
+            slug: "x".into(),
+            fetched_at: "2024".into(),
+        });
+        assert_eq!(web.title(), "web");
+
+        let pdf = DocumentMetadata::Pdf(PdfMetadata {
+            title: "doc.pdf".into(),
+            original_filename: Some("doc.pdf".into()),
+        });
+        assert_eq!(pdf.title(), "doc.pdf");
+    }
+
+    #[test]
+    fn document_metadata_slug_only_present_for_web_page() {
+        let web = DocumentMetadata::WebPage(WebPageMetadata {
+            title: "t".into(),
+            source_url: "https://x/a".into(),
+            slug: "a".into(),
+            fetched_at: "2024".into(),
+        });
+        assert_eq!(web.slug(), Some("a"));
+
+        let md = DocumentMetadata::Markdown(PlainMetadata { title: "t".into() });
+        assert_eq!(md.slug(), None);
+
+        let txt = DocumentMetadata::PlainText(PlainMetadata { title: "t".into() });
+        assert_eq!(txt.slug(), None);
+
+        let pdf = DocumentMetadata::Pdf(PdfMetadata {
+            title: "t".into(),
+            original_filename: None,
+        });
+        assert_eq!(pdf.slug(), None);
+    }
+
+    #[test]
+    fn content_hash_constructor_preserves_string() {
+        let h = ContentHash::new("deadbeef".into());
+        assert_eq!(h.as_hex(), "deadbeef");
+        assert_eq!(h.to_string(), "deadbeef");
+    }
+
+    #[test]
+    fn pdf_metadata_original_filename_defaults_to_none() {
+        let raw = r#"{"title": "t"}"#;
+        let pdf: PdfMetadata = serde_json::from_str(raw).expect("parse");
+        assert_eq!(pdf.title, "t");
+        assert_eq!(pdf.original_filename, None);
+    }
 }

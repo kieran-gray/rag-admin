@@ -7,7 +7,9 @@ use crate::shared::contracts::{
     aggregate_type, ConnectorCommandDto, ConnectorConfigDto, ConnectorDto, UnregisterConnectorDto,
 };
 use crate::ui::components::app::event_bus::use_invalidator;
-use crate::ui::components::primitives::{Dialog, EmptyState, PageHeader, Surface};
+use crate::ui::components::primitives::{
+    Dialog, EmptyState, InlineStatus, InlineStatusMessage, PageHeader, Surface,
+};
 
 use self::form_dialog::{ConnectorForm, ConnectorFormDialog};
 
@@ -22,7 +24,7 @@ pub fn ConnectorsPage() -> impl IntoView {
     );
 
     let (busy, set_busy) = signal(false);
-    let (status, set_status) = signal::<Option<(bool, String)>>(None);
+    let (status, set_status) = signal::<Option<InlineStatusMessage>>(None);
     let (form, set_form) = signal::<Option<ConnectorForm>>(None);
     let (delete_target, set_delete_target) = signal::<Option<ConnectorDto>>(None);
 
@@ -47,10 +49,7 @@ pub fn ConnectorsPage() -> impl IntoView {
                 }.into_any())
             />
 
-            {move || status.get().map(|(ok, msg)| {
-                let cls = if ok { "log-line-ok" } else { "log-line-error" };
-                view! { <div class=format!("{cls} text-sm mb-3")>{msg}</div> }
-            })}
+            <InlineStatus status=status />
 
             <Suspense fallback=|| view! {
                 <Surface><div class="p-6 muted text-sm">"Loading connectors…"</div></Surface>
@@ -130,6 +129,12 @@ fn ConnectorCard(
                 </div>
             </div>
             <div class="flex gap-2 shrink-0">
+                <a
+                    class="btn"
+                    href=format!("/documents?tab=connector:{}", connector.connector_id)
+                >
+                    "Browse"
+                </a>
                 <button
                     type="button"
                     class="btn"
@@ -157,7 +162,7 @@ fn ConnectorDeleteDialog(
     set_target: WriteSignal<Option<ConnectorDto>>,
     busy: ReadSignal<bool>,
     set_busy: WriteSignal<bool>,
-    set_status: WriteSignal<Option<(bool, String)>>,
+    set_status: WriteSignal<Option<InlineStatusMessage>>,
     set_refresh: WriteSignal<u32>,
 ) -> impl IntoView {
     let close = Callback::new(move |_| set_target.set(None));
@@ -207,7 +212,7 @@ pub(crate) fn run_connector_command<F>(
     command: ConnectorCommandDto,
     success_message: &'static str,
     set_busy: WriteSignal<bool>,
-    set_status: WriteSignal<Option<(bool, String)>>,
+    set_status: WriteSignal<Option<InlineStatusMessage>>,
     dialog_status: Option<WriteSignal<Option<String>>>,
     set_refresh: WriteSignal<u32>,
     on_success: F,
@@ -229,7 +234,7 @@ pub(crate) fn run_connector_command<F>(
                     ds.set(None);
                 }
                 on_success();
-                set_status.set(Some((true, success_message.to_string())));
+                set_status.set(Some(InlineStatusMessage::ok(success_message)));
                 set_refresh.update(|v| *v += 1);
             }
             Err(e) => {
@@ -237,7 +242,7 @@ pub(crate) fn run_connector_command<F>(
                 if let Some(ds) = dialog_status {
                     ds.set(Some(message));
                 } else {
-                    set_status.set(Some((false, message)));
+                    set_status.set(Some(InlineStatusMessage::err(message)));
                 }
             }
         }

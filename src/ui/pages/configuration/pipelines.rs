@@ -9,7 +9,9 @@ use crate::shared::contracts::{
     UpdatePipelineConfigurationDto,
 };
 use crate::ui::components::app::event_bus::use_invalidator;
-use crate::ui::components::primitives::{Dialog, EmptyState, PageHeader, Surface};
+use crate::ui::components::primitives::{
+    Dialog, EmptyState, InlineStatusMessage, PageHeader, Surface,
+};
 use crate::ui::pages::configuration::commands::{
     parse_uuid_or_none, run_pipeline_configuration_command,
 };
@@ -45,7 +47,7 @@ pub fn PipelinesPage() -> impl IntoView {
     );
 
     let (busy, set_busy) = signal(false);
-    let (status, set_status) = signal::<Option<(bool, String)>>(None);
+    let (status, set_status) = signal::<Option<InlineStatusMessage>>(None);
     let (form_mode, set_form_mode) = signal::<Option<FormMode>>(None);
     let (delete_target, set_delete_target) = signal::<Option<PipelineConfigurationDto>>(None);
 
@@ -127,15 +129,15 @@ pub fn PipelinesPage() -> impl IntoView {
 }
 
 #[component]
-fn StatusBanner(status: ReadSignal<Option<(bool, String)>>) -> impl IntoView {
+fn StatusBanner(status: ReadSignal<Option<InlineStatusMessage>>) -> impl IntoView {
     view! {
-        {move || status.get().map(|(ok, msg)| {
-            let cls = if ok {
+        {move || status.get().map(|m| {
+            let cls = if m.ok {
                 "surface mb-4 px-4 py-2"
             } else {
                 "surface mb-4 px-4 py-2 log-line-error"
             };
-            view! { <div class=cls>{msg}</div> }
+            view! { <div class=cls>{m.text}</div> }
         })}
     }
 }
@@ -250,7 +252,7 @@ fn PipelineFormDialog(
     set_form_mode: WriteSignal<Option<FormMode>>,
     busy: ReadSignal<bool>,
     set_busy: WriteSignal<bool>,
-    set_status: WriteSignal<Option<(bool, String)>>,
+    set_status: WriteSignal<Option<InlineStatusMessage>>,
     set_refresh: WriteSignal<u32>,
 ) -> impl IntoView {
     let config = StoredValue::new(config);
@@ -444,7 +446,7 @@ fn DeleteConfirmDialog(
     set_target: WriteSignal<Option<PipelineConfigurationDto>>,
     busy: ReadSignal<bool>,
     set_busy: WriteSignal<bool>,
-    set_status: WriteSignal<Option<(bool, String)>>,
+    set_status: WriteSignal<Option<InlineStatusMessage>>,
     set_refresh: WriteSignal<u32>,
 ) -> impl IntoView {
     let close = Callback::new(move |_| set_target.set(None));

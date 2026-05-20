@@ -5,6 +5,7 @@ use sqlx::PgPool;
 use tokio::sync::Notify;
 
 use crate::server::application::connector::{ConnectorImpl, ConnectorRegistry};
+use crate::server::application::connector_sync::{BulkImportService, ConnectorSyncService};
 use crate::server::application::evaluation::dataset::EvaluationDatasetEffectExecutor;
 use crate::server::application::evaluation::ports::LlmJudge;
 use crate::server::application::evaluation::run::{
@@ -32,6 +33,8 @@ use crate::server::domain::configuration::vector_index::{
     make_vector_index_projector, VectorIndexCatalog,
 };
 use crate::server::domain::connector::{Connector, ConnectorProjector};
+use crate::server::domain::connector_import::{ConnectorImport, ConnectorImportProjector};
+use crate::server::domain::connector_sync::{ConnectorSync, ConnectorSyncProjector};
 use crate::server::domain::evaluation::dataset::aggregate::EvaluationDataset;
 use crate::server::domain::evaluation::dataset::effects::EvaluationDatasetEffect;
 use crate::server::domain::evaluation::dataset::projector::EvaluationDatasetProjector;
@@ -65,6 +68,8 @@ use event_sourcing::process_manager::ProcessManager;
 pub struct Workflows {
     pub source_document_ingest_service: Arc<SourceDocumentIngestService>,
     pub connector_registry: Arc<ConnectorRegistry>,
+    pub connector_sync_service: Arc<ConnectorSyncService>,
+    pub bulk_import_service: Arc<BulkImportService>,
 }
 
 pub struct WorkflowsDeps<'a> {
@@ -157,6 +162,27 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
         vec![Arc::new(ConnectorProjector::new(Arc::clone(
             &repos.connector,
         )))],
+        None,
+        Arc::clone(&checkpoint),
+        Arc::clone(&event_bus),
+        &mut wakeups,
+    );
+    spawn_driver::<ConnectorImport, ()>(
+        Arc::clone(&wirings.connector_import.event_store),
+        vec![Arc::new(ConnectorImportProjector::new(Arc::clone(
+            &repos.connector_import,
+        )))],
+        None,
+        Arc::clone(&checkpoint),
+        Arc::clone(&event_bus),
+        &mut wakeups,
+    );
+    spawn_driver::<ConnectorSync, ()>(
+        Arc::clone(&wirings.connector_sync.event_store),
+        vec![Arc::new(ConnectorSyncProjector::new(
+            Arc::clone(&repos.connector_sync),
+            Arc::clone(&repos.connector_discovered_item),
+        ))],
         None,
         Arc::clone(&checkpoint),
         Arc::clone(&event_bus),
@@ -343,15 +369,36 @@ pub fn launch_workflows(deps: WorkflowsDeps<'_>) -> Result<Workflows, SetupError
             blob_store: Arc::clone(&repos.blob_store),
             connector_registry: Arc::clone(&connector_registry),
             connector_query_service: Arc::clone(&services.connector_query_service),
+            connector_import_command_handler: Arc::clone(
+                &services.connector_import_command_handler,
+            ),
             pipeline_resolver: Arc::clone(&services.pipeline_resolver),
             http_client: http_port,
             normalizer_registry,
-            clock,
-            id_generator,
+            clock: Arc::clone(&clock),
+            id_generator: Arc::clone(&id_generator),
         });
+
+    let connector_sync_service = ConnectorSyncService::new(
+        Arc::clone(&services.connector_sync_command_handler),
+        Arc::clone(&services.connector_sync_query_service),
+        Arc::clone(&connector_registry),
+        Arc::clone(&services.connector_query_service),
+        Arc::clone(&services.connector_import_command_handler),
+        Arc::clone(&clock),
+        Arc::clone(&id_generator),
+    );
+
+    let bulk_import_service = BulkImportService::new(
+        Arc::clone(&source_document_ingest_service),
+        Arc::clone(&services.pipeline_resolver),
+        Arc::clone(&services.chunking_configuration_query_service),
+    );
 
     Ok(Workflows {
         source_document_ingest_service,
         connector_registry,
+        connector_sync_service,
+        bulk_import_service,
     })
 }

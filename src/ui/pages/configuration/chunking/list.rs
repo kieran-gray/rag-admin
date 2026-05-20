@@ -3,7 +3,7 @@ use leptos::prelude::*;
 use crate::shared::contracts::{
     ChunkingConfigurationCommandDto, ChunkingConfigurationDto, DeleteChunkingConfigurationDto,
 };
-use crate::ui::components::primitives::{Dialog, EmptyState, Surface};
+use crate::ui::components::primitives::{Dialog, EmptyState, InlineStatusMessage, Surface};
 use crate::ui::pages::configuration::commands::run_chunking_configuration_command;
 
 #[component]
@@ -91,7 +91,7 @@ pub(super) fn DeleteConfirmDialog(
     set_target: WriteSignal<Option<ChunkingConfigurationDto>>,
     busy: ReadSignal<bool>,
     set_busy: WriteSignal<bool>,
-    set_status: WriteSignal<Option<(bool, String)>>,
+    set_status: WriteSignal<Option<InlineStatusMessage>>,
     set_refresh: WriteSignal<u32>,
 ) -> impl IntoView {
     let close = Callback::new(move |_| set_target.set(None));

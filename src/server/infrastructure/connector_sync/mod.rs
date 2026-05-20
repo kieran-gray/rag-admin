@@ -1,0 +1,5 @@
+pub mod postgres_connector_discovered_item_repository;
+pub mod postgres_connector_sync_repository;
+
+pub use postgres_connector_discovered_item_repository::PostgresConnectorDiscoveredItemRepository;
+pub use postgres_connector_sync_repository::PostgresConnectorSyncRepository;

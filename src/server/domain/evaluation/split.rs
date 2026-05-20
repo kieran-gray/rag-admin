@@ -353,4 +353,130 @@ mod tests {
     fn k_fold_returns_empty_when_too_small() {
         assert!(k_fold(seed(1), 3, 5).is_empty());
     }
+
+    #[test]
+    fn seed_from_uuid_nil_is_normalised() {
+        let s = seed_from_uuid(Uuid::nil());
+        assert_ne!(s, 0, "nil uuid must be normalised away from zero");
+    }
+
+    #[test]
+    fn seed_from_uuid_collapses_when_halves_are_xor_identical() {
+        let mut bytes = [0u8; 16];
+        for i in 0..8 {
+            bytes[i] = 0x42;
+            bytes[i + 8] = 0x42;
+        }
+        let id = Uuid::from_bytes(bytes);
+        let s = seed_from_uuid(id);
+        assert_ne!(
+            s, 0,
+            "symmetric halves XOR to 0, but normalise_seed must produce a usable seed",
+        );
+    }
+
+    #[test]
+    fn split_questions_total_indices_cover_input() {
+        for n in [1usize, 5, 10, 50, 100] {
+            let s = split_questions(seed(n as u128), n, 700);
+            let mut all: Vec<usize> = s.tuning.iter().chain(s.holdout.iter()).copied().collect();
+            all.sort_unstable();
+            assert_eq!(
+                all,
+                (0..n).collect::<Vec<_>>(),
+                "split must partition indices for n={n}",
+            );
+        }
+    }
+
+    #[test]
+    fn split_questions_tuning_holdout_are_disjoint() {
+        for n in [3usize, 7, 25, 100] {
+            let s = split_questions(seed(n as u128), n, 500);
+            let tuning: std::collections::HashSet<usize> = s.tuning.iter().copied().collect();
+            for h in &s.holdout {
+                assert!(!tuning.contains(h), "n={n}: holdout {h} leaked into tuning");
+            }
+        }
+    }
+
+    #[test]
+    fn three_way_indices_partition_input() {
+        let s = three_way(seed(0xC0DE), 40, ThreeWayRatios::default());
+        let mut all: Vec<usize> = s
+            .tuning
+            .iter()
+            .chain(s.validation.iter())
+            .chain(s.holdout.iter())
+            .copied()
+            .collect();
+        all.sort_unstable();
+        assert_eq!(all, (0..40).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn three_way_zero_ratios_still_partition_safely() {
+        let s = three_way(
+            seed(7),
+            12,
+            ThreeWayRatios {
+                tuning_milli: 0,
+                validation_milli: 0,
+                holdout_milli: 0,
+            },
+        );
+        let total = s.tuning.len() + s.validation.len() + s.holdout.len();
+        assert_eq!(total, 12, "all indices must still be assigned somewhere");
+        assert!(
+            s.is_usable(),
+            "even with degenerate ratios, each side keeps ≥1"
+        );
+    }
+
+    #[test]
+    fn k_fold_validate_sets_are_disjoint_and_cover_input() {
+        let folds = k_fold(seed(0xC0FFEE), 17, 4);
+        let mut seen = std::collections::HashSet::<usize>::new();
+        for f in &folds {
+            for v in &f.validate {
+                assert!(seen.insert(*v), "index {v} appeared in two validate sets");
+            }
+        }
+        assert_eq!(seen.len(), 17);
+    }
+
+    #[test]
+    fn k_fold_train_unions_to_complement_of_validate() {
+        for f in k_fold(seed(0xC0FFEE), 20, 5) {
+            let train: std::collections::BTreeSet<usize> = f.train.iter().copied().collect();
+            let validate: std::collections::BTreeSet<usize> = f.validate.iter().copied().collect();
+            assert!(train.is_disjoint(&validate));
+            let union: std::collections::BTreeSet<usize> =
+                train.union(&validate).copied().collect();
+            assert_eq!(union.len(), 20);
+        }
+    }
+
+    #[test]
+    fn k_fold_with_k_zero_treated_as_one() {
+        let folds = k_fold(seed(1), 5, 0);
+        assert_eq!(folds.len(), 1);
+        assert_eq!(folds[0].validate.len(), 5);
+        assert!(folds[0].train.is_empty());
+    }
+
+    #[test]
+    fn split_questions_below_total_keeps_one_holdout() {
+        let s = split_questions(seed(13), 5, 1000);
+        assert_eq!(s.tuning.len(), 4);
+        assert_eq!(s.holdout.len(), 1);
+    }
+
+    #[test]
+    fn split_is_deterministic_across_repeated_calls_with_same_seed() {
+        let a = split_questions(seed(42), 30, 700);
+        let b = split_questions(seed(42), 30, 700);
+        assert_eq!(a.tuning, b.tuning);
+        assert_eq!(a.holdout, b.holdout);
+    }
 }

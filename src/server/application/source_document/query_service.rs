@@ -3,6 +3,8 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
+use crate::server::application::connector::ConnectorQueryService;
+use crate::server::application::connector_import::ConnectorImportQueryService;
 use crate::server::application::markdown::{Block, BlockKind};
 use crate::server::application::ports::MarkdownParser;
 use crate::server::application::source_document::ports::BlobStore;
@@ -17,10 +19,10 @@ use crate::server::domain::source_document::repository::{
 };
 use crate::server::domain::source_document::source_ref::SourceRef;
 use crate::shared::contracts::{
-    ChunkDto, DocumentListItemDto, DocumentListPageDto, DocumentListQueryDto,
-    DocumentStatusFilterDto, IndexingDto, MarkdownBlockDto, MarkdownBlockKindDto,
-    SourceDescriptorDto, SourceDocumentDetailDto, SourceDocumentDto, SourceDocumentMarkdownDto,
-    SourceFacetDto, SourceFilterDto,
+    ChunkDto, ConnectorFacetDto, DocumentConnectorDto, DocumentListItemDto, DocumentListPageDto,
+    DocumentListQueryDto, DocumentStatusFilterDto, IndexingDto, MarkdownBlockDto,
+    MarkdownBlockKindDto, SourceDescriptorDto, SourceDocumentDetailDto, SourceDocumentDto,
+    SourceDocumentMarkdownDto, SourceFacetDto, SourceFilterDto,
 };
 
 pub struct SourceDocumentQueryService {
@@ -29,6 +31,8 @@ pub struct SourceDocumentQueryService {
     chunk_set_repository: Arc<dyn ChunkSetRepository>,
     blob_store: Arc<dyn BlobStore>,
     markdown_parser: Arc<dyn MarkdownParser>,
+    connector_query_service: Arc<ConnectorQueryService>,
+    connector_import_query_service: Arc<ConnectorImportQueryService>,
 }
 
 impl SourceDocumentQueryService {
@@ -38,6 +42,8 @@ impl SourceDocumentQueryService {
         chunk_set_repository: Arc<dyn ChunkSetRepository>,
         blob_store: Arc<dyn BlobStore>,
         markdown_parser: Arc<dyn MarkdownParser>,
+        connector_query_service: Arc<ConnectorQueryService>,
+        connector_import_query_service: Arc<ConnectorImportQueryService>,
     ) -> Arc<Self> {
         Arc::new(Self {
             source_document_repository,
@@ -45,6 +51,8 @@ impl SourceDocumentQueryService {
             chunk_set_repository,
             blob_store,
             markdown_parser,
+            connector_query_service,
+            connector_import_query_service,
         })
     }
 
@@ -70,10 +78,15 @@ impl SourceDocumentQueryService {
                 .push(map_indexing_to_dto(indexing));
         }
 
+        let mut connectors_by_doc = self.build_connectors_by_document(&document_ids).await?;
+
         Ok(docs
             .iter()
             .map(|doc| {
                 let indexings = indexings_by_doc
+                    .remove(&doc.document_id)
+                    .unwrap_or_default();
+                let connectors = connectors_by_doc
                     .remove(&doc.document_id)
                     .unwrap_or_default();
                 let dto = map_doc_to_dto(doc);
@@ -86,22 +99,67 @@ impl SourceDocumentQueryService {
                     latest_content_hash: Some(dto.latest_content_hash),
                     indexings,
                     source: source_descriptor_from(&doc.source_ref),
+                    connectors,
                     updated_at: doc.latest_version_occurred_at.clone(),
                 }
             })
             .collect())
     }
 
+    async fn build_connectors_by_document(
+        &self,
+        document_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, Vec<DocumentConnectorDto>>, AppError> {
+        let imports = self
+            .connector_import_query_service
+            .list_for_documents(document_ids)
+            .await?;
+        if imports.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let connectors = self.connector_query_service.list().await?;
+        let name_by_id: HashMap<Uuid, String> = connectors
+            .iter()
+            .map(|c| (c.connector_id, c.name.clone()))
+            .collect();
+        let mut by_doc: HashMap<Uuid, Vec<DocumentConnectorDto>> = HashMap::new();
+        for record in imports {
+            let name = name_by_id
+                .get(&record.connector_id)
+                .cloned()
+                .unwrap_or_else(|| "(removed)".to_string());
+            by_doc
+                .entry(record.document_id)
+                .or_default()
+                .push(DocumentConnectorDto {
+                    connector_id: record.connector_id,
+                    name,
+                });
+        }
+        Ok(by_doc)
+    }
+
     pub async fn list_documents_page(
         &self,
         query: DocumentListQueryDto,
     ) -> Result<DocumentListPageDto, AppError> {
+        let document_id_filter = if query.connectors.is_empty() {
+            None
+        } else {
+            Some(
+                self.connector_import_query_service
+                    .document_ids_for_connectors(&query.connectors)
+                    .await?,
+            )
+        };
+
         let domain_query = DocumentListQuery {
             cursor: query.cursor.as_deref().map(decode_cursor).transpose()?,
             limit: if query.limit == 0 { 25 } else { query.limit },
             search: query.search.clone(),
             sources: query.sources.iter().map(source_filter_from_dto).collect(),
             statuses: query.statuses.iter().map(status_filter_from_dto).collect(),
+            document_id_filter,
         };
 
         let page = self
@@ -122,12 +180,17 @@ impl SourceDocumentQueryService {
                 .push(map_indexing_to_dto(indexing));
         }
 
+        let mut connectors_by_doc = self.build_connectors_by_document(&document_ids).await?;
+
         let items: Vec<DocumentListItemDto> = page
             .items
             .iter()
             .map(|entry| {
                 let doc = &entry.document;
                 let indexings = indexings_by_doc
+                    .remove(&doc.document_id)
+                    .unwrap_or_default();
+                let connectors = connectors_by_doc
                     .remove(&doc.document_id)
                     .unwrap_or_default();
                 let dto = map_doc_to_dto(doc);
@@ -140,6 +203,7 @@ impl SourceDocumentQueryService {
                     latest_content_hash: Some(dto.latest_content_hash),
                     indexings,
                     source: source_descriptor_from(&doc.source_ref),
+                    connectors,
                     updated_at: entry.updated_at.clone(),
                 }
             })
@@ -154,12 +218,31 @@ impl SourceDocumentQueryService {
             })
             .collect();
 
+        let connector_facet_pairs = self.connector_import_query_service.facets().await?;
+        let connector_dtos = self.connector_query_service.list().await?;
+        let name_by_id: HashMap<Uuid, String> = connector_dtos
+            .into_iter()
+            .map(|c| (c.connector_id, c.name))
+            .collect();
+        let connectors: Vec<ConnectorFacetDto> = connector_facet_pairs
+            .into_iter()
+            .map(|(connector_id, count)| ConnectorFacetDto {
+                connector_id,
+                name: name_by_id
+                    .get(&connector_id)
+                    .cloned()
+                    .unwrap_or_else(|| "(removed)".to_string()),
+                document_count: count,
+            })
+            .collect();
+
         Ok(DocumentListPageDto {
             items,
             next_cursor: page.next_cursor.as_ref().map(encode_cursor),
             total_matching: page.total_matching,
             total_all: page.total_all,
             sources,
+            connectors,
         })
     }
 

@@ -13,7 +13,7 @@ use crate::shared::contracts::{
     SweepTemplateCommandDto, SweepTemplateDto,
 };
 use crate::ui::components::app::event_bus::use_invalidator;
-use crate::ui::components::primitives::{PageHeader, Surface};
+use crate::ui::components::primitives::{InlineStatusMessage, PageHeader, Surface};
 use crate::ui::pages::configuration::commands::run_sweep_template_command;
 
 use self::form_dialog::ChunkingFormDialog;
@@ -63,7 +63,7 @@ pub fn ChunkingPage() -> impl IntoView {
     );
 
     let (busy, set_busy) = signal(false);
-    let (status, set_status) = signal::<Option<(bool, String)>>(None);
+    let (status, set_status) = signal::<Option<InlineStatusMessage>>(None);
     let (form_mode, set_form_mode) = signal::<Option<FormMode>>(None);
     let (delete_target, set_delete_target) = signal::<Option<ChunkingConfigurationDto>>(None);
     let (sweep_form_mode, set_sweep_form_mode) = signal::<Option<SweepFormMode>>(None);

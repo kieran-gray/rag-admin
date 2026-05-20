@@ -32,6 +32,14 @@ impl ConnectorQueryService {
         let model = self.repository.load(connector_id).await?;
         Ok(model.filter(|m| !m.deleted).map(|m| m.config))
     }
+
+    pub async fn get_read_model(
+        &self,
+        connector_id: Uuid,
+    ) -> Result<Option<ConnectorReadModel>, AppError> {
+        let model = self.repository.load(connector_id).await?;
+        Ok(model.filter(|m| !m.deleted))
+    }
 }
 
 fn read_model_to_dto(model: ConnectorReadModel) -> ConnectorDto {
@@ -39,6 +47,8 @@ fn read_model_to_dto(model: ConnectorReadModel) -> ConnectorDto {
         connector_id: model.connector_id,
         name: model.name,
         config: config_domain_to_dto(model.config),
+        default_pipeline_configuration_id: model.default_pipeline_configuration_id,
+        default_chunking_configuration_id: model.default_chunking_configuration_id,
     }
 }
 

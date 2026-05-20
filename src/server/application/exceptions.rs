@@ -17,6 +17,12 @@ use crate::server::domain::configuration::{
     vector_index::VectorIndexRepositoryError,
 };
 use crate::server::domain::connector::{ConnectorError, ConnectorRepositoryError};
+use crate::server::domain::connector_import::{
+    ConnectorImportError, ConnectorImportRepositoryError,
+};
+use crate::server::domain::connector_sync::{
+    ConnectorDiscoveredItemRepositoryError, ConnectorSyncError, ConnectorSyncRepositoryError,
+};
 use crate::server::domain::embedding_set::repository::EmbeddingSetRepositoryError;
 use crate::server::domain::evaluation::{
     dataset::{exceptions::EvaluationDatasetError, repository::EvaluationDatasetRepositoryError},
@@ -147,6 +153,42 @@ impl From<ConnectorError> for AppError {
 
 impl From<ConnectorRepositoryError> for AppError {
     fn from(value: ConnectorRepositoryError) -> Self {
+        AppError::Internal(value.to_string())
+    }
+}
+
+impl From<ConnectorImportError> for AppError {
+    fn from(value: ConnectorImportError) -> Self {
+        AppError::Internal(value.to_string())
+    }
+}
+
+impl From<ConnectorImportRepositoryError> for AppError {
+    fn from(value: ConnectorImportRepositoryError) -> Self {
+        AppError::Internal(value.to_string())
+    }
+}
+
+impl From<ConnectorSyncError> for AppError {
+    fn from(value: ConnectorSyncError) -> Self {
+        match value {
+            ConnectorSyncError::NotFound => AppError::NotFound(value.to_string()),
+            ConnectorSyncError::AlreadyStarted
+            | ConnectorSyncError::AlreadyTerminal
+            | ConnectorSyncError::InvalidCommand(_) => AppError::Validation(value.to_string()),
+            ConnectorSyncError::Internal(_) => AppError::Internal(value.to_string()),
+        }
+    }
+}
+
+impl From<ConnectorSyncRepositoryError> for AppError {
+    fn from(value: ConnectorSyncRepositoryError) -> Self {
+        AppError::Internal(value.to_string())
+    }
+}
+
+impl From<ConnectorDiscoveredItemRepositoryError> for AppError {
+    fn from(value: ConnectorDiscoveredItemRepositoryError) -> Self {
         AppError::Internal(value.to_string())
     }
 }

@@ -12,26 +12,34 @@ use crate::server::domain::configuration::pipeline_configuration::PipelineConfig
 use crate::server::domain::configuration::sweep_template::SweepTemplateRepository;
 use crate::server::domain::configuration::vector_index::VectorIndexRepository;
 use crate::server::domain::connector::ConnectorRepository;
+use crate::server::domain::connector_import::ConnectorImportRepository;
+use crate::server::domain::connector_sync::{
+    ConnectorDiscoveredItemRepository, ConnectorSyncRepository,
+};
 use crate::server::domain::embedding_set::repository::EmbeddingSetRepository;
 use crate::server::domain::evaluation::dataset::repository::EvaluationDatasetRepository;
 use crate::server::domain::evaluation::run::repository::EvaluationRunRepository;
 use crate::server::domain::indexing::repository::IndexingRepository;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
-use crate::server::infrastructure::shared::clients::CloudflareApi;
+use crate::server::infrastructure::chunk_set::PostgresChunkSetRepository;
 use crate::server::infrastructure::configuration::{
     PostgresChunkingConfigurationRepository, PostgresEmbeddingModelRepository,
     PostgresGenerationModelRepository, PostgresPipelineConfigurationRepository,
     PostgresSweepTemplateRepository, PostgresVectorIndexRepository,
 };
 use crate::server::infrastructure::connector::PostgresConnectorRepository;
+use crate::server::infrastructure::connector_import::PostgresConnectorImportRepository;
+use crate::server::infrastructure::connector_sync::{
+    PostgresConnectorDiscoveredItemRepository, PostgresConnectorSyncRepository,
+};
+use crate::server::infrastructure::embedding_set::PostgresEmbeddingSetRepository;
 use crate::server::infrastructure::evaluation::{
     PostgresEvaluationDatasetRepository, PostgresEvaluationRunRepository,
 };
-use crate::server::infrastructure::shared::event_sourcing::PostgresCheckpointRepository;
-use crate::server::infrastructure::indexing::PostgresIndexingRepository;
 use crate::server::infrastructure::indexing::kv::{CloudflareKvStore, PostgresKvStore};
-use crate::server::infrastructure::chunk_set::PostgresChunkSetRepository;
-use crate::server::infrastructure::embedding_set::PostgresEmbeddingSetRepository;
+use crate::server::infrastructure::indexing::PostgresIndexingRepository;
+use crate::server::infrastructure::shared::clients::CloudflareApi;
+use crate::server::infrastructure::shared::event_sourcing::PostgresCheckpointRepository;
 use crate::server::infrastructure::source_document::{
     PostgresBlobStore, PostgresSourceDocumentRepository,
 };
@@ -47,6 +55,9 @@ pub struct Repositories {
     pub chunking_configuration: Arc<dyn ChunkingConfigurationRepository>,
     pub sweep_template: Arc<dyn SweepTemplateRepository>,
     pub connector: Arc<dyn ConnectorRepository>,
+    pub connector_import: Arc<dyn ConnectorImportRepository>,
+    pub connector_sync: Arc<dyn ConnectorSyncRepository>,
+    pub connector_discovered_item: Arc<dyn ConnectorDiscoveredItemRepository>,
     pub source_document: Arc<dyn SourceDocumentRepository>,
     pub indexing: Arc<dyn IndexingRepository>,
     pub evaluation_dataset: Arc<dyn EvaluationDatasetRepository>,
@@ -87,6 +98,11 @@ pub fn build_repositories(
         )),
         sweep_template: Arc::new(PostgresSweepTemplateRepository::new(pool.clone())),
         connector: Arc::new(PostgresConnectorRepository::new(pool.clone())),
+        connector_import: Arc::new(PostgresConnectorImportRepository::new(pool.clone())),
+        connector_sync: Arc::new(PostgresConnectorSyncRepository::new(pool.clone())),
+        connector_discovered_item: Arc::new(PostgresConnectorDiscoveredItemRepository::new(
+            pool.clone(),
+        )),
         source_document: Arc::new(PostgresSourceDocumentRepository::new(pool.clone())),
         indexing: Arc::new(PostgresIndexingRepository::new(pool.clone())),
         evaluation_dataset: Arc::new(PostgresEvaluationDatasetRepository::new(pool.clone())),

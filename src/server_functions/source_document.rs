@@ -1,8 +1,8 @@
 use leptos::prelude::*;
 
 use crate::shared::contracts::{
-    ChunkDto, ConnectorDiscoveredItemDto, DocumentListItemDto, DocumentListPageDto,
-    DocumentListQueryDto, SourceDocumentDetailDto, SourceDocumentDto, SourceDocumentMarkdownDto,
+    ChunkDto, DocumentListItemDto, DocumentListPageDto, DocumentListQueryDto,
+    SourceDocumentDetailDto, SourceDocumentDto, SourceDocumentMarkdownDto,
 };
 use crate::shared::ChunkingConfig;
 
@@ -98,35 +98,6 @@ pub async fn import_source_document_from_url(
 ) -> Result<SourceDocumentDto, ServerFnError> {
     ctx::<Arc<SourceDocumentIngestService>>()?
         .import_url(url)
-        .await
-        .map_err(|e| map_app_error(&e))
-}
-
-#[server(
-    name = ImportFromConnector,
-    prefix = "/api",
-    endpoint = "import_from_connector"
-)]
-pub async fn import_from_connector(
-    connector_id: uuid::Uuid,
-    source_ref_key: String,
-) -> Result<SourceDocumentDto, ServerFnError> {
-    ctx::<Arc<SourceDocumentIngestService>>()?
-        .import_from_connector(connector_id, parse_source_ref(&source_ref_key)?)
-        .await
-        .map_err(|e| map_app_error(&e))
-}
-
-#[server(
-    name = ListFromConnector,
-    prefix = "/api",
-    endpoint = "list_from_connector"
-)]
-pub async fn list_from_connector(
-    connector_id: uuid::Uuid,
-) -> Result<Vec<ConnectorDiscoveredItemDto>, ServerFnError> {
-    ctx::<Arc<SourceDocumentIngestService>>()?
-        .list_from_connector(connector_id)
         .await
         .map_err(|e| map_app_error(&e))
 }

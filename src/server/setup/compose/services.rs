@@ -14,6 +14,12 @@ use crate::server::application::configuration::{
     SweepTemplateCommandHandler, SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
 };
 use crate::server::application::connector::{ConnectorCommandHandler, ConnectorQueryService};
+use crate::server::application::connector_import::{
+    ConnectorImportCommandHandler, ConnectorImportQueryService,
+};
+use crate::server::application::connector_sync::{
+    ConnectorSyncCommandHandler, ConnectorSyncQueryService,
+};
 use crate::server::application::embedding::ports::Embedder;
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::evaluation::ports::{EvaluationGenerator, Retriever};
@@ -33,11 +39,11 @@ use crate::server::application::source_document::{
     SourceDocumentCommandHandler, SourceDocumentQueryService,
 };
 use crate::server::application::{ActivityRegistry, JobRegistry};
-use crate::server::infrastructure::shared::clients::{CloudflareApi, OllamaApi};
 use crate::server::infrastructure::embedding::{OllamaEmbedder, WorkersAiEmbedder};
 use crate::server::infrastructure::evaluation::{LlmEvaluationGenerator, PgvectorRetriever};
-use crate::server::infrastructure::shared::http::ReqwestHttpClient;
 use crate::server::infrastructure::llm::{OllamaGenerationClient, WorkersAiGenerationClient};
+use crate::server::infrastructure::shared::clients::{CloudflareApi, OllamaApi};
+use crate::server::infrastructure::shared::http::ReqwestHttpClient;
 use crate::server::infrastructure::shared::markdown::MarkdownRsParser;
 use crate::server::infrastructure::shared::tokenizer::{TiktokenTokenizer, DEFAULT_TIKTOKEN_MODEL};
 use crate::server::infrastructure::vector::{
@@ -59,6 +65,10 @@ pub struct Services {
     pub sweep_template_command_handler: Arc<SweepTemplateCommandHandler>,
     pub connector_command_handler: Arc<ConnectorCommandHandler>,
     pub connector_query_service: Arc<ConnectorQueryService>,
+    pub connector_import_command_handler: Arc<ConnectorImportCommandHandler>,
+    pub connector_import_query_service: Arc<ConnectorImportQueryService>,
+    pub connector_sync_command_handler: Arc<ConnectorSyncCommandHandler>,
+    pub connector_sync_query_service: Arc<ConnectorSyncQueryService>,
     pub source_document_command_handler: Arc<SourceDocumentCommandHandler>,
     pub indexing_command_handler: Arc<IndexingCommandHandler>,
     pub evaluation_dataset_command_handler: Arc<EvaluationDatasetCommandHandler>,
@@ -166,6 +176,7 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
 
     let pipeline_resolver = PipelineResolver::new(
         Arc::clone(&repos.pipeline_configuration),
+        Arc::clone(&repos.connector),
         Arc::clone(&embedding_service),
         Arc::clone(&generation_service),
         Arc::clone(&vector_index_resolver),
@@ -210,6 +221,19 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         Arc::clone(&clock),
         Arc::clone(&id_generator),
     );
+    let connector_import_command_handler =
+        ConnectorImportCommandHandler::new(Arc::clone(&wirings.connector_import.command_processor));
+    let connector_import_query_service =
+        ConnectorImportQueryService::new(Arc::clone(&repos.connector_import));
+    let connector_sync_command_handler =
+        ConnectorSyncCommandHandler::new(Arc::clone(&wirings.connector_sync.command_processor));
+    let connector_sync_query_service = ConnectorSyncQueryService::new(
+        Arc::clone(&repos.connector_sync),
+        Arc::clone(&repos.connector_discovered_item),
+        Arc::clone(&repos.connector_import),
+        Arc::clone(&repos.source_document),
+        Arc::clone(&repos.indexing),
+    );
     let source_document_command_handler =
         SourceDocumentCommandHandler::new(Arc::clone(&wirings.source_document.command_processor));
     let indexing_command_handler =
@@ -237,8 +261,10 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         Arc::clone(&repos.generation_model),
         Arc::clone(&repos.vector_index),
     );
-    let chunking_configuration_query_service =
-        ChunkingConfigurationQueryService::new(Arc::clone(&repos.chunking_configuration));
+    let chunking_configuration_query_service = ChunkingConfigurationQueryService::new(
+        Arc::clone(&repos.chunking_configuration),
+        Arc::clone(&repos.connector),
+    );
     let sweep_template_query_service =
         SweepTemplateQueryService::new(Arc::clone(&repos.sweep_template));
     let evaluation_query_service = EvaluationQueryService::new(
@@ -252,6 +278,8 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         Arc::clone(&repos.chunk_set),
         Arc::clone(&repos.blob_store),
         Arc::clone(&markdown_parser),
+        Arc::clone(&connector_query_service),
+        Arc::clone(&connector_import_query_service),
     );
     let retrieval_service = RetrievalService::new(
         Arc::clone(&pipeline_resolver),
@@ -291,6 +319,10 @@ pub async fn build_services(deps: ServicesDeps<'_>) -> Result<Services, SetupErr
         sweep_template_command_handler,
         connector_command_handler,
         connector_query_service,
+        connector_import_command_handler,
+        connector_import_query_service,
+        connector_sync_command_handler,
+        connector_sync_query_service,
         source_document_command_handler,
         indexing_command_handler,
         evaluation_dataset_command_handler,

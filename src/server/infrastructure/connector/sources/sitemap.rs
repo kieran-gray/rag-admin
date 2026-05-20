@@ -313,5 +313,4 @@ mod tests {
             "https://example.com/*"
         ));
     }
-
 }

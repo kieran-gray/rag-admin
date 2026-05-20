@@ -42,6 +42,10 @@ pub struct ConnectorDto {
     pub connector_id: Uuid,
     pub name: String,
     pub config: ConnectorConfigDto,
+    #[serde(default)]
+    pub default_pipeline_configuration_id: Option<Uuid>,
+    #[serde(default)]
+    pub default_chunking_configuration_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,17 +72,62 @@ pub struct UnregisterConnectorDto {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SetConnectorDefaultsDto {
+    pub connector_id: Uuid,
+    pub pipeline_configuration_id: Option<Uuid>,
+    pub chunking_configuration_id: Option<Uuid>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum ConnectorCommandDto {
     RegisterConnector(RegisterConnectorDto),
     RenameConnector(RenameConnectorDto),
     UpdateConnectorConfig(UpdateConnectorConfigDto),
     UnregisterConnector(UnregisterConnectorDto),
+    SetConnectorDefaults(SetConnectorDefaultsDto),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConnectorDiscoveredItemDto {
+pub struct ConnectorSyncSummaryDto {
+    pub sync_id: Uuid,
+    pub connector_id: Uuid,
+    pub status: String,
+    pub discovered_count: u32,
+    pub started_at: String,
+    pub completed_at: Option<String>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ConnectorItemStatusDto {
+    Discovered,
+    Imported,
+    Indexed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConnectorDiscoveredItemViewDto {
+    pub connector_id: Uuid,
     pub source_ref_key: String,
     pub title: String,
-    pub already_imported: bool,
+    pub first_seen: String,
+    pub last_seen: String,
+    pub latest_sync_id: Uuid,
+    pub imported_document_id: Option<Uuid>,
+    pub status: ConnectorItemStatusDto,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BulkImportFailureDto {
+    pub source_ref_key: String,
+    pub error: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BulkImportResultDto {
+    pub imported: u32,
+    pub indexed: u32,
+    pub failures: Vec<BulkImportFailureDto>,
 }

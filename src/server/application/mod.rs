@@ -3,6 +3,8 @@ pub mod chat;
 pub mod chunking;
 pub mod configuration;
 pub mod connector;
+pub mod connector_import;
+pub mod connector_sync;
 pub mod embedding;
 pub mod evaluation;
 pub mod exceptions;

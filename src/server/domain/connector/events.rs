@@ -31,10 +31,18 @@ pub struct ConnectorUnregistered {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ConnectorDefaultsSet {
+    pub pipeline_configuration_id: Option<uuid::Uuid>,
+    pub chunking_configuration_id: Option<uuid::Uuid>,
+    pub occurred_at: Timestamp,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", content = "data")]
 pub enum ConnectorEvent {
     ConnectorRegistered(ConnectorRegistered),
     ConnectorRenamed(ConnectorRenamed),
     ConnectorConfigUpdated(ConnectorConfigUpdated),
     ConnectorUnregistered(ConnectorUnregistered),
+    ConnectorDefaultsSet(ConnectorDefaultsSet),
 }

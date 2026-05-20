@@ -38,6 +38,7 @@ pub struct DocumentListQuery {
     pub search: Option<String>,
     pub sources: Vec<SourceFilter>,
     pub statuses: Vec<DocumentStatusFilter>,
+    pub document_id_filter: Option<Vec<Uuid>>,
 }
 
 #[derive(Debug, Clone)]

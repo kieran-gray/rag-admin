@@ -4,7 +4,7 @@ use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::AppError;
 use crate::server::domain::connector::{
     Connector, ConnectorCommand, ConnectorConfig, RegisterConnector, RenameConnector,
-    SitemapConfig, UnregisterConnector, UpdateConnectorConfig,
+    SetConnectorDefaults, SitemapConfig, UnregisterConnector, UpdateConnectorConfig,
 };
 use crate::shared::contracts::connector::{ConnectorCommandDto, ConnectorConfigDto, ConnectorDto};
 use event_sourcing::CommandProcessor;
@@ -83,6 +83,20 @@ impl ConnectorCommandHandler {
             ConnectorCommandDto::UnregisterConnector(d) => {
                 self.unregister(d.connector_id).await?;
                 Ok(None)
+            }
+            ConnectorCommandDto::SetConnectorDefaults(d) => {
+                self.processor
+                    .handle(
+                        d.connector_id,
+                        ConnectorCommand::SetConnectorDefaults(SetConnectorDefaults {
+                            connector_id: d.connector_id,
+                            pipeline_configuration_id: d.pipeline_configuration_id,
+                            chunking_configuration_id: d.chunking_configuration_id,
+                            occurred_at: self.clock.now(),
+                        }),
+                    )
+                    .await?;
+                Ok(self.query_service.get(d.connector_id).await?)
             }
         }
     }

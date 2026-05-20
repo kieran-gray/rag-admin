@@ -36,3 +36,62 @@ impl CatalogEntry for GenerationModel {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn model(kind: AiProviderKind, name: &str) -> GenerationModel {
+        GenerationModel {
+            generation_model_id: Uuid::new_v4(),
+            kind,
+            model: name.into(),
+        }
+    }
+
+    #[test]
+    fn id_returns_inner_uuid() {
+        let m = model(AiProviderKind::Ollama, "llama3");
+        assert_eq!(m.id(), m.generation_model_id);
+    }
+
+    #[test]
+    fn natural_key_combines_kind_and_model() {
+        let m = model(AiProviderKind::Ollama, "llama3");
+        assert_eq!(m.natural_key(), "ollama:llama3");
+    }
+
+    #[test]
+    fn validate_accepts_cloudflare_id_with_at_cf_prefix() {
+        assert!(model(AiProviderKind::Cloudflare, "@cf/meta/llama-3")
+            .validate()
+            .is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_cloudflare_id_without_at_cf_prefix() {
+        let err = model(AiProviderKind::Cloudflare, "meta/llama-3")
+            .validate()
+            .unwrap_err();
+        assert!(matches!(err, CatalogError::ValidationError(_)));
+    }
+
+    #[test]
+    fn validate_rejects_ollama_id_with_whitespace() {
+        let err = model(AiProviderKind::Ollama, "llama 3")
+            .validate()
+            .unwrap_err();
+        assert!(matches!(err, CatalogError::ValidationError(_)));
+    }
+
+    #[test]
+    fn validate_rejects_empty_model_name() {
+        let err = model(AiProviderKind::Ollama, "  ").validate().unwrap_err();
+        assert!(matches!(err, CatalogError::ValidationError(_)));
+    }
+
+    #[test]
+    fn validate_accepts_ollama_with_simple_name() {
+        assert!(model(AiProviderKind::Ollama, "llama3").validate().is_ok());
+    }
+}

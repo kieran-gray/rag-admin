@@ -278,4 +278,91 @@ mod tests {
         assert_eq!(trial_label(42), "trial-0042");
         assert_eq!(trial_label(9999), "trial-9999");
     }
+
+    #[test]
+    fn top_k_clamps_zero_or_negative_to_one() {
+        let mut params: HashMap<String, Value> = HashMap::new();
+        params.insert("top_k".into(), Value::Int(0));
+        let (_c, options) = params_to_run_config(&params, Uuid::nil());
+        assert_eq!(options.top_k, 1);
+
+        params.insert("top_k".into(), Value::Int(-5));
+        let (_c, options) = params_to_run_config(&params, Uuid::nil());
+        assert_eq!(options.top_k, 1);
+    }
+
+    #[test]
+    fn top_k_clamps_huge_values() {
+        let mut params: HashMap<String, Value> = HashMap::new();
+        params.insert("top_k".into(), Value::Int(1_000_000));
+        let (_c, options) = params_to_run_config(&params, Uuid::nil());
+        assert_eq!(options.top_k, 1_000);
+    }
+
+    #[test]
+    fn min_score_below_zero_clamps_to_zero() {
+        let mut params: HashMap<String, Value> = HashMap::new();
+        params.insert("min_score".into(), Value::Float(-0.7));
+        let (_c, options) = params_to_run_config(&params, Uuid::nil());
+        assert_eq!(options.min_score_milli, 0);
+    }
+
+    #[test]
+    fn bert_strategy_clamps_zero_target_tokens_to_one() {
+        let mut params: HashMap<String, Value> = HashMap::new();
+        params.insert("strategy".into(), Value::String("bert".into()));
+        params.insert("bert_target_tokens".into(), Value::Int(0));
+        let (chunking, _) = params_to_run_config(&params, Uuid::nil());
+        let ChunkingConfig::Bert(c) = chunking else {
+            panic!("expected bert");
+        };
+        assert_eq!(c.target_tokens, 1);
+    }
+
+    #[test]
+    fn darn_strategy_overlap_can_be_zero() {
+        let mut params: HashMap<String, Value> = HashMap::new();
+        params.insert("strategy".into(), Value::String("darn".into()));
+        params.insert("darn_max_chunk_size".into(), Value::Int(500));
+        params.insert("darn_overlap".into(), Value::Int(0));
+        let (chunking, _) = params_to_run_config(&params, Uuid::nil());
+        let ChunkingConfig::Darn(c) = chunking else {
+            panic!("expected darn");
+        };
+        assert_eq!(c.max_chunk_size, 500);
+        assert_eq!(c.overlap, 0);
+    }
+
+    #[test]
+    fn unknown_strategy_falls_back_to_section() {
+        let mut params: HashMap<String, Value> = HashMap::new();
+        params.insert("strategy".into(), Value::String("unknown-mystery".into()));
+        let (chunking, _) = params_to_run_config(&params, Uuid::nil());
+        assert!(matches!(chunking, ChunkingConfig::Section(_)));
+    }
+
+    #[test]
+    fn parse_trial_rung_label_extracts_pair() {
+        assert_eq!(parse_trial_rung_label("trial-0042-r3"), Some((42, 3)));
+        assert_eq!(parse_trial_rung_label("trial-0000-r0"), Some((0, 0)));
+    }
+
+    #[test]
+    fn parse_trial_rung_label_rejects_malformed_input() {
+        assert_eq!(parse_trial_rung_label("not-a-trial"), None);
+        assert_eq!(parse_trial_rung_label("trial-foo-r3"), None);
+        assert_eq!(parse_trial_rung_label("trial-1-rbeta"), None);
+    }
+
+    #[test]
+    fn parse_trial_validation_and_holdout_labels_roundtrip() {
+        assert_eq!(
+            parse_trial_validation_label(&trial_validation_label(7)),
+            Some(7)
+        );
+        assert_eq!(
+            parse_trial_holdout_label(&trial_holdout_label(99)),
+            Some(99)
+        );
+    }
 }

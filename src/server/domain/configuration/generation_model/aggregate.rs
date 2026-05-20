@@ -152,3 +152,214 @@ impl Aggregate for GenerationModelCatalog {
 }
 
 impl HasPolicies<GenerationModelCatalog, ()> for GenerationModelCatalogEvent {}
+
+#[cfg(test)]
+mod tests {
+    use super::super::commands::{
+        AddGenerationModel, RemoveGenerationModel, UpdateGenerationModel,
+    };
+    use super::*;
+    use crate::shared::reference_data::AiProviderKind;
+
+    fn add(kind: AiProviderKind, model: &str) -> GenerationModelCatalogCommand {
+        GenerationModelCatalogCommand::AddGenerationModel(AddGenerationModel {
+            kind,
+            model: model.into(),
+        })
+    }
+
+    fn seeded() -> (GenerationModelCatalog, Vec<GenerationModelCatalogEvent>) {
+        let events =
+            GenerationModelCatalog::handle_command(None, add(AiProviderKind::Ollama, "llama3"))
+                .expect("seed");
+        let state = GenerationModelCatalog::from_events(&events).expect("seed state");
+        (state, events)
+    }
+
+    #[test]
+    fn first_add_emits_catalog_created_then_added() {
+        let events =
+            GenerationModelCatalog::handle_command(None, add(AiProviderKind::Ollama, "llama3"))
+                .unwrap();
+        assert_eq!(events.len(), 2);
+        assert!(matches!(
+            events[0],
+            GenerationModelCatalogEvent::GenerationModelCatalogCreated(_)
+        ));
+        assert!(matches!(
+            events[1],
+            GenerationModelCatalogEvent::GenerationModelAdded(_)
+        ));
+    }
+
+    #[test]
+    fn replay_builds_state_with_one_entry() {
+        let (state, _) = seeded();
+        assert_eq!(state.models().len(), 1);
+        assert_eq!(state.models()[0].model, "llama3");
+        assert_eq!(state.models()[0].kind, AiProviderKind::Ollama);
+    }
+
+    #[test]
+    fn duplicate_kind_and_model_rejected() {
+        let (state, _) = seeded();
+        let err = GenerationModelCatalog::handle_command(
+            Some(&state),
+            add(AiProviderKind::Ollama, "llama3"),
+        )
+        .unwrap_err();
+        assert!(matches!(err, CatalogError::ValidationError(_)));
+    }
+
+    #[test]
+    fn same_model_under_different_kind_is_allowed() {
+        let (state, mut events) = seeded();
+        let extra = GenerationModelCatalog::handle_command(
+            Some(&state),
+            add(AiProviderKind::Cloudflare, "@cf/meta/llama-3"),
+        )
+        .unwrap();
+        events.extend(extra);
+        let state = GenerationModelCatalog::from_events(&events).unwrap();
+        assert_eq!(state.models().len(), 2);
+    }
+
+    #[test]
+    fn invalid_cloudflare_model_id_rejected_at_command_layer() {
+        let err = GenerationModelCatalog::handle_command(
+            None,
+            add(AiProviderKind::Cloudflare, "no-prefix-here"),
+        )
+        .unwrap_err();
+        assert!(matches!(err, CatalogError::ValidationError(_)));
+    }
+
+    #[test]
+    fn update_rewrites_entry_in_place() {
+        let (state, mut events) = seeded();
+        let id = state.models()[0].generation_model_id;
+        let upd = GenerationModelCatalog::handle_command(
+            Some(&state),
+            GenerationModelCatalogCommand::UpdateGenerationModel(UpdateGenerationModel {
+                model_id: id,
+                kind: AiProviderKind::Cloudflare,
+                model: "@cf/meta/llama-3".into(),
+            }),
+        )
+        .unwrap();
+        events.extend(upd);
+        let updated = GenerationModelCatalog::from_events(&events).unwrap();
+        assert_eq!(updated.models().len(), 1);
+        let e = &updated.models()[0];
+        assert_eq!(e.generation_model_id, id);
+        assert_eq!(e.kind, AiProviderKind::Cloudflare);
+        assert_eq!(e.model, "@cf/meta/llama-3");
+    }
+
+    #[test]
+    fn update_unknown_id_returns_not_found() {
+        let (state, _) = seeded();
+        let err = GenerationModelCatalog::handle_command(
+            Some(&state),
+            GenerationModelCatalogCommand::UpdateGenerationModel(UpdateGenerationModel {
+                model_id: Uuid::new_v4(),
+                kind: AiProviderKind::Ollama,
+                model: "mistral".into(),
+            }),
+        )
+        .unwrap_err();
+        assert!(matches!(err, CatalogError::NotFound));
+    }
+
+    #[test]
+    fn update_validates_new_model_id_format() {
+        let (state, _) = seeded();
+        let id = state.models()[0].generation_model_id;
+        let err = GenerationModelCatalog::handle_command(
+            Some(&state),
+            GenerationModelCatalogCommand::UpdateGenerationModel(UpdateGenerationModel {
+                model_id: id,
+                kind: AiProviderKind::Cloudflare,
+                model: "no-prefix".into(),
+            }),
+        )
+        .unwrap_err();
+        assert!(matches!(err, CatalogError::ValidationError(_)));
+    }
+
+    #[test]
+    fn update_into_another_entrys_natural_key_rejected() {
+        let (state, mut events) = seeded();
+        let extra = GenerationModelCatalog::handle_command(
+            Some(&state),
+            add(AiProviderKind::Ollama, "mistral"),
+        )
+        .unwrap();
+        events.extend(extra);
+        let state = GenerationModelCatalog::from_events(&events).unwrap();
+        let mistral_id = state
+            .models()
+            .iter()
+            .find(|m| m.model == "mistral")
+            .unwrap()
+            .generation_model_id;
+        let err = GenerationModelCatalog::handle_command(
+            Some(&state),
+            GenerationModelCatalogCommand::UpdateGenerationModel(UpdateGenerationModel {
+                model_id: mistral_id,
+                kind: AiProviderKind::Ollama,
+                model: "llama3".into(),
+            }),
+        )
+        .unwrap_err();
+        assert!(matches!(err, CatalogError::ValidationError(_)));
+    }
+
+    #[test]
+    fn remove_deletes_entry() {
+        let (state, mut events) = seeded();
+        let id = state.models()[0].generation_model_id;
+        events.extend(
+            GenerationModelCatalog::handle_command(
+                Some(&state),
+                GenerationModelCatalogCommand::RemoveGenerationModel(RemoveGenerationModel {
+                    model_id: id,
+                }),
+            )
+            .unwrap(),
+        );
+        let after = GenerationModelCatalog::from_events(&events).unwrap();
+        assert!(after.models().is_empty());
+    }
+
+    #[test]
+    fn remove_unknown_id_returns_not_found() {
+        let (state, _) = seeded();
+        let err = GenerationModelCatalog::handle_command(
+            Some(&state),
+            GenerationModelCatalogCommand::RemoveGenerationModel(RemoveGenerationModel {
+                model_id: Uuid::new_v4(),
+            }),
+        )
+        .unwrap_err();
+        assert!(matches!(err, CatalogError::NotFound));
+    }
+
+    #[test]
+    fn replay_with_event_before_creation_returns_none() {
+        let events = vec![GenerationModelCatalogEvent::GenerationModelRemoved(
+            GenerationModelRemoved {
+                model_id: Uuid::new_v4(),
+            },
+        )];
+        assert!(GenerationModelCatalog::from_events(&events).is_none());
+    }
+
+    #[test]
+    fn aggregate_type_is_stable_identifier() {
+        assert_eq!(
+            GenerationModelCatalog::aggregate_type(),
+            "generation_model_catalog",
+        );
+    }
+}

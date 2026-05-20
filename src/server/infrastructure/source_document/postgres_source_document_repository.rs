@@ -343,6 +343,18 @@ fn push_filters(qb: &mut QueryBuilder<'_, Postgres>, query: &DocumentListQuery) 
         qb.push(")");
     }
 
+    if let Some(ids) = query
+        .document_id_filter
+        .as_ref()
+        .filter(|ids| !ids.is_empty())
+    {
+        qb.push(" AND document_id = ANY(");
+        qb.push_bind(ids.clone());
+        qb.push(")");
+    } else if query.document_id_filter.as_ref().is_some_and(Vec::is_empty) {
+        qb.push(" AND FALSE");
+    }
+
     if !query.statuses.is_empty() {
         qb.push(" AND (");
         let mut first = true;

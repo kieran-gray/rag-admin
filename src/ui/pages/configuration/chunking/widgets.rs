@@ -1,15 +1,17 @@
 use leptos::prelude::*;
 
+use crate::ui::components::primitives::InlineStatusMessage;
+
 #[component]
-pub(super) fn StatusBanner(status: ReadSignal<Option<(bool, String)>>) -> impl IntoView {
+pub(super) fn StatusBanner(status: ReadSignal<Option<InlineStatusMessage>>) -> impl IntoView {
     view! {
-        {move || status.get().map(|(ok, msg)| {
-            let cls = if ok {
+        {move || status.get().map(|m| {
+            let cls = if m.ok {
                 "surface mb-4 px-4 py-2"
             } else {
                 "surface mb-4 px-4 py-2 log-line-error"
             };
-            view! { <div class=cls>{msg}</div> }
+            view! { <div class=cls>{m.text}</div> }
         })}
     }
 }

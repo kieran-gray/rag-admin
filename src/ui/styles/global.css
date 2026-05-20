@@ -2417,3 +2417,189 @@ header::before {
     color: var(--color-text);
     font-weight: 500;
 }
+
+/* ── Smart filter bar (token chips inside the search input) ───────────── */
+
+.smart-filter {
+    position: relative;
+    padding: 0.55rem 0.875rem;
+    border-bottom: 1px solid var(--color-border);
+    background-color: color-mix(in srgb, var(--color-surface-1) 92%, var(--color-page-bg));
+}
+
+.smart-filter-shell {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    background-color: var(--color-surface-1);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-1);
+    padding: 0.35rem 0.5rem;
+    transition: border-color 0.12s ease, background-color 0.12s ease, box-shadow 0.12s ease;
+    min-height: 2.1rem;
+}
+
+.smart-filter-shell:focus-within {
+    border-color: var(--color-accent);
+    background-color: var(--color-surface-2);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 18%, transparent);
+}
+
+.smart-filter-icon {
+    color: var(--color-text-faint);
+    font-size: 0.8125rem;
+    line-height: 1;
+    padding: 0 0.15rem;
+    flex-shrink: 0;
+}
+
+.smart-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0.35rem 0.15rem 0.5rem;
+    background-color: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface-2));
+    border: 1px solid color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
+    border-radius: 999px;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    color: var(--color-text);
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+    white-space: nowrap;
+}
+
+.smart-filter-chip-key {
+    color: color-mix(in srgb, var(--color-accent) 75%, var(--color-text-muted));
+}
+
+.smart-filter-chip-remove {
+    background: none;
+    border: none;
+    color: var(--color-text-faint);
+    cursor: pointer;
+    padding: 0 0.15rem;
+    line-height: 1;
+    font-size: 0.75rem;
+    border-radius: 999px;
+    font-family: inherit;
+}
+
+.smart-filter-chip-remove:hover {
+    color: var(--color-text);
+}
+
+.smart-filter-input {
+    flex: 1 1 10rem;
+    min-width: 6rem;
+    border: none;
+    background: transparent;
+    color: var(--color-text);
+    font-size: 0.8125rem;
+    font-family: inherit;
+    padding: 0.15rem 0.25rem;
+}
+
+.smart-filter-input:focus {
+    outline: none;
+}
+
+.smart-filter-input::placeholder {
+    color: var(--color-text-faint);
+}
+
+.smart-filter-hint {
+    color: var(--color-text-faint);
+    font-size: 0.6875rem;
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+    padding: 0 0.15rem;
+    user-select: none;
+}
+
+.smart-filter-clear {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: var(--color-text-faint);
+    font-size: 0.7rem;
+    cursor: pointer;
+    text-decoration: underline dotted;
+    text-underline-offset: 2px;
+    font-family: inherit;
+}
+
+.smart-filter-clear:hover {
+    color: var(--color-text);
+}
+
+.smart-filter-popover {
+    position: absolute;
+    left: 0.875rem;
+    right: 0.875rem;
+    top: calc(100% - 0.25rem);
+    max-height: 18rem;
+    overflow-y: auto;
+    background-color: var(--color-surface-2);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-1);
+    box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.35);
+    z-index: 30;
+    padding: 0.3rem;
+}
+
+.smart-filter-popover-header {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.6875rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-text-faint);
+}
+
+.smart-filter-popover-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+    padding: 0.35rem 0.55rem;
+    border-radius: var(--radius-1);
+    color: var(--color-text);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.smart-filter-popover-item:hover,
+.smart-filter-popover-item[data-highlighted="true"] {
+    background-color: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface-1));
+}
+
+.smart-filter-popover-item-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+.smart-filter-popover-item-kbd {
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+    color: var(--color-text-faint);
+    font-size: 0.6875rem;
+}
+
+.smart-filter-popover-empty {
+    padding: 0.55rem;
+    color: var(--color-text-faint);
+    font-size: 0.75rem;
+    text-align: center;
+}
+
+.smart-filter-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.875rem;
+    border-bottom: 1px solid var(--color-border);
+    background-color: var(--color-surface-1);
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
+}

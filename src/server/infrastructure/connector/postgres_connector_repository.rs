@@ -24,7 +24,8 @@ impl ConnectorRepository for PostgresConnectorRepository {
     ) -> Result<Option<ConnectorReadModel>, ConnectorRepositoryError> {
         let row: Option<ConnectorRow> = sqlx::query_as(
             "
-            SELECT connector_id, name, config, deleted, created_at, updated_at
+            SELECT connector_id, name, config, deleted, created_at, updated_at,
+                   default_pipeline_configuration_id, default_chunking_configuration_id
             FROM connectors
             WHERE connector_id = $1
             ",
@@ -44,15 +45,18 @@ impl ConnectorRepository for PostgresConnectorRepository {
         sqlx::query(
             "
             INSERT INTO connectors (
-                connector_id, name, kind, config, deleted, created_at, updated_at
+                connector_id, name, kind, config, deleted, created_at, updated_at,
+                default_pipeline_configuration_id, default_chunking_configuration_id
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             ON CONFLICT (connector_id) DO UPDATE SET
                 name = EXCLUDED.name,
                 kind = EXCLUDED.kind,
                 config = EXCLUDED.config,
                 deleted = EXCLUDED.deleted,
-                updated_at = EXCLUDED.updated_at
+                updated_at = EXCLUDED.updated_at,
+                default_pipeline_configuration_id = EXCLUDED.default_pipeline_configuration_id,
+                default_chunking_configuration_id = EXCLUDED.default_chunking_configuration_id
             ",
         )
         .bind(read_model.connector_id)
@@ -62,6 +66,8 @@ impl ConnectorRepository for PostgresConnectorRepository {
         .bind(read_model.deleted)
         .bind(&read_model.created_at)
         .bind(&read_model.updated_at)
+        .bind(read_model.default_pipeline_configuration_id)
+        .bind(read_model.default_chunking_configuration_id)
         .execute(&self.pool)
         .await
         .map_err(|e| ConnectorRepositoryError::Internal(format!("save: {e}")))?;
@@ -93,7 +99,8 @@ impl ConnectorRepository for PostgresConnectorRepository {
     async fn list_active(&self) -> Result<Vec<ConnectorReadModel>, ConnectorRepositoryError> {
         let rows: Vec<ConnectorRow> = sqlx::query_as(
             "
-            SELECT connector_id, name, config, deleted, created_at, updated_at
+            SELECT connector_id, name, config, deleted, created_at, updated_at,
+                   default_pipeline_configuration_id, default_chunking_configuration_id
             FROM connectors
             WHERE NOT deleted
             ORDER BY created_at ASC
@@ -115,6 +122,8 @@ struct ConnectorRow {
     deleted: bool,
     created_at: String,
     updated_at: String,
+    default_pipeline_configuration_id: Option<Uuid>,
+    default_chunking_configuration_id: Option<Uuid>,
 }
 
 impl TryFrom<ConnectorRow> for ConnectorReadModel {
@@ -130,6 +139,8 @@ impl TryFrom<ConnectorRow> for ConnectorReadModel {
             deleted: row.deleted,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            default_pipeline_configuration_id: row.default_pipeline_configuration_id,
+            default_chunking_configuration_id: row.default_chunking_configuration_id,
         })
     }
 }

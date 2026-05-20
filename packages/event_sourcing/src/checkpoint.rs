@@ -48,3 +48,50 @@ pub trait CheckpointRepository: Send + Sync {
 
     async fn upsert(&self, checkpoint: &ProjectionCheckpoint) -> Result<(), EsError>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cp(status: CheckpointStatus, error_count: i64) -> ProjectionCheckpoint {
+        ProjectionCheckpoint {
+            projector_name: "p".into(),
+            last_processed_log_position: 0,
+            status,
+            error_message: None,
+            error_count,
+            updated_at: OffsetDateTime::now_utc(),
+        }
+    }
+
+    #[test]
+    fn test_as_str_conversions() {
+        assert_eq!(CheckpointStatus::Error.as_str(), "error");
+        assert_eq!(CheckpointStatus::Healthy.as_str(), "healthy");
+    }
+
+    #[test]
+    fn faulted_at_exactly_max_errors() {
+        assert!(cp(CheckpointStatus::Error, 5).is_faulted(5));
+    }
+
+    #[test]
+    fn not_faulted_below_max_errors() {
+        assert!(!cp(CheckpointStatus::Error, 4).is_faulted(5));
+    }
+
+    #[test]
+    fn healthy_is_never_faulted() {
+        assert!(!cp(CheckpointStatus::Healthy, 100).is_faulted(1));
+    }
+
+    #[test]
+    fn status_round_trips_through_str() {
+        assert_eq!(
+            CheckpointStatus::parse("healthy"),
+            CheckpointStatus::Healthy
+        );
+        assert_eq!(CheckpointStatus::parse("error"), CheckpointStatus::Error);
+        assert_eq!(CheckpointStatus::parse("other"), CheckpointStatus::Healthy);
+    }
+}

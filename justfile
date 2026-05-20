@@ -40,3 +40,7 @@ down:
 
 db-up:
     docker compose up -d db
+
+coverage:
+    cargo llvm-cov clean --workspace
+    cargo llvm-cov --package rag-admin --lib --summary-only --features ssr

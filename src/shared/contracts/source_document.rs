@@ -11,7 +11,15 @@ pub struct DocumentListItemDto {
     pub latest_content_hash: Option<String>,
     pub indexings: Vec<IndexingDto>,
     pub source: SourceDescriptorDto,
+    #[serde(default)]
+    pub connectors: Vec<DocumentConnectorDto>,
     pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocumentConnectorDto {
+    pub connector_id: Uuid,
+    pub name: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -106,11 +114,20 @@ pub struct DocumentListQueryDto {
     pub sources: Vec<SourceFilterDto>,
     #[serde(default)]
     pub statuses: Vec<DocumentStatusFilterDto>,
+    #[serde(default)]
+    pub connectors: Vec<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourceFacetDto {
     pub source: SourceDescriptorDto,
+    pub document_count: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConnectorFacetDto {
+    pub connector_id: Uuid,
+    pub name: String,
     pub document_count: u64,
 }
 
@@ -121,6 +138,8 @@ pub struct DocumentListPageDto {
     pub total_matching: u64,
     pub total_all: u64,
     pub sources: Vec<SourceFacetDto>,
+    #[serde(default)]
+    pub connectors: Vec<ConnectorFacetDto>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

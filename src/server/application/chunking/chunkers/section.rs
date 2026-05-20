@@ -116,7 +116,9 @@ fn last_double_newline(window: &[char]) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        server::{application::ports::MarkdownParser, infrastructure::shared::markdown::MarkdownRsParser},
+        server::{
+            application::ports::MarkdownParser, infrastructure::shared::markdown::MarkdownRsParser,
+        },
         shared::SectionChunkingConfig,
     };
 

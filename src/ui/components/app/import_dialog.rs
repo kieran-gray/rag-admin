@@ -4,25 +4,18 @@ use leptos::task::spawn_local;
 use leptos::web_sys;
 use leptos_router::hooks::use_navigate;
 use leptos_router::NavigateOptions;
-use uuid::Uuid;
 use wasm_bindgen::JsCast;
 
-use crate::server_functions::connector::list_connectors;
 use crate::server_functions::source_document::{
-    import_from_connector, import_source_document_from_url, list_from_connector,
-    start_indexing_with_defaults,
+    import_source_document_from_url, start_indexing_with_defaults,
 };
-use crate::shared::contracts::{
-    aggregate_type, ConnectorDiscoveredItemDto, ConnectorDto, SourceDocumentDto,
-};
-use crate::ui::components::app::event_bus::use_invalidator;
-use crate::ui::components::primitives::{Dialog, Help, Status, StatusPill};
+use crate::shared::contracts::SourceDocumentDto;
+use crate::ui::components::primitives::{Dialog, Help};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Tab {
     Upload,
     Url,
-    Connector,
 }
 
 #[component]
@@ -45,7 +38,7 @@ pub fn ImportDialog(#[prop(into)] open: Signal<bool>, on_close: Callback<()>) ->
         <Dialog
             open=open
             title="Import document"
-            subtitle="Upload a file, paste a URL, or pick from a configured connector.".to_string()
+            subtitle="Upload a file or paste a URL. For bulk imports, use a connector's Browse page.".to_string()
             on_close=on_close
         >
             <nav class="border-b border-[var(--color-border)] mb-4 flex gap-1 -mt-1">
@@ -55,15 +48,11 @@ pub fn ImportDialog(#[prop(into)] open: Signal<bool>, on_close: Callback<()>) ->
                 <TabButton label="From URL"
                     active=move || tab.get() == Tab::Url
                     on_click=Callback::new(move |_| set_tab.set(Tab::Url)) />
-                <TabButton label="From connector"
-                    active=move || tab.get() == Tab::Connector
-                    on_click=Callback::new(move |_| set_tab.set(Tab::Connector)) />
             </nav>
 
             {move || match tab.get() {
                 Tab::Upload => view! { <UploadPane on_imported=handle_imported /> }.into_any(),
                 Tab::Url => view! { <UrlPane on_imported=handle_imported /> }.into_any(),
-                Tab::Connector => view! { <ConnectorPane on_imported=handle_imported /> }.into_any(),
             }}
         </Dialog>
     }
@@ -331,195 +320,6 @@ fn UrlPane(on_imported: Callback<SourceDocumentDto>) -> impl IntoView {
                 </button>
             </div>
         </form>
-    }
-}
-
-#[component]
-fn ConnectorPane(on_imported: Callback<SourceDocumentDto>) -> impl IntoView {
-    let invalidator = use_invalidator(|e| {
-        e.from_any(&[
-            aggregate_type::SOURCE_DOCUMENT,
-            aggregate_type::INDEXING,
-            aggregate_type::CONNECTOR,
-        ])
-    });
-    let connectors = Resource::new(
-        move || invalidator.get(),
-        |_| async move { list_connectors().await },
-    );
-
-    let (selected, set_selected) = signal::<Option<Uuid>>(None);
-
-    view! {
-        <Suspense fallback=|| view! { <p class="muted text-sm">"Loading connectors…"</p> }>
-            {move || connectors.get().map(|res| match res {
-                Err(e) => view! {
-                    <div class="log-line-error text-sm">{format!("Failed to load: {e}")}</div>
-                }.into_any(),
-                Ok(list) if list.is_empty() => view! {
-                    <p class="muted text-sm">
-                        "No connectors are configured. Add one from "
-                        <a href="/configuration/connectors" class="link">"Configuration → Connectors"</a>
-                        "."
-                    </p>
-                }.into_any(),
-                Ok(list) => {
-                    if selected.get().is_none() {
-                        if let Some(first) = list.first() {
-                            set_selected.set(Some(first.connector_id));
-                        }
-                    }
-                    view! {
-                        <div class="flex flex-col gap-3">
-                            <ConnectorSelect connectors=list.clone() selected=selected set_selected=set_selected />
-                            <ConnectorItems
-                                connectors=list
-                                selected=selected
-                                on_imported=on_imported
-                            />
-                        </div>
-                    }.into_any()
-                }
-            })}
-        </Suspense>
-    }
-}
-
-#[component]
-fn ConnectorSelect(
-    connectors: Vec<ConnectorDto>,
-    selected: ReadSignal<Option<Uuid>>,
-    set_selected: WriteSignal<Option<Uuid>>,
-) -> impl IntoView {
-    let options = connectors.clone();
-    view! {
-        <label class="flex flex-col gap-1 text-sm">
-            <span class="muted">"Connector"</span>
-            <select
-                class="input"
-                on:change=move |ev| {
-                    let value = event_target_value(&ev);
-                    set_selected.set(Uuid::parse_str(&value).ok());
-                }
-            >
-                {options.into_iter().map(|c| {
-                    let id = c.connector_id.to_string();
-                    let is_selected = selected.get_untracked() == Some(c.connector_id);
-                    view! {
-                        <option value=id selected=is_selected>
-                            {c.name}
-                        </option>
-                    }
-                }).collect_view()}
-            </select>
-        </label>
-    }
-}
-
-#[component]
-fn ConnectorItems(
-    connectors: Vec<ConnectorDto>,
-    selected: ReadSignal<Option<Uuid>>,
-    on_imported: Callback<SourceDocumentDto>,
-) -> impl IntoView {
-    let connectors = StoredValue::new(connectors);
-    let imports_invalidator = use_invalidator(|e| e.from_any(&[aggregate_type::SOURCE_DOCUMENT]));
-    let items = Resource::new(
-        move || (selected.get(), imports_invalidator.get()),
-        move |(id, _)| async move {
-            match id {
-                Some(id) => list_from_connector(id).await.map_err(|e| e.to_string()),
-                None => Ok(Vec::new()),
-            }
-        },
-    );
-
-    view! {
-        <Suspense fallback=|| view! { <p class="muted text-sm">"Discovering documents…"</p> }>
-            {move || items.get().map(|res| match res {
-                Err(e) => view! {
-                    <div class="log-line-error text-sm">{format!("Failed: {e}")}</div>
-                }.into_any(),
-                Ok(list) if list.is_empty() => view! {
-                    <p class="muted text-sm">"No items discovered from this connector."</p>
-                }.into_any(),
-                Ok(list) => {
-                    let connector_id = selected.get_untracked();
-                    let _ = connectors.get_value();
-                    view! {
-                        <ul class="flex flex-col gap-1 max-h-96 overflow-y-auto">
-                            {list.into_iter().map(|item| view! {
-                                <ConnectorItemRow
-                                    connector_id=connector_id
-                                    item=item
-                                    on_imported=on_imported
-                                />
-                            }).collect_view()}
-                        </ul>
-                    }.into_any()
-                }
-            })}
-        </Suspense>
-    }
-}
-
-#[component]
-fn ConnectorItemRow(
-    connector_id: Option<Uuid>,
-    item: ConnectorDiscoveredItemDto,
-    on_imported: Callback<SourceDocumentDto>,
-) -> impl IntoView {
-    let (busy, set_busy) = signal(false);
-    let (error, set_error) = signal::<Option<String>>(None);
-    let already_imported = item.already_imported;
-    let source_ref_key = StoredValue::new(item.source_ref_key.clone());
-    let title = item.title.clone();
-    let key = item.source_ref_key.clone();
-
-    let do_import = move |_| {
-        let Some(cid) = connector_id else {
-            return;
-        };
-        if busy.get_untracked() {
-            return;
-        }
-        let key = source_ref_key.get_value();
-        set_busy.set(true);
-        set_error.set(None);
-        spawn_local(async move {
-            match import_from_connector(cid, key).await {
-                Ok(dto) => on_imported.run(dto),
-                Err(e) => set_error.set(Some(format!("{e}"))),
-            }
-            set_busy.set(false);
-        });
-    };
-
-    view! {
-        <li class="flex items-center justify-between gap-3 px-3 py-2 rounded hover:bg-[var(--color-surface-hover)]">
-            <div class="min-w-0 flex-1">
-                <div class="text-sm truncate">{title}</div>
-                <div class="faint text-xs truncate">{key}</div>
-                {move || error.get().map(|e| view! {
-                    <div class="log-line-error text-xs mt-1">{e}</div>
-                })}
-            </div>
-            <div class="flex items-center gap-2 shrink-0">
-                {if already_imported {
-                    view! { <StatusPill label="Imported".to_string() kind=Status::Ok /> }.into_any()
-                } else {
-                    view! { <StatusPill label="New".to_string() kind=Status::Stale /> }.into_any()
-                }}
-                <button
-                    type="button"
-                    class="btn btn-ghost btn-sm"
-                    disabled=move || busy.get() || already_imported
-                    on:click=do_import
-                >
-                    {move || if busy.get() { "Importing…" } else if already_imported { "Imported" } else { "Import" }}
-                </button>
-            </div>
-        </li>
     }
 }
 

@@ -21,6 +21,7 @@ use crate::shared::contracts::{
 };
 use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{EmptyState, PageHeader, Surface};
+use crate::ui::pages::shared::document_type_label;
 
 #[component]
 pub fn EvaluatePage() -> impl IntoView {
@@ -364,16 +365,6 @@ fn derive_header(doc: &SourceDocumentDto) -> (String, String, Option<String>) {
         doc.latest_version,
     ));
     (eyebrow, title, subtitle)
-}
-
-fn document_type_label(doc_type: &str) -> &'static str {
-    match doc_type {
-        "Markdown" => "Markdown",
-        "PlainText" => "Plain text",
-        "WebPage" => "Web page",
-        "Pdf" => "PDF",
-        _ => "Document",
-    }
 }
 
 #[component]

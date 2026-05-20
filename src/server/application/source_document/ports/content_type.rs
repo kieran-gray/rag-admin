@@ -39,11 +39,11 @@ mod tests {
 
     #[test]
     fn maps_common_extensions() {
-        assert_eq!(ContentType::from_filename("notes.md"), ContentType::Markdown);
         assert_eq!(
-            ContentType::from_filename("paper.pdf"),
-            ContentType::Pdf
+            ContentType::from_filename("notes.md"),
+            ContentType::Markdown
         );
+        assert_eq!(ContentType::from_filename("paper.pdf"), ContentType::Pdf);
         assert_eq!(ContentType::from_filename("page.html"), ContentType::Html);
         assert_eq!(ContentType::from_filename("page.htm"), ContentType::Html);
         assert_eq!(

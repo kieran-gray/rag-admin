@@ -21,6 +21,9 @@ use crate::server::application::configuration::{
 use crate::server::application::connector::{
     ConnectorCommandHandler, ConnectorQueryService, ConnectorRegistry,
 };
+use crate::server::application::connector_sync::{
+    BulkImportService, ConnectorSyncQueryService, ConnectorSyncService,
+};
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::evaluation::query_service::EvaluationQueryService;
 use crate::server::application::evaluation::{
@@ -75,6 +78,9 @@ pub struct App {
     pub connector_command_handler: Arc<ConnectorCommandHandler>,
     pub connector_query_service: Arc<ConnectorQueryService>,
     pub connector_registry: Arc<ConnectorRegistry>,
+    pub connector_sync_service: Arc<ConnectorSyncService>,
+    pub connector_sync_query_service: Arc<ConnectorSyncQueryService>,
+    pub bulk_import_service: Arc<BulkImportService>,
     pub event_bus: Arc<EventBus>,
 }
 
@@ -153,6 +159,9 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         connector_command_handler: services.connector_command_handler,
         connector_query_service: services.connector_query_service,
         connector_registry: workflows.connector_registry,
+        connector_sync_service: workflows.connector_sync_service,
+        connector_sync_query_service: services.connector_sync_query_service,
+        bulk_import_service: workflows.bulk_import_service,
         event_bus,
     };
 
@@ -188,6 +197,9 @@ impl App {
         provide_context(Arc::clone(&self.connector_command_handler));
         provide_context(Arc::clone(&self.connector_query_service));
         provide_context(Arc::clone(&self.connector_registry));
+        provide_context(Arc::clone(&self.connector_sync_service));
+        provide_context(Arc::clone(&self.connector_sync_query_service));
+        provide_context(Arc::clone(&self.bulk_import_service));
     }
 
     pub fn apply_axum_extensions(&self, router: Router) -> Router {
