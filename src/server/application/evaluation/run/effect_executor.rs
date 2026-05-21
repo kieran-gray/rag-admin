@@ -147,7 +147,7 @@ impl ExecuteVariantEffectExecutor {
 
         let ctx = self
             .trial_scorer
-            .load_run_context(effect.dataset_id, effect.pipeline_configuration_id)
+            .load_run_context(effect.dataset_id, effect.index_profile_id)
             .await?;
         let plan =
             EvaluationPlan::for_run(effect.run_id, autotune_shared.as_ref(), ctx.questions.len())?;
@@ -342,7 +342,7 @@ impl FinalizeRunEffectExecutor {
                 effect.autotune_request.clone().map(Into::into);
             let ctx = self
                 .trial_scorer
-                .load_run_context(effect.dataset_id, effect.pipeline_configuration_id)
+                .load_run_context(effect.dataset_id, effect.index_profile_id)
                 .await?;
             let plan = EvaluationPlan::for_run(
                 effect.run_id,

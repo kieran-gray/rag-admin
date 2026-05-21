@@ -31,7 +31,7 @@ fn fanout_on_run_requested(
             payload: EvaluationRunEffect::OptimizeRun(OptimizeRunEffect {
                 run_id: event.run_id,
                 dataset_id: event.dataset_id,
-                pipeline_configuration_id: event.pipeline_configuration_id,
+                index_profile_id: event.index_profile_id,
                 document_id: event.document_id,
                 document_version: event.document_version,
                 optimization: optimization.clone(),
@@ -55,7 +55,7 @@ fn fanout_on_run_requested(
                 payload: EvaluationRunEffect::ExecuteVariant(ExecuteVariantEffect {
                     run_id: event.run_id,
                     dataset_id: event.dataset_id,
-                    pipeline_configuration_id: event.pipeline_configuration_id,
+                    index_profile_id: event.index_profile_id,
                     document_id: event.document_id,
                     document_version: event.document_version,
                     variant_label: variant.label,
@@ -107,7 +107,7 @@ fn finalize_when_primary_scoring_done(
         payload: EvaluationRunEffect::FinalizeRun(FinalizeRunEffect {
             run_id: run.run_id,
             dataset_id: run.dataset_id,
-            pipeline_configuration_id: run.pipeline_configuration_id,
+            index_profile_id: run.index_profile_id,
             autotune_request: run.autotune_request.clone(),
             scoring_policy: run.scoring_policy,
         }),

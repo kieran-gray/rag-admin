@@ -5,7 +5,8 @@ use crate::server::domain::configuration::chunking_configuration::ChunkingConfig
 use crate::server::domain::configuration::defaults::ConfigurationDefaultsRepository;
 use crate::server::domain::configuration::embedding_model::EmbeddingModelRepository;
 use crate::server::domain::configuration::generation_model::GenerationModelRepository;
-use crate::server::domain::configuration::pipeline_configuration::PipelineConfigurationRepository;
+use crate::server::domain::configuration::index_profile::IndexProfileRepository;
+use crate::server::domain::configuration::retrieval_profile::RetrievalProfileRepository;
 use crate::server::domain::configuration::sweep_template::{
     SweepTemplateRepository, SweepTemplateRepositoryError,
 };
@@ -13,7 +14,7 @@ use crate::server::domain::configuration::vector_index::VectorIndexRepository;
 use crate::server::domain::connector::ConnectorRepository;
 use crate::shared::contracts::{
     ChunkingConfigurationDto, ConfigurationDto, EmbeddingModelDto, GenerationModelDto,
-    PipelineConfigurationDto, SweepTemplateDto, VectorIndexDto,
+    IndexProfileDto, RetrievalProfileDto, SweepTemplateDto, VectorIndexDto,
 };
 use crate::shared::ChunkingConfig;
 use uuid::Uuid;
@@ -22,6 +23,8 @@ pub struct ConfigurationQueryService {
     embedding_models: Arc<dyn EmbeddingModelRepository>,
     generation_models: Arc<dyn GenerationModelRepository>,
     vector_indexes: Arc<dyn VectorIndexRepository>,
+    index_profiles: Arc<dyn IndexProfileRepository>,
+    defaults: Arc<dyn ConfigurationDefaultsRepository>,
 }
 
 impl ConfigurationQueryService {
@@ -29,11 +32,15 @@ impl ConfigurationQueryService {
         embedding_models: Arc<dyn EmbeddingModelRepository>,
         generation_models: Arc<dyn GenerationModelRepository>,
         vector_indexes: Arc<dyn VectorIndexRepository>,
+        index_profiles: Arc<dyn IndexProfileRepository>,
+        defaults: Arc<dyn ConfigurationDefaultsRepository>,
     ) -> Arc<Self> {
         Arc::new(Self {
             embedding_models,
             generation_models,
             vector_indexes,
+            index_profiles,
+            defaults,
         })
     }
 
@@ -41,15 +48,17 @@ impl ConfigurationQueryService {
         let embedding_models = self.embedding_models.load_all().await?;
         let generation_models = self.generation_models.load_all().await?;
         let vector_indexes = self.vector_indexes.load_all().await?;
+        let index_profiles = self.index_profiles.load_all().await?;
+        let default_id = self.defaults.load().await?.index_profile_id;
 
         Ok(ConfigurationDto {
             configuration_id: Uuid::nil(),
             embedding_models: embedding_models
-                .into_iter()
+                .iter()
                 .map(|m| EmbeddingModelDto {
                     embedding_model_id: m.embedding_model_id,
                     kind: m.kind,
-                    model: m.model,
+                    model: m.model.clone(),
                     dimensions: m.dimensions,
                 })
                 .collect(),
@@ -62,77 +71,144 @@ impl ConfigurationQueryService {
                 })
                 .collect(),
             vector_indexes: vector_indexes
-                .into_iter()
+                .iter()
                 .map(|i| VectorIndexDto {
                     index_id: i.index_id,
                     kind: i.kind,
-                    name: i.name,
+                    name: i.name.clone(),
                     dimensions: i.dimensions,
+                })
+                .collect(),
+            index_profiles: index_profiles
+                .into_iter()
+                .map(|ip| IndexProfileDto {
+                    embedding_model_name: embedding_models
+                        .iter()
+                        .find(|m| m.embedding_model_id == ip.embedding_model_id)
+                        .map(|m| m.model.clone()),
+                    vector_index_name: vector_indexes
+                        .iter()
+                        .find(|i| i.index_id == ip.vector_index_id)
+                        .map(|i| i.name.clone()),
+                    is_default: default_id == Some(ip.index_profile_id),
+                    index_profile_id: ip.index_profile_id,
+                    name: ip.name,
+                    embedding_model_id: ip.embedding_model_id,
+                    vector_index_id: ip.vector_index_id,
+                    dimensions: ip.dimensions,
                 })
                 .collect(),
         })
     }
 }
 
-pub struct PipelineConfigurationQueryService {
-    pipeline_repository: Arc<dyn PipelineConfigurationRepository>,
+pub struct IndexProfileQueryService {
+    index_profiles: Arc<dyn IndexProfileRepository>,
     embedding_models: Arc<dyn EmbeddingModelRepository>,
-    generation_models: Arc<dyn GenerationModelRepository>,
     vector_indexes: Arc<dyn VectorIndexRepository>,
     defaults: Arc<dyn ConfigurationDefaultsRepository>,
 }
 
-impl PipelineConfigurationQueryService {
+impl IndexProfileQueryService {
     pub fn new(
-        pipeline_repository: Arc<dyn PipelineConfigurationRepository>,
+        index_profiles: Arc<dyn IndexProfileRepository>,
         embedding_models: Arc<dyn EmbeddingModelRepository>,
-        generation_models: Arc<dyn GenerationModelRepository>,
         vector_indexes: Arc<dyn VectorIndexRepository>,
         defaults: Arc<dyn ConfigurationDefaultsRepository>,
     ) -> Arc<Self> {
         Arc::new(Self {
-            pipeline_repository,
+            index_profiles,
             embedding_models,
-            generation_models,
             vector_indexes,
             defaults,
         })
     }
 
-    pub async fn list(&self) -> Result<Vec<PipelineConfigurationDto>, AppError> {
-        let pipelines = self.pipeline_repository.load_all().await?;
+    pub async fn list(&self) -> Result<Vec<IndexProfileDto>, AppError> {
+        let profiles = self.index_profiles.load_all().await?;
         let embedding_models = self.embedding_models.load_all().await?;
-        let generation_models = self.generation_models.load_all().await?;
         let vector_indexes = self.vector_indexes.load_all().await?;
-        let default_id = self.defaults.load().await?.pipeline_configuration_id;
+        let default_id = self.defaults.load().await?.index_profile_id;
 
-        Ok(pipelines
+        Ok(profiles
             .into_iter()
-            .map(|pc| PipelineConfigurationDto {
-                pipeline_configuration_id: pc.pipeline_configuration_id,
-                name: pc.name,
+            .map(|ip| IndexProfileDto {
                 embedding_model_name: embedding_models
                     .iter()
-                    .find(|m| m.embedding_model_id == pc.embedding_model_id)
+                    .find(|m| m.embedding_model_id == ip.embedding_model_id)
                     .map(|m| m.model.clone()),
-                embedding_model_id: pc.embedding_model_id,
-                generation_model_name: generation_models
-                    .iter()
-                    .find(|m| m.generation_model_id == pc.generation_model_id)
-                    .map(|m| m.model.clone()),
-                generation_model_id: pc.generation_model_id,
                 vector_index_name: vector_indexes
                     .iter()
-                    .find(|i| i.index_id == pc.vector_index_id)
+                    .find(|i| i.index_id == ip.vector_index_id)
                     .map(|i| i.name.clone()),
-                vector_index_id: pc.vector_index_id,
-                is_default: default_id == Some(pc.pipeline_configuration_id),
+                is_default: default_id == Some(ip.index_profile_id),
+                index_profile_id: ip.index_profile_id,
+                name: ip.name,
+                embedding_model_id: ip.embedding_model_id,
+                vector_index_id: ip.vector_index_id,
+                dimensions: ip.dimensions,
             })
             .collect())
     }
 
     pub async fn find_default_id(&self) -> Result<Option<Uuid>, AppError> {
-        Ok(self.defaults.load().await?.pipeline_configuration_id)
+        Ok(self.defaults.load().await?.index_profile_id)
+    }
+}
+
+pub struct RetrievalProfileQueryService {
+    retrieval_profiles: Arc<dyn RetrievalProfileRepository>,
+    index_profiles: Arc<dyn IndexProfileRepository>,
+    generation_models: Arc<dyn GenerationModelRepository>,
+    defaults: Arc<dyn ConfigurationDefaultsRepository>,
+}
+
+impl RetrievalProfileQueryService {
+    pub fn new(
+        retrieval_profiles: Arc<dyn RetrievalProfileRepository>,
+        index_profiles: Arc<dyn IndexProfileRepository>,
+        generation_models: Arc<dyn GenerationModelRepository>,
+        defaults: Arc<dyn ConfigurationDefaultsRepository>,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            retrieval_profiles,
+            index_profiles,
+            generation_models,
+            defaults,
+        })
+    }
+
+    pub async fn list(&self) -> Result<Vec<RetrievalProfileDto>, AppError> {
+        let profiles = self.retrieval_profiles.load_all().await?;
+        let index_profiles = self.index_profiles.load_all().await?;
+        let generation_models = self.generation_models.load_all().await?;
+        let default_id = self.defaults.load().await?.retrieval_profile_id;
+
+        Ok(profiles
+            .into_iter()
+            .map(|rp| RetrievalProfileDto {
+                index_profile_name: index_profiles
+                    .iter()
+                    .find(|ip| ip.index_profile_id == rp.index_profile_id)
+                    .map(|ip| ip.name.clone()),
+                generation_model_name: generation_models
+                    .iter()
+                    .find(|m| m.generation_model_id == rp.generation_model_id)
+                    .map(|m| m.model.clone()),
+                is_default: default_id == Some(rp.retrieval_profile_id),
+                retrieval_profile_id: rp.retrieval_profile_id,
+                name: rp.name,
+                index_profile_id: rp.index_profile_id,
+                generation_model_id: rp.generation_model_id,
+                reranker_model_id: rp.reranker_model_id,
+                default_top_k: rp.default_top_k,
+                default_min_score_milli: rp.default_min_score_milli,
+            })
+            .collect())
+    }
+
+    pub async fn find_default_id(&self) -> Result<Option<Uuid>, AppError> {
+        Ok(self.defaults.load().await?.retrieval_profile_id)
     }
 }
 

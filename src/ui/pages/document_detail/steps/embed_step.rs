@@ -2,16 +2,16 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 
 use crate::server_functions::source_document::requeue_embedding;
-use crate::shared::contracts::{IndexingDto, PipelineConfigurationDto};
+use crate::shared::contracts::{IndexProfileDto, IndexingDto};
 use crate::ui::components::primitives::{EmptyState, Help, Status, StatusPill, Surface};
 use crate::ui::pages::document_detail::steps::{
-    pipeline_meta_view, ConfigSelection, PipelineMetaDto,
+    index_profile_meta_view, ConfigSelection, IndexProfileMetaDto,
 };
 
 #[component]
 pub fn EmbedStep(
     selection: ConfigSelection,
-    pipelines: StoredValue<Vec<PipelineConfigurationDto>>,
+    index_profiles: StoredValue<Vec<IndexProfileDto>>,
     indexings: Signal<Vec<IndexingDto>>,
     on_back: Callback<()>,
     on_advance: Callback<()>,
@@ -20,19 +20,19 @@ pub fn EmbedStep(
     let (error, set_error) = signal::<Option<String>>(None);
 
     let active_indexing: Signal<Option<IndexingDto>> = Signal::derive(move || {
-        let pid = selection.pipeline_id.get()?;
+        let pid = selection.index_profile_id.get()?;
         indexings
             .get()
             .into_iter()
-            .find(|ix| ix.pipeline_configuration_id == pid && !ix.removed)
+            .find(|ix| ix.index_profile_id == pid && !ix.removed)
     });
 
-    let pipeline_meta: Signal<Option<PipelineMetaDto>> = Signal::derive(move || {
-        let pid = selection.pipeline_id.get()?;
-        pipelines.with_value(|ps| {
+    let index_profile_meta: Signal<Option<IndexProfileMetaDto>> = Signal::derive(move || {
+        let pid = selection.index_profile_id.get()?;
+        index_profiles.with_value(|ps| {
             ps.iter()
-                .find(|p| p.pipeline_configuration_id == pid)
-                .map(|p| PipelineMetaDto {
+                .find(|p| p.index_profile_id == pid)
+                .map(|p| IndexProfileMetaDto {
                     name: p.name.clone(),
                     embedding_model: p.embedding_model_name.clone(),
                     vector_index: p.vector_index_name.clone(),
@@ -92,7 +92,7 @@ pub fn EmbedStep(
                 actions=Box::new(move || view! {
                     <Help title="What does embedding do?".to_string()>
                         <p>
-                            "Each chunk is sent through the pipeline's embedding model, which returns a fixed-length vector that captures the chunk's meaning. Those vectors are what the search step compares against at query time."
+                            "Each chunk is sent through the index profile's embedding model, which returns a fixed-length vector that captures the chunk's meaning. Those vectors are what the search step compares against at query time."
                         </p>
                         <p class="mt-3">
                             "Embedding is purely mechanical: the chunks do not change. Re-running with the same chunks just regenerates the vectors using the same model."
@@ -117,12 +117,12 @@ pub fn EmbedStep(
                         />
                     }.into_any(),
                     Some(ix) => {
-                        let pm = pipeline_meta.get();
+                        let pm = index_profile_meta.get();
                         let document_version = ix.document_version;
                         let target = pm.as_ref().and_then(|m| m.embedding_model.clone());
                         view! {
                             <div class="space-y-4">
-                                {pipeline_meta_view(pm, document_version, "Embedding model", target)}
+                                {index_profile_meta_view(pm, document_version, "Embedding model", target)}
 
                                 <div class="flex items-center justify-between gap-3 pt-3 border-t border-[var(--color-border)]">
                                     <EmbedStatusLine status=stage />

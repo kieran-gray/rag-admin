@@ -51,8 +51,8 @@ pub async fn start_indexing_with_defaults(
     let ingestion = ctx::<Arc<IngestionServices>>()?;
     let catalog = ctx::<Arc<CatalogServices>>()?;
 
-    let pipeline = catalog
-        .pipeline_configuration_query_service
+    let index_profile = catalog
+        .index_profile_query_service
         .list()
         .await
         .map_err(|e| map_app_error(&e))?
@@ -60,7 +60,7 @@ pub async fn start_indexing_with_defaults(
         .find(|p| p.is_default)
         .ok_or_else(|| {
             map_app_error(&AppError::Validation(
-                "no default pipeline configured".into(),
+                "no default index profile configured".into(),
             ))
         })?;
 
@@ -81,7 +81,7 @@ pub async fn start_indexing_with_defaults(
         .source_document_ingest_service
         .request_indexing(
             parse_source_ref(&source_ref_slug)?,
-            pipeline.pipeline_configuration_id,
+            index_profile.index_profile_id,
             chunking.config,
             true,
         )
@@ -111,7 +111,7 @@ pub async fn import_source_document_from_url(
 )]
 pub async fn request_indexing(
     source_ref_slug: String,
-    pipeline_configuration_id: uuid::Uuid,
+    index_profile_id: uuid::Uuid,
     chunking_config: ChunkingConfig,
     auto_advance: bool,
 ) -> Result<uuid::Uuid, ServerFnError> {
@@ -119,7 +119,7 @@ pub async fn request_indexing(
         .source_document_ingest_service
         .request_indexing(
             parse_source_ref(&source_ref_slug)?,
-            pipeline_configuration_id,
+            index_profile_id,
             chunking_config,
             auto_advance,
         )

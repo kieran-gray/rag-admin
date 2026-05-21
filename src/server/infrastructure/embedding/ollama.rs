@@ -5,8 +5,10 @@ use reqwest::Method;
 use serde::{Deserialize, Serialize};
 
 use crate::server::application::embedding::ports::Embedder;
+use crate::server::application::embedding::EmbedderRegistry;
 use crate::server::application::AppError;
 use crate::server::infrastructure::shared::clients::OllamaApi;
+use crate::shared::reference_data::AiProviderKind;
 
 pub struct OllamaEmbedder {
     api: Arc<OllamaApi>,
@@ -16,6 +18,10 @@ impl OllamaEmbedder {
     pub fn new(api: Arc<OllamaApi>) -> Arc<Self> {
         Arc::new(Self { api })
     }
+}
+
+pub fn register(registry: &mut EmbedderRegistry, api: Arc<OllamaApi>) {
+    registry.register(AiProviderKind::Ollama, OllamaEmbedder::new(api));
 }
 
 #[derive(Serialize)]

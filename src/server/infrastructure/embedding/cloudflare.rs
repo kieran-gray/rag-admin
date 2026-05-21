@@ -6,8 +6,10 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use crate::server::application::embedding::ports::Embedder;
+use crate::server::application::embedding::EmbedderRegistry;
 use crate::server::application::AppError;
 use crate::server::infrastructure::shared::clients::{CloudflareApi, CLOUDFLARE_API_BASE};
+use crate::shared::reference_data::AiProviderKind;
 
 pub struct WorkersAiEmbedder {
     api: Arc<CloudflareApi>,
@@ -17,6 +19,10 @@ impl WorkersAiEmbedder {
     pub fn new(api: Arc<CloudflareApi>) -> Arc<Self> {
         Arc::new(Self { api })
     }
+}
+
+pub fn register(registry: &mut EmbedderRegistry, api: Arc<CloudflareApi>) {
+    registry.register(AiProviderKind::Cloudflare, WorkersAiEmbedder::new(api));
 }
 
 #[derive(Debug, Deserialize)]

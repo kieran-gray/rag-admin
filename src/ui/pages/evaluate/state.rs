@@ -1,31 +1,39 @@
 use leptos::prelude::*;
 use uuid::Uuid;
 
-use crate::shared::contracts::PipelineConfigurationDto;
+use crate::shared::contracts::{IndexProfileDto, RetrievalProfileDto};
 
 #[derive(Clone, Copy)]
 pub struct EvaluateSelection {
     pub dataset_id: RwSignal<Option<Uuid>>,
     pub run_id: RwSignal<Option<Uuid>>,
-    pub pipeline_id: RwSignal<Option<Uuid>>,
+    pub index_profile_id: RwSignal<Option<Uuid>>,
+    pub retrieval_profile_id: RwSignal<Option<Uuid>>,
 }
 
 impl EvaluateSelection {
     pub fn new(
-        pipelines: &[PipelineConfigurationDto],
+        index_profiles: &[IndexProfileDto],
+        retrieval_profiles: &[RetrievalProfileDto],
         initial_dataset: Option<Uuid>,
         initial_run: Option<Uuid>,
     ) -> Self {
-        let initial_pipeline = pipelines
+        let initial_index_profile = index_profiles
             .iter()
             .find(|p| p.is_default)
-            .or_else(|| pipelines.first())
-            .map(|p| p.pipeline_configuration_id);
+            .or_else(|| index_profiles.first())
+            .map(|p| p.index_profile_id);
+        let initial_retrieval = retrieval_profiles
+            .iter()
+            .find(|p| p.is_default)
+            .or_else(|| retrieval_profiles.first())
+            .map(|p| p.retrieval_profile_id);
 
         Self {
             dataset_id: RwSignal::new(initial_dataset),
             run_id: RwSignal::new(initial_run),
-            pipeline_id: RwSignal::new(initial_pipeline),
+            index_profile_id: RwSignal::new(initial_index_profile),
+            retrieval_profile_id: RwSignal::new(initial_retrieval),
         }
     }
 }

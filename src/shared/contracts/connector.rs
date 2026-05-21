@@ -43,9 +43,11 @@ pub struct ConnectorDto {
     pub name: String,
     pub config: ConnectorConfigDto,
     #[serde(default)]
-    pub default_pipeline_configuration_id: Option<Uuid>,
+    pub default_index_profile_id: Option<Uuid>,
     #[serde(default)]
     pub default_chunking_configuration_id: Option<Uuid>,
+    #[serde(default)]
+    pub default_retrieval_profile_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,8 +76,9 @@ pub struct UnregisterConnectorDto {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SetConnectorDefaultsDto {
     pub connector_id: Uuid,
-    pub pipeline_configuration_id: Option<Uuid>,
+    pub index_profile_id: Option<Uuid>,
     pub chunking_configuration_id: Option<Uuid>,
+    pub retrieval_profile_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

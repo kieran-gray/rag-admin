@@ -3,16 +3,17 @@ pub mod queries;
 
 pub use commands::{
     AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto,
-    ChunkingConfigurationCommandDto, CreateChunkingConfigurationDto,
-    CreatePipelineConfigurationDto, CreateSweepTemplateDto, DeleteChunkingConfigurationDto,
-    DeletePipelineConfigurationDto, DeleteSweepTemplateDto, EmbeddingModelCommandDto,
-    GenerationModelCommandDto, PipelineConfigurationCommandDto, RemoveEmbeddingModelDto,
-    RemoveGenerationModelDto, RemoveVectorIndexDto, SetDefaultSweepTemplateDto,
-    SweepTemplateCommandDto, UpdateChunkingConfigurationDto, UpdateEmbeddingModelDto,
-    UpdateGenerationModelDto, UpdatePipelineConfigurationDto, UpdateSweepTemplateDto,
-    UpdateVectorIndexDto, VectorIndexCommandDto,
+    ChunkingConfigurationCommandDto, CreateChunkingConfigurationDto, CreateIndexProfileDto,
+    CreateRetrievalProfileDto, CreateSweepTemplateDto, DeleteChunkingConfigurationDto,
+    DeleteIndexProfileDto, DeleteRetrievalProfileDto, DeleteSweepTemplateDto,
+    EmbeddingModelCommandDto, GenerationModelCommandDto, IndexProfileCommandDto,
+    RemoveEmbeddingModelDto, RemoveGenerationModelDto, RemoveVectorIndexDto,
+    RetrievalProfileCommandDto, SetDefaultSweepTemplateDto, SweepTemplateCommandDto,
+    UpdateChunkingConfigurationDto, UpdateEmbeddingModelDto, UpdateGenerationModelDto,
+    UpdateIndexProfileDto, UpdateRetrievalProfileDto, UpdateSweepTemplateDto, UpdateVectorIndexDto,
+    VectorIndexCommandDto,
 };
 pub use queries::{
     ChunkingConfigurationDto, ConfigurationDto, EmbeddingModelDto, GenerationModelDto,
-    PipelineConfigurationDto, SweepTemplateDto, VectorIndexDto,
+    IndexProfileDto, RetrievalProfileDto, SweepTemplateDto, VectorIndexDto,
 };

@@ -15,9 +15,9 @@ const CONFIGURATION_ITEMS: &[NavMenuItem] = &[
         hint: "models · indexes",
     },
     NavMenuItem {
-        href: "/configuration/pipelines",
-        label: "Pipelines",
-        hint: "compose models + index",
+        href: "/configuration/profiles",
+        label: "Profiles",
+        hint: "index + retrieval",
     },
     NavMenuItem {
         href: "/configuration/chunking",

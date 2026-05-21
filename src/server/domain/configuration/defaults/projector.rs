@@ -44,9 +44,12 @@ impl Projector<ConfigurationDefaultsEvent> for ConfigurationDefaultsProjector {
                         .set_chunking_configuration(e.chunking_configuration_id)
                         .await?;
                 }
-                ConfigurationDefaultsEvent::DefaultPipelineConfigurationSet(e) => {
+                ConfigurationDefaultsEvent::DefaultIndexProfileSet(e) => {
+                    self.defaults.set_index_profile(e.index_profile_id).await?;
+                }
+                ConfigurationDefaultsEvent::DefaultRetrievalProfileSet(e) => {
                     self.defaults
-                        .set_pipeline_configuration(e.pipeline_configuration_id)
+                        .set_retrieval_profile(e.retrieval_profile_id)
                         .await?;
                 }
                 ConfigurationDefaultsEvent::DefaultSweepTemplateSet(e) => {

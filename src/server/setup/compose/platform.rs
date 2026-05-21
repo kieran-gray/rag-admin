@@ -1,18 +1,20 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::server::application::chunking::chunkers::{
     BertChunker, DarnChunker, LlmChunker, SectionChunker,
 };
 use crate::server::application::chunking::ChunkerRegistry;
-use crate::server::application::embedding::ports::Embedder;
-use crate::server::application::embedding::EmbeddingService;
+use crate::server::application::embedding::{EmbedderRegistry, EmbeddingService};
 use crate::server::application::llm::ports::GenerationClient;
-use crate::server::application::llm::GenerationService;
+use crate::server::application::llm::{GenerationClientRegistry, GenerationService};
 use crate::server::application::ports::{MarkdownParser, Tokenizer};
 use crate::server::application::{spawn_activity_projection, ActivityRegistry, JobRegistry};
-use crate::server::infrastructure::embedding::{OllamaEmbedder, WorkersAiEmbedder};
-use crate::server::infrastructure::llm::{OllamaGenerationClient, WorkersAiGenerationClient};
+use crate::server::infrastructure::embedding::{
+    cloudflare as cf_embedder, ollama as ollama_embedder,
+};
+use crate::server::infrastructure::llm::{
+    ollama_generation_client as ollama_llm, workers_ai_generation_client as workers_ai_llm,
+};
 use crate::server::infrastructure::shared::clients::{CloudflareApi, OllamaApi};
 use crate::server::infrastructure::shared::http::ReqwestHttpClient;
 use crate::server::infrastructure::shared::markdown::MarkdownRsParser;
@@ -20,7 +22,6 @@ use crate::server::infrastructure::shared::tokenizer::{TiktokenTokenizer, DEFAUL
 use crate::server::setup::compose::repositories::Repositories;
 use crate::server::setup::config::Config;
 use crate::server::setup::exceptions::SetupError;
-use crate::shared::reference_data::AiProviderKind;
 use event_sourcing::event_bus::EventBus;
 
 pub struct PlatformServices {
@@ -63,37 +64,20 @@ impl PlatformServices {
             .map_err(|e| SetupError::Internal(format!("tokenizer: {e}")))?;
         let markdown_parser: Arc<dyn MarkdownParser> = Arc::new(MarkdownRsParser);
 
-        let embedders: HashMap<AiProviderKind, Arc<dyn Embedder>> = HashMap::from([
-            (
-                AiProviderKind::Cloudflare,
-                WorkersAiEmbedder::new(Arc::clone(&cf_api)) as Arc<dyn Embedder>,
-            ),
-            (
-                AiProviderKind::Ollama,
-                OllamaEmbedder::new(Arc::clone(&ollama_api)) as Arc<dyn Embedder>,
-            ),
-        ]);
+        let mut embedders = EmbedderRegistry::new();
+        cf_embedder::register(&mut embedders, Arc::clone(&cf_api));
+        ollama_embedder::register(&mut embedders, Arc::clone(&ollama_api));
         let embedding_service =
             EmbeddingService::new(embedders, Arc::clone(&repos.embedding_model));
 
-        let ollama_generation_client: Arc<dyn GenerationClient> = OllamaGenerationClient::new(
+        let mut generation_clients = GenerationClientRegistry::new();
+        let ollama_generation_client = ollama_llm::register(
+            &mut generation_clients,
             Arc::clone(&http),
             config.ollama.base_url.clone(),
             config.ollama.num_ctx,
         );
-        let workers_ai_generation_client: Arc<dyn GenerationClient> =
-            WorkersAiGenerationClient::new(Arc::clone(&cf_api));
-        let generation_clients: HashMap<AiProviderKind, Arc<dyn GenerationClient>> =
-            HashMap::from([
-                (
-                    AiProviderKind::Ollama,
-                    Arc::clone(&ollama_generation_client),
-                ),
-                (
-                    AiProviderKind::Cloudflare,
-                    Arc::clone(&workers_ai_generation_client),
-                ),
-            ]);
+        workers_ai_llm::register(&mut generation_clients, Arc::clone(&cf_api));
         let generation_service =
             GenerationService::new(generation_clients, Arc::clone(&repos.generation_model));
 

@@ -2,8 +2,9 @@ use leptos::prelude::*;
 
 use crate::shared::contracts::{
     ChunkingConfigurationCommandDto, ChunkingConfigurationDto, ConfigurationDto,
-    EmbeddingModelCommandDto, GenerationModelCommandDto, PipelineConfigurationCommandDto,
-    PipelineConfigurationDto, SweepTemplateCommandDto, SweepTemplateDto, VectorIndexCommandDto,
+    EmbeddingModelCommandDto, GenerationModelCommandDto, IndexProfileCommandDto, IndexProfileDto,
+    RetrievalProfileCommandDto, RetrievalProfileDto, SweepTemplateCommandDto, SweepTemplateDto,
+    VectorIndexCommandDto,
 };
 
 #[cfg(feature = "ssr")]
@@ -27,13 +28,26 @@ pub async fn get_configuration() -> Result<ConfigurationDto, ServerFnError> {
 }
 
 #[server(
-    name = GetPipelineConfigurations,
+    name = GetIndexProfiles,
     prefix = "/api",
-    endpoint = "get_pipeline_configurations"
+    endpoint = "get_index_profiles"
 )]
-pub async fn get_pipeline_configurations() -> Result<Vec<PipelineConfigurationDto>, ServerFnError> {
+pub async fn get_index_profiles() -> Result<Vec<IndexProfileDto>, ServerFnError> {
     ctx::<Arc<CatalogServices>>()?
-        .pipeline_configuration_query_service
+        .index_profile_query_service
+        .list()
+        .await
+        .map_err(|e| map_app_error(&e))
+}
+
+#[server(
+    name = GetRetrievalProfiles,
+    prefix = "/api",
+    endpoint = "get_retrieval_profiles"
+)]
+pub async fn get_retrieval_profiles() -> Result<Vec<RetrievalProfileDto>, ServerFnError> {
+    ctx::<Arc<CatalogServices>>()?
+        .retrieval_profile_query_service
         .list()
         .await
         .map_err(|e| map_app_error(&e))
@@ -111,15 +125,30 @@ pub async fn apply_vector_index_command(
 }
 
 #[server(
-    name = ApplyPipelineConfigurationCommand,
+    name = ApplyIndexProfileCommand,
     prefix = "/api",
-    endpoint = "apply_pipeline_configuration_command"
+    endpoint = "apply_index_profile_command"
 )]
-pub async fn apply_pipeline_configuration_command(
-    command: PipelineConfigurationCommandDto,
+pub async fn apply_index_profile_command(
+    command: IndexProfileCommandDto,
 ) -> Result<(), ServerFnError> {
     ctx::<Arc<CatalogServices>>()?
-        .pipeline_configuration_command_handler
+        .index_profile_command_handler
+        .handle_dto(command)
+        .await
+        .map_err(|e| map_app_error(&e))
+}
+
+#[server(
+    name = ApplyRetrievalProfileCommand,
+    prefix = "/api",
+    endpoint = "apply_retrieval_profile_command"
+)]
+pub async fn apply_retrieval_profile_command(
+    command: RetrievalProfileCommandDto,
+) -> Result<(), ServerFnError> {
+    ctx::<Arc<CatalogServices>>()?
+        .retrieval_profile_command_handler
         .handle_dto(command)
         .await
         .map_err(|e| map_app_error(&e))

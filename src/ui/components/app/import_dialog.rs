@@ -95,11 +95,11 @@ fn IndexAfterImportCheckbox(
                     prop:checked=index_after
                     on:change=move |ev| set_index_after.set(event_target_checked(&ev))
                 />
-                <span>"Index immediately with default pipeline"</span>
+                <span>"Index immediately with default index profile"</span>
             </label>
             <Help title="What does this do?".to_string()>
                 <p>
-                    "If enabled, the document is chunked, embedded, and indexed using the pipeline marked as default. You can change the default pipeline from the Configuration page."
+                    "If enabled, the document is chunked, embedded, and indexed using the index profile marked as default. You can change the default index profile from the Profiles page."
                 </p>
                 <p class="mt-3">
                     "Leave unchecked to walk through chunking, embedding, and indexing step by step after import. Recommended on first use so you can preview chunks before vectorizing."

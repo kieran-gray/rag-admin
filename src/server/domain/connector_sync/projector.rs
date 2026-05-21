@@ -204,6 +204,7 @@ mod tests {
             &self,
             _connector_id: Uuid,
             _limit: u32,
+            _offset: u32,
         ) -> Result<Vec<ConnectorSyncSummary>, ConnectorSyncRepositoryError> {
             Ok(Vec::new())
         }

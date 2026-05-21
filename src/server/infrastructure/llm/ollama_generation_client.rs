@@ -9,8 +9,10 @@ use serde::{Deserialize, Serialize};
 use crate::server::application::llm::ports::{
     GenerationClient, GenerationRequest, GenerationResponse, GenerationResponseFormat,
 };
+use crate::server::application::llm::GenerationClientRegistry;
 use crate::server::application::AppError;
 use crate::server::infrastructure::shared::http::ReqwestHttpClient;
+use crate::shared::reference_data::AiProviderKind;
 
 pub struct OllamaGenerationClient {
     http: Arc<ReqwestHttpClient>,
@@ -26,6 +28,17 @@ impl OllamaGenerationClient {
             num_ctx,
         })
     }
+}
+
+pub fn register(
+    registry: &mut GenerationClientRegistry,
+    http: Arc<ReqwestHttpClient>,
+    base_url: String,
+    num_ctx: u32,
+) -> Arc<dyn GenerationClient> {
+    let client: Arc<dyn GenerationClient> = OllamaGenerationClient::new(http, base_url, num_ctx);
+    registry.register(AiProviderKind::Ollama, Arc::clone(&client));
+    client
 }
 
 #[derive(Serialize)]

@@ -6,8 +6,8 @@ use event_sourcing::Aggregate;
 
 use super::commands::ConfigurationDefaultsCommand;
 use super::events::{
-    ConfigurationDefaultsEvent, DefaultChunkingConfigurationSet, DefaultPipelineConfigurationSet,
-    DefaultSweepTemplateSet,
+    ConfigurationDefaultsEvent, DefaultChunkingConfigurationSet, DefaultIndexProfileSet,
+    DefaultRetrievalProfileSet, DefaultSweepTemplateSet,
 };
 use super::exceptions::ConfigurationDefaultsError;
 
@@ -16,7 +16,8 @@ const CONFIGURATION_DEFAULTS_ID: Uuid = uuid::uuid!("8a17e2f1-3a9d-4e58-a9c9-0a0
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ConfigurationDefaults {
     pub chunking_configuration_id: Option<Uuid>,
-    pub pipeline_configuration_id: Option<Uuid>,
+    pub index_profile_id: Option<Uuid>,
+    pub retrieval_profile_id: Option<Uuid>,
     pub sweep_template_id: Option<Uuid>,
 }
 
@@ -40,8 +41,11 @@ impl Aggregate for ConfigurationDefaults {
             Self::Event::DefaultChunkingConfigurationSet(e) => {
                 self.chunking_configuration_id = Some(e.chunking_configuration_id);
             }
-            Self::Event::DefaultPipelineConfigurationSet(e) => {
-                self.pipeline_configuration_id = Some(e.pipeline_configuration_id);
+            Self::Event::DefaultIndexProfileSet(e) => {
+                self.index_profile_id = Some(e.index_profile_id);
+            }
+            Self::Event::DefaultRetrievalProfileSet(e) => {
+                self.retrieval_profile_id = Some(e.retrieval_profile_id);
             }
             Self::Event::DefaultSweepTemplateSet(e) => {
                 self.sweep_template_id = Some(e.sweep_template_id);
@@ -66,13 +70,23 @@ impl Aggregate for ConfigurationDefaults {
                     },
                 )])
             }
-            ConfigurationDefaultsCommand::SetDefaultPipelineConfiguration(cmd) => {
-                if current.pipeline_configuration_id == Some(cmd.pipeline_configuration_id) {
+            ConfigurationDefaultsCommand::SetDefaultIndexProfile(cmd) => {
+                if current.index_profile_id == Some(cmd.index_profile_id) {
                     return Ok(vec![]);
                 }
-                Ok(vec![Self::Event::DefaultPipelineConfigurationSet(
-                    DefaultPipelineConfigurationSet {
-                        pipeline_configuration_id: cmd.pipeline_configuration_id,
+                Ok(vec![Self::Event::DefaultIndexProfileSet(
+                    DefaultIndexProfileSet {
+                        index_profile_id: cmd.index_profile_id,
+                    },
+                )])
+            }
+            ConfigurationDefaultsCommand::SetDefaultRetrievalProfile(cmd) => {
+                if current.retrieval_profile_id == Some(cmd.retrieval_profile_id) {
+                    return Ok(vec![]);
+                }
+                Ok(vec![Self::Event::DefaultRetrievalProfileSet(
+                    DefaultRetrievalProfileSet {
+                        retrieval_profile_id: cmd.retrieval_profile_id,
                     },
                 )])
             }
@@ -107,7 +121,8 @@ impl HasPolicies<ConfigurationDefaults, ()> for ConfigurationDefaultsEvent {}
 mod tests {
     use super::*;
     use crate::server::domain::configuration::defaults::commands::{
-        SetDefaultChunkingConfiguration, SetDefaultPipelineConfiguration, SetDefaultSweepTemplate,
+        SetDefaultChunkingConfiguration, SetDefaultIndexProfile, SetDefaultRetrievalProfile,
+        SetDefaultSweepTemplate,
     };
 
     #[test]
@@ -130,16 +145,16 @@ mod tests {
     #[test]
     fn idempotent_when_unchanged() {
         let id = Uuid::new_v4();
-        let mut state = ConfigurationDefaults::default();
-        state.pipeline_configuration_id = Some(id);
+        let state = ConfigurationDefaults {
+            index_profile_id: Some(id),
+            ..ConfigurationDefaults::default()
+        };
 
         let events = ConfigurationDefaults::handle_command(
             Some(&state),
-            ConfigurationDefaultsCommand::SetDefaultPipelineConfiguration(
-                SetDefaultPipelineConfiguration {
-                    pipeline_configuration_id: id,
-                },
-            ),
+            ConfigurationDefaultsCommand::SetDefaultIndexProfile(SetDefaultIndexProfile {
+                index_profile_id: id,
+            }),
         )
         .unwrap();
         assert!(events.is_empty());
@@ -149,8 +164,10 @@ mod tests {
     fn changes_existing_default() {
         let old = Uuid::new_v4();
         let new = Uuid::new_v4();
-        let mut state = ConfigurationDefaults::default();
-        state.sweep_template_id = Some(old);
+        let state = ConfigurationDefaults {
+            sweep_template_id: Some(old),
+            ..ConfigurationDefaults::default()
+        };
 
         let events = ConfigurationDefaults::handle_command(
             Some(&state),
@@ -160,5 +177,20 @@ mod tests {
         )
         .unwrap();
         assert_eq!(events.len(), 1);
+    }
+
+    #[test]
+    fn retrieval_profile_default_round_trip() {
+        let id = Uuid::new_v4();
+        let events = ConfigurationDefaults::handle_command(
+            None,
+            ConfigurationDefaultsCommand::SetDefaultRetrievalProfile(SetDefaultRetrievalProfile {
+                retrieval_profile_id: id,
+            }),
+        )
+        .unwrap();
+        assert_eq!(events.len(), 1);
+        let state = ConfigurationDefaults::from_events(&events).unwrap();
+        assert_eq!(state.retrieval_profile_id, Some(id));
     }
 }

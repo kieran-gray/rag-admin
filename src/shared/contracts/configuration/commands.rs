@@ -63,27 +63,53 @@ pub struct RemoveVectorIndexDto {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreatePipelineConfigurationDto {
+pub struct CreateIndexProfileDto {
     pub name: String,
     pub embedding_model_id: Uuid,
-    pub generation_model_id: Uuid,
     pub vector_index_id: Uuid,
     pub is_default: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdatePipelineConfigurationDto {
-    pub pipeline_configuration_id: Uuid,
+pub struct UpdateIndexProfileDto {
+    pub index_profile_id: Uuid,
     pub name: String,
     pub embedding_model_id: Uuid,
-    pub generation_model_id: Uuid,
     pub vector_index_id: Uuid,
     pub is_default: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeletePipelineConfigurationDto {
-    pub pipeline_configuration_id: Uuid,
+pub struct DeleteIndexProfileDto {
+    pub index_profile_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateRetrievalProfileDto {
+    pub name: String,
+    pub index_profile_id: Uuid,
+    pub generation_model_id: Uuid,
+    pub reranker_model_id: Option<Uuid>,
+    pub default_top_k: u32,
+    pub default_min_score_milli: u32,
+    pub is_default: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateRetrievalProfileDto {
+    pub retrieval_profile_id: Uuid,
+    pub name: String,
+    pub index_profile_id: Uuid,
+    pub generation_model_id: Uuid,
+    pub reranker_model_id: Option<Uuid>,
+    pub default_top_k: u32,
+    pub default_min_score_milli: u32,
+    pub is_default: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteRetrievalProfileDto {
+    pub retrieval_profile_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -155,10 +181,18 @@ pub enum VectorIndexCommandDto {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
-pub enum PipelineConfigurationCommandDto {
-    CreatePipelineConfiguration(CreatePipelineConfigurationDto),
-    UpdatePipelineConfiguration(UpdatePipelineConfigurationDto),
-    DeletePipelineConfiguration(DeletePipelineConfigurationDto),
+pub enum IndexProfileCommandDto {
+    CreateIndexProfile(CreateIndexProfileDto),
+    UpdateIndexProfile(UpdateIndexProfileDto),
+    DeleteIndexProfile(DeleteIndexProfileDto),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum RetrievalProfileCommandDto {
+    CreateRetrievalProfile(CreateRetrievalProfileDto),
+    UpdateRetrievalProfile(UpdateRetrievalProfileDto),
+    DeleteRetrievalProfile(DeleteRetrievalProfileDto),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

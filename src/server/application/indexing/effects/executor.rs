@@ -7,7 +7,7 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::server::application::chunking::ChunkerRegistry;
-use crate::server::application::configuration::{PipelineResolver, ResolvedPipeline};
+use crate::server::application::configuration::{IndexProfileResolver, ResolvedIndexProfile};
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::indexing::ports::KvStore;
 use crate::server::application::indexing::VectorIndexResolver;
@@ -53,7 +53,7 @@ pub struct IndexingEffectExecutor {
     embedding_service: Arc<EmbeddingService>,
     embedding_set_repository: Arc<dyn EmbeddingSetRepository>,
     vector_index_resolver: Arc<VectorIndexResolver>,
-    pipeline_resolver: Arc<PipelineResolver>,
+    index_profile_resolver: Arc<IndexProfileResolver>,
     kv_store: Arc<dyn KvStore>,
     command_processor: Arc<CommandProcessor<Indexing>>,
     session: JobSession<Indexing>,
@@ -72,7 +72,7 @@ impl IndexingEffectExecutor {
         embedding_service: Arc<EmbeddingService>,
         embedding_set_repository: Arc<dyn EmbeddingSetRepository>,
         vector_index_resolver: Arc<VectorIndexResolver>,
-        pipeline_resolver: Arc<PipelineResolver>,
+        index_profile_resolver: Arc<IndexProfileResolver>,
         kv_store: Arc<dyn KvStore>,
         command_processor: Arc<CommandProcessor<Indexing>>,
         job_registry: Arc<JobRegistry>,
@@ -95,7 +95,7 @@ impl IndexingEffectExecutor {
             embedding_service,
             embedding_set_repository,
             vector_index_resolver,
-            pipeline_resolver,
+            index_profile_resolver,
             kv_store,
             command_processor,
             session,
@@ -123,19 +123,19 @@ impl IndexingEffectExecutor {
             .ok_or_else(|| AppError::NotFound(format!("indexing {indexing_id}")))
     }
 
-    async fn load_pipeline(
+    async fn load_index_profile(
         &self,
         indexing: &IndexingReadModel,
-    ) -> Result<ResolvedPipeline, AppError> {
-        self.pipeline_resolver
-            .resolve(indexing.pipeline_configuration_id)
+    ) -> Result<ResolvedIndexProfile, AppError> {
+        self.index_profile_resolver
+            .resolve(indexing.index_profile_id)
             .await
     }
 
     async fn build_index_scope(
         &self,
         indexing: &IndexingReadModel,
-        pipeline: &ResolvedPipeline,
+        index_profile: &ResolvedIndexProfile,
     ) -> Result<IndexScope, AppError> {
         let document = self
             .source_document_repository
@@ -148,8 +148,8 @@ impl IndexingEffectExecutor {
             .map_or_else(|| document.source_ref.natural_key(), str::to_owned);
         Ok(IndexScope::new(
             indexing.document_id,
-            indexing.pipeline_configuration_id,
-            pipeline.vector_index.name.clone(),
+            indexing.index_profile_id,
+            index_profile.vector_index.name.clone(),
             source_slug,
         ))
     }
@@ -195,11 +195,13 @@ impl IndexingEffectExecutor {
 
     async fn execute_removal(&self, effect: &ExecuteRemovalEffect) -> Result<(), AppError> {
         let indexing = self.load_indexing(effect.indexing_id).await?;
-        let pipeline = self.load_pipeline(&indexing).await?;
-        let scope = self.build_index_scope(&indexing, &pipeline).await?;
+        let index_profile = self.load_index_profile(&indexing).await?;
+        let scope = self.build_index_scope(&indexing, &index_profile).await?;
 
         let ids = scope.vector_ids(0..REMOVAL_SWEEP_WINDOW);
-        let vector_index = self.vector_index_resolver.build(&pipeline.vector_index)?;
+        let vector_index = self
+            .vector_index_resolver
+            .build(&index_profile.vector_index)?;
         vector_index.delete(&ids).await?;
 
         self.kv_store.delete(&scope.kv_key()).await?;
@@ -311,9 +313,9 @@ impl IndexingEffectExecutor {
             return Ok(());
         }
 
-        let pipeline = self.load_pipeline(&indexing).await?;
+        let index_profile = self.load_index_profile(&indexing).await?;
         let chunks = self.chunk_set_repository.load_chunks(chunk_set_id).await?;
-        let embedding_model = &pipeline.embedding_model;
+        let embedding_model = &index_profile.embedding_model;
 
         let embedding_set_id = if let Some(existing) = self
             .embedding_set_repository
@@ -428,7 +430,7 @@ impl IndexingEffectExecutor {
             AppError::Validation("indexing requested without a chunk_set; restart chunking".into())
         })?;
 
-        let pipeline = self.load_pipeline(&indexing).await?;
+        let index_profile = self.load_index_profile(&indexing).await?;
         let chunks = self.chunk_set_repository.load_chunks(chunk_set_id).await?;
         let embeddings = self
             .embedding_set_repository
@@ -436,7 +438,7 @@ impl IndexingEffectExecutor {
             .await?;
         let chunk_map: HashMap<Uuid, &Chunk> = chunks.iter().map(|c| (c.chunk_id, c)).collect();
 
-        let scope = self.build_index_scope(&indexing, &pipeline).await?;
+        let scope = self.build_index_scope(&indexing, &index_profile).await?;
         let source_version = indexing.document_version.to_string();
 
         let records: Vec<VectorRecord> = embeddings
@@ -453,7 +455,7 @@ impl IndexingEffectExecutor {
                     metadata: json!({
                         "document_id": indexing.document_id.to_string(),
                         "document_version": indexing.document_version,
-                        "pipeline_configuration_id": indexing.pipeline_configuration_id.to_string(),
+                        "index_profile_id": indexing.index_profile_id.to_string(),
                         "chunk_id": chunk.sequence,
                         "chunk_uuid": chunk.chunk_id.to_string(),
                         "chunk_set_id": chunk_set_id.to_string(),
@@ -470,7 +472,9 @@ impl IndexingEffectExecutor {
             })
             .collect();
 
-        let vector_index = self.vector_index_resolver.build(&pipeline.vector_index)?;
+        let vector_index = self
+            .vector_index_resolver
+            .build(&index_profile.vector_index)?;
         let vector_count = records.len() as u32;
 
         job.emit(
@@ -620,7 +624,7 @@ fn is_http_url(s: &str) -> bool {
 
 struct IndexScope {
     doc_id_hex: String,
-    pipeline_hex_short: String,
+    index_profile_hex_short: String,
     vector_index_name: String,
     source_slug: String,
 }
@@ -628,15 +632,15 @@ struct IndexScope {
 impl IndexScope {
     fn new(
         document_id: Uuid,
-        pipeline_configuration_id: Uuid,
+        index_profile_id: Uuid,
         vector_index_name: String,
         source_slug: String,
     ) -> Self {
-        let pipeline_hex_full = uuid_hex(pipeline_configuration_id);
-        let pipeline_hex_short = pipeline_hex_full.chars().take(8).collect();
+        let index_profile_hex_full = uuid_hex(index_profile_id);
+        let index_profile_hex_short = index_profile_hex_full.chars().take(8).collect();
         Self {
             doc_id_hex: uuid_hex(document_id),
-            pipeline_hex_short,
+            index_profile_hex_short,
             vector_index_name,
             source_slug,
         }
@@ -645,7 +649,7 @@ impl IndexScope {
     fn vector_id(&self, sequence: u32) -> String {
         format!(
             "{}:{}:{}",
-            self.doc_id_hex, self.pipeline_hex_short, sequence
+            self.doc_id_hex, self.index_profile_hex_short, sequence
         )
     }
 

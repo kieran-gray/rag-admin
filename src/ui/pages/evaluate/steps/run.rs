@@ -7,7 +7,7 @@ use crate::server_functions::evaluation::{
     get_runs_for_document, start_run_evaluation, start_run_optimization,
 };
 use crate::shared::contracts::{
-    aggregate_type, ChunkingConfigurationDto, EvaluationRunSummaryDto, PipelineConfigurationDto,
+    aggregate_type, ChunkingConfigurationDto, EvaluationRunSummaryDto, IndexProfileDto,
     RunEvaluationRequestDto, RunOptimizationRequestDto, SweepTemplateDto,
 };
 use crate::ui::components::app::event_bus::use_invalidator;
@@ -22,14 +22,14 @@ pub fn RunStep<'a>(
     document_id: Uuid,
     source_ref: &'a str,
     selection: EvaluateSelection,
-    pipelines: Vec<PipelineConfigurationDto>,
+    index_profiles: Vec<IndexProfileDto>,
     chunking_configurations: Vec<ChunkingConfigurationDto>,
     sweep_templates: Vec<SweepTemplateDto>,
     on_back: Callback<()>,
     on_advance: Callback<()>,
 ) -> impl IntoView {
     let _ = source_ref;
-    let pipelines_stored = StoredValue::new(pipelines);
+    let index_profiles_stored = StoredValue::new(index_profiles);
     let chunking_stored = StoredValue::new(chunking_configurations);
     let sweep_stored = StoredValue::new(sweep_templates);
 
@@ -106,8 +106,8 @@ pub fn RunStep<'a>(
     });
 
     let active_dataset = selection.dataset_id.read_only();
-    let active_pipeline = selection.pipeline_id.read_only();
-    let set_active_pipeline = selection.pipeline_id.write_only();
+    let active_index_profile = selection.index_profile_id.read_only();
+    let set_active_index_profile = selection.index_profile_id.write_only();
 
     view! {
         <div class="space-y-6">
@@ -160,7 +160,7 @@ pub fn RunStep<'a>(
             {move || view! {
                 <OptimizeLauncher
                     dataset_id=selection.dataset_id.get()
-                    pipeline_configuration_id=selection.pipeline_id.get()
+                    index_profile_id=selection.index_profile_id.get()
                     on_launch=launch_optimization
                     busy=busy
                     error=error
@@ -173,12 +173,12 @@ pub fn RunStep<'a>(
                 </summary>
                 <div class="pt-4">
                     <EvaluationLauncher
-                        pipelines=pipelines_stored
+                        index_profiles=index_profiles_stored
                         chunking_configurations=chunking_stored
                         sweep_templates=sweep_stored
                         active_dataset=active_dataset
-                        active_pipeline=active_pipeline
-                        set_active_pipeline=set_active_pipeline
+                        active_index_profile=active_index_profile
+                        set_active_index_profile=set_active_index_profile
                         running=busy
                         callbacks=LauncherCallbacks { on_start: launch_manual }
                     />

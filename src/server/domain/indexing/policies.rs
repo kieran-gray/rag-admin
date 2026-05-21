@@ -182,7 +182,7 @@ mod tests {
     fn ingest_requested_event() -> IndexingEvent {
         IndexingEvent::IngestRequested(IngestRequested {
             document_id: Uuid::new_v4(),
-            pipeline_configuration_id: Uuid::new_v4(),
+            index_profile_id: Uuid::new_v4(),
             document_version: 1,
             chunking_config: ChunkingConfig::Section(SectionChunkingConfig {
                 max_section_tokens: 512,

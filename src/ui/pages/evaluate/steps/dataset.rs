@@ -6,9 +6,7 @@ use uuid::Uuid;
 use crate::server_functions::evaluation::{
     get_datasets_for_document, start_generate_synthetic_dataset,
 };
-use crate::shared::contracts::{
-    aggregate_type, EvaluationDatasetSummaryDto, PipelineConfigurationDto,
-};
+use crate::shared::contracts::{aggregate_type, EvaluationDatasetSummaryDto, IndexProfileDto};
 use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{EmptyState, Help, Status, StatusPill, Surface};
 use crate::ui::pages::evaluate::state::EvaluateSelection;
@@ -17,7 +15,7 @@ use crate::ui::pages::evaluate::state::EvaluateSelection;
 pub fn DatasetStep(
     document_id: Uuid,
     selection: EvaluateSelection,
-    pipelines: StoredValue<Vec<PipelineConfigurationDto>>,
+    index_profiles: StoredValue<Vec<IndexProfileDto>>,
     on_advance: Callback<()>,
 ) -> impl IntoView {
     let invalidator = use_invalidator(|e| e.from_any(&[aggregate_type::EVALUATION_DATASET]));
@@ -44,9 +42,9 @@ pub fn DatasetStep(
     });
 
     let on_generate = move |_| {
-        let Some(pipeline_id) = selection.pipeline_id.get() else {
+        let Some(retrieval_profile_id) = selection.retrieval_profile_id.get() else {
             set_error.set(Some(
-                "Pick a pipeline configuration before generating a dataset.".to_string(),
+                "Pick a retrieval profile before generating a dataset.".to_string(),
             ));
             return;
         };
@@ -63,7 +61,7 @@ pub fn DatasetStep(
         spawn_local(async move {
             match start_generate_synthetic_dataset(
                 document_id,
-                pipeline_id,
+                retrieval_profile_id,
                 label,
                 target,
                 excerpt,
@@ -126,7 +124,7 @@ pub fn DatasetStep(
             </Surface>
 
             <Surface title="Generate a new dataset".to_string()>
-                <PipelineSelect selection=selection pipelines=pipelines />
+                <IndexProfileSelect selection=selection index_profiles=index_profiles />
                 <div class="mt-4 space-y-4">
                     <label class="block space-y-1">
                         <span class="eyebrow">"Label"</span>
@@ -251,31 +249,27 @@ where
 }
 
 #[component]
-fn PipelineSelect(
+fn IndexProfileSelect(
     selection: EvaluateSelection,
-    pipelines: StoredValue<Vec<PipelineConfigurationDto>>,
+    index_profiles: StoredValue<Vec<IndexProfileDto>>,
 ) -> impl IntoView {
     view! {
         <label class="flex flex-col gap-1 text-sm">
-            <span class="eyebrow">"Pipeline"</span>
+            <span class="eyebrow">"Index profile"</span>
             <select
                 class="input"
                 on:change=move |ev| {
-                    selection.pipeline_id.set(Uuid::parse_str(&event_target_value(&ev)).ok());
+                    selection.index_profile_id.set(Uuid::parse_str(&event_target_value(&ev)).ok());
                 }
             >
-                {move || pipelines.with_value(|ps| {
+                {move || index_profiles.with_value(|ps| {
                     ps.iter().map(|p| {
-                        let id = p.pipeline_configuration_id;
+                        let id = p.index_profile_id;
                         let suffix = if p.is_default { " · default" } else { "" };
                         let name = p.name.clone();
-                        let generation = p.generation_model_name.clone().unwrap_or_default();
-                        let label = if generation.is_empty() {
-                            format!("{name}{suffix}")
-                        } else {
-                            format!("{name}{suffix} · {generation}")
-                        };
-                        let selected = selection.pipeline_id.get() == Some(id);
+                        let dims = p.dimensions;
+                        let label = format!("{name}{suffix} · {dims}d");
+                        let selected = selection.index_profile_id.get() == Some(id);
                         view! { <option value=id.to_string() selected=selected>{label}</option> }
                     }).collect_view()
                 })}

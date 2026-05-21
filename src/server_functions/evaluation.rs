@@ -107,7 +107,7 @@ pub async fn get_dataset(dataset_id: Uuid) -> Result<Option<EvaluationDatasetDto
 )]
 pub async fn start_generate_synthetic_dataset(
     document_id: Uuid,
-    pipeline_configuration_id: Uuid,
+    retrieval_profile_id: Uuid,
     label: String,
     question_count: u32,
     excerpt_similarity_threshold_milli: u32,
@@ -117,7 +117,7 @@ pub async fn start_generate_synthetic_dataset(
         .evaluation_dataset_command_handler
         .start_generation(StartDatasetGenerationRequest {
             document_id,
-            pipeline_configuration_id,
+            retrieval_profile_id,
             label,
             question_count,
             excerpt_similarity_threshold_milli,

@@ -51,7 +51,7 @@ impl Projector<IndexingEvent> for IndexingProjector {
                         None => IndexingReadModel {
                             indexing_id,
                             document_id: e.document_id,
-                            pipeline_configuration_id: e.pipeline_configuration_id,
+                            index_profile_id: e.index_profile_id,
                             document_version: e.document_version,
                             chunking_config: e.chunking_config,
                             chunk_set_id: None,
@@ -211,14 +211,14 @@ mod tests {
     fn ingest_requested(
         indexing_id: Uuid,
         document_id: Uuid,
-        pipeline_id: Uuid,
+        index_profile_id: Uuid,
         version: u32,
         auto_advance: bool,
     ) -> EventEnvelope<IndexingEvent> {
         EventEnvelope {
             event: IndexingEvent::IngestRequested(IngestRequested {
                 document_id,
-                pipeline_configuration_id: pipeline_id,
+                index_profile_id: index_profile_id,
                 document_version: version,
                 chunking_config: chunking_payload(),
                 request_id: Uuid::new_v4(),
@@ -260,13 +260,13 @@ mod tests {
         let projector = IndexingProjector::new(repo.clone());
         let indexing_id = Uuid::new_v4();
         let document_id = Uuid::new_v4();
-        let pipeline_id = Uuid::new_v4();
+        let index_profile_id = Uuid::new_v4();
 
         projector
             .project(&[ingest_requested(
                 indexing_id,
                 document_id,
-                pipeline_id,
+                index_profile_id,
                 3,
                 true,
             )])
@@ -276,7 +276,7 @@ mod tests {
         let model = repo.get(indexing_id).expect("read model");
         assert_eq!(model.indexing_id, indexing_id);
         assert_eq!(model.document_id, document_id);
-        assert_eq!(model.pipeline_configuration_id, pipeline_id);
+        assert_eq!(model.index_profile_id, index_profile_id);
         assert_eq!(model.document_version, 3);
         assert_eq!(model.status, IndexingStatus::Pending);
         assert!(model.chunk_set_id.is_none());
@@ -292,11 +292,11 @@ mod tests {
         let projector = IndexingProjector::new(repo.clone());
         let indexing_id = Uuid::new_v4();
         let document_id = Uuid::new_v4();
-        let pipeline_id = Uuid::new_v4();
+        let index_profile_id = Uuid::new_v4();
 
         projector
             .project(&[
-                ingest_requested(indexing_id, document_id, pipeline_id, 1, true),
+                ingest_requested(indexing_id, document_id, index_profile_id, 1, true),
                 envelope(
                     indexing_id,
                     IndexingEvent::ChunkingCompleted(ChunkingCompleted {
@@ -307,7 +307,7 @@ mod tests {
                     }),
                     2,
                 ),
-                ingest_requested(indexing_id, document_id, pipeline_id, 2, false),
+                ingest_requested(indexing_id, document_id, index_profile_id, 2, false),
             ])
             .await
             .expect("project");

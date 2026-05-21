@@ -9,7 +9,8 @@ use crate::server::domain::configuration::chunking_configuration::ChunkingConfig
 use crate::server::domain::configuration::defaults::ConfigurationDefaultsRepository;
 use crate::server::domain::configuration::embedding_model::EmbeddingModelRepository;
 use crate::server::domain::configuration::generation_model::GenerationModelRepository;
-use crate::server::domain::configuration::pipeline_configuration::PipelineConfigurationRepository;
+use crate::server::domain::configuration::index_profile::IndexProfileRepository;
+use crate::server::domain::configuration::retrieval_profile::RetrievalProfileRepository;
 use crate::server::domain::configuration::sweep_template::SweepTemplateRepository;
 use crate::server::domain::configuration::vector_index::VectorIndexRepository;
 use crate::server::domain::connector::ConnectorRepository;
@@ -25,8 +26,8 @@ use crate::server::infrastructure::chunk_set::PostgresChunkSetRepository;
 use crate::server::infrastructure::configuration::{
     PostgresChunkingConfigurationRepository, PostgresConfigurationDefaultsRepository,
     PostgresEmbeddingModelRepository, PostgresGenerationModelRepository,
-    PostgresPipelineConfigurationRepository, PostgresSweepTemplateRepository,
-    PostgresVectorIndexRepository,
+    PostgresIndexProfileRepository, PostgresRetrievalProfileRepository,
+    PostgresSweepTemplateRepository, PostgresVectorIndexRepository,
 };
 use crate::server::infrastructure::connector::PostgresConnectorRepository;
 use crate::server::infrastructure::connector_sync::{
@@ -51,7 +52,8 @@ pub struct Repositories {
     pub embedding_model: Arc<dyn EmbeddingModelRepository>,
     pub generation_model: Arc<dyn GenerationModelRepository>,
     pub vector_index: Arc<dyn VectorIndexRepository>,
-    pub pipeline_configuration: Arc<dyn PipelineConfigurationRepository>,
+    pub index_profile: Arc<dyn IndexProfileRepository>,
+    pub retrieval_profile: Arc<dyn RetrievalProfileRepository>,
     pub chunking_configuration: Arc<dyn ChunkingConfigurationRepository>,
     pub configuration_defaults: Arc<dyn ConfigurationDefaultsRepository>,
     pub sweep_template: Arc<dyn SweepTemplateRepository>,
@@ -90,9 +92,8 @@ pub fn build_repositories(
         embedding_model: Arc::new(PostgresEmbeddingModelRepository::new(pool.clone())),
         generation_model: Arc::new(PostgresGenerationModelRepository::new(pool.clone())),
         vector_index: Arc::new(PostgresVectorIndexRepository::new(pool.clone())),
-        pipeline_configuration: Arc::new(PostgresPipelineConfigurationRepository::new(
-            pool.clone(),
-        )),
+        index_profile: Arc::new(PostgresIndexProfileRepository::new(pool.clone())),
+        retrieval_profile: Arc::new(PostgresRetrievalProfileRepository::new(pool.clone())),
         chunking_configuration: Arc::new(PostgresChunkingConfigurationRepository::new(
             pool.clone(),
         )),

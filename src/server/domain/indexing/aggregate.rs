@@ -3,6 +3,8 @@ use uuid::Uuid;
 
 use event_sourcing::Aggregate;
 
+use crate::server::domain::shared::value_objects::ChunkingConfig;
+
 use super::{
     commands::IndexingCommand,
     events::{
@@ -28,14 +30,19 @@ pub struct Indexing {
 }
 
 impl Indexing {
-    pub fn compute_id(document_id: Uuid, pipeline_configuration_id: Uuid) -> Uuid {
-        let name = format!("{document_id}:{pipeline_configuration_id}");
+    pub fn compute_id(
+        document_id: Uuid,
+        index_profile_id: Uuid,
+        chunking_config: &ChunkingConfig,
+    ) -> Uuid {
+        let chunking_json = serde_json::to_string(chunking_config).unwrap_or_default();
+        let name = format!("{document_id}:{index_profile_id}:{chunking_json}");
         Uuid::new_v5(&INDEXING_NAMESPACE, name.as_bytes())
     }
 
     fn from_requested(e: &IngestRequested) -> Self {
         Self {
-            indexing_id: Self::compute_id(e.document_id, e.pipeline_configuration_id),
+            indexing_id: Self::compute_id(e.document_id, e.index_profile_id, &e.chunking_config),
             chunk_set_id: None,
             embedding_set_id: None,
             status: IndexingStatus::Pending,
@@ -110,7 +117,7 @@ impl Aggregate for Indexing {
                 Some(s) if s.last_request_id == Some(cmd.request_id) => Ok(vec![]),
                 None | Some(_) => Ok(vec![Self::Event::IngestRequested(IngestRequested {
                     document_id: cmd.document_id,
-                    pipeline_configuration_id: cmd.pipeline_configuration_id,
+                    index_profile_id: cmd.index_profile_id,
                     document_version: cmd.document_version,
                     chunking_config: cmd.chunking_config,
                     request_id: cmd.request_id,
@@ -271,30 +278,34 @@ mod tests {
         "2024-01-01T00:00:00Z".into()
     }
 
-    fn base_request(doc_id: Uuid, pc_id: Uuid) -> IndexingCommand {
+    fn sample_chunking() -> ChunkingConfig {
+        ChunkingConfig::Section(SectionChunkingConfig {
+            max_section_tokens: 512,
+        })
+    }
+
+    fn base_request(doc_id: Uuid, ip_id: Uuid) -> IndexingCommand {
         IndexingCommand::RequestIngest(RequestIngest {
             document_id: doc_id,
-            pipeline_configuration_id: pc_id,
+            index_profile_id: ip_id,
             document_version: 1,
-            chunking_config: ChunkingConfig::Section(SectionChunkingConfig {
-                max_section_tokens: 512,
-            }),
+            chunking_config: sample_chunking(),
             request_id: Uuid::new_v4(),
             auto_advance: true,
             occurred_at: now(),
         })
     }
 
-    fn base_state(doc_id: Uuid, pc_id: Uuid) -> Indexing {
-        let events = Indexing::handle_command(None, base_request(doc_id, pc_id)).unwrap();
+    fn base_state(doc_id: Uuid, ip_id: Uuid) -> Indexing {
+        let events = Indexing::handle_command(None, base_request(doc_id, ip_id)).unwrap();
         Indexing::from_events(&events).unwrap()
     }
 
     #[test]
     fn request_ingest_from_none_creates_aggregate() {
         let doc_id = Uuid::new_v4();
-        let pc_id = Uuid::new_v4();
-        let events = Indexing::handle_command(None, base_request(doc_id, pc_id)).unwrap();
+        let ip_id = Uuid::new_v4();
+        let events = Indexing::handle_command(None, base_request(doc_id, ip_id)).unwrap();
 
         assert_eq!(events.len(), 1);
         let IndexingEvent::IngestRequested(event) = &events[0] else {
@@ -304,23 +315,24 @@ mod tests {
 
         let indexing = Indexing::from_events(&events).unwrap();
         assert_eq!(indexing.status, IndexingStatus::Pending);
-        assert_eq!(indexing.indexing_id, Indexing::compute_id(doc_id, pc_id));
+        assert_eq!(
+            indexing.indexing_id,
+            Indexing::compute_id(doc_id, ip_id, &sample_chunking())
+        );
     }
 
     #[test]
     fn duplicate_request_id_is_noop() {
         let doc_id = Uuid::new_v4();
-        let pc_id = Uuid::new_v4();
+        let ip_id = Uuid::new_v4();
         let request_id = Uuid::new_v4();
         let first_events = Indexing::handle_command(
             None,
             IndexingCommand::RequestIngest(RequestIngest {
                 document_id: doc_id,
-                pipeline_configuration_id: pc_id,
+                index_profile_id: ip_id,
                 document_version: 1,
-                chunking_config: ChunkingConfig::Section(SectionChunkingConfig {
-                    max_section_tokens: 512,
-                }),
+                chunking_config: sample_chunking(),
                 request_id,
                 auto_advance: true,
                 occurred_at: now(),
@@ -333,11 +345,9 @@ mod tests {
             Some(&indexing),
             IndexingCommand::RequestIngest(RequestIngest {
                 document_id: doc_id,
-                pipeline_configuration_id: pc_id,
+                index_profile_id: ip_id,
                 document_version: 1,
-                chunking_config: ChunkingConfig::Section(SectionChunkingConfig {
-                    max_section_tokens: 512,
-                }),
+                chunking_config: sample_chunking(),
                 request_id,
                 auto_advance: true,
                 occurred_at: now(),
@@ -351,8 +361,8 @@ mod tests {
     #[test]
     fn requeue_chunking_emits_marker_event() {
         let doc_id = Uuid::new_v4();
-        let pc_id = Uuid::new_v4();
-        let indexing = base_state(doc_id, pc_id);
+        let ip_id = Uuid::new_v4();
+        let indexing = base_state(doc_id, ip_id);
 
         let events = Indexing::handle_command(
             Some(&indexing),
@@ -366,8 +376,8 @@ mod tests {
     #[test]
     fn requeue_embedding_requires_chunk_set() {
         let doc_id = Uuid::new_v4();
-        let pc_id = Uuid::new_v4();
-        let indexing = base_state(doc_id, pc_id);
+        let ip_id = Uuid::new_v4();
+        let indexing = base_state(doc_id, ip_id);
 
         let err = Indexing::handle_command(
             Some(&indexing),
@@ -380,8 +390,8 @@ mod tests {
     #[test]
     fn requeue_embedding_succeeds_after_chunking() {
         let doc_id = Uuid::new_v4();
-        let pc_id = Uuid::new_v4();
-        let mut events = Indexing::handle_command(None, base_request(doc_id, pc_id)).unwrap();
+        let ip_id = Uuid::new_v4();
+        let mut events = Indexing::handle_command(None, base_request(doc_id, ip_id)).unwrap();
         events.push(IndexingEvent::ChunkingCompleted(ChunkingCompleted {
             chunk_set_id: Uuid::new_v4(),
             chunk_count: 10,
@@ -402,8 +412,8 @@ mod tests {
     #[test]
     fn requeue_indexing_requires_embedding_set() {
         let doc_id = Uuid::new_v4();
-        let pc_id = Uuid::new_v4();
-        let indexing = base_state(doc_id, pc_id);
+        let ip_id = Uuid::new_v4();
+        let indexing = base_state(doc_id, ip_id);
 
         let err = Indexing::handle_command(
             Some(&indexing),
@@ -416,9 +426,9 @@ mod tests {
     #[test]
     fn requeue_events_do_not_change_status_or_ids() {
         let doc_id = Uuid::new_v4();
-        let pc_id = Uuid::new_v4();
+        let ip_id = Uuid::new_v4();
         let chunk_set_id = Uuid::new_v4();
-        let mut events = Indexing::handle_command(None, base_request(doc_id, pc_id)).unwrap();
+        let mut events = Indexing::handle_command(None, base_request(doc_id, ip_id)).unwrap();
         events.push(IndexingEvent::ChunkingCompleted(ChunkingCompleted {
             chunk_set_id,
             chunk_count: 5,
@@ -437,16 +447,14 @@ mod tests {
     #[test]
     fn auto_advance_carried_through_event() {
         let doc_id = Uuid::new_v4();
-        let pc_id = Uuid::new_v4();
+        let ip_id = Uuid::new_v4();
         let events = Indexing::handle_command(
             None,
             IndexingCommand::RequestIngest(RequestIngest {
                 document_id: doc_id,
-                pipeline_configuration_id: pc_id,
+                index_profile_id: ip_id,
                 document_version: 1,
-                chunking_config: ChunkingConfig::Section(SectionChunkingConfig {
-                    max_section_tokens: 512,
-                }),
+                chunking_config: sample_chunking(),
                 request_id: Uuid::new_v4(),
                 auto_advance: false,
                 occurred_at: now(),
@@ -460,8 +468,8 @@ mod tests {
     #[test]
     fn complete_chunking_advances_to_chunking() {
         let doc_id = Uuid::new_v4();
-        let pc_id = Uuid::new_v4();
-        let indexing = base_state(doc_id, pc_id);
+        let ip_id = Uuid::new_v4();
+        let indexing = base_state(doc_id, ip_id);
         let chunk_set_id = Uuid::new_v4();
 
         let events = Indexing::handle_command(
@@ -481,7 +489,7 @@ mod tests {
             panic!("expected ChunkingCompleted");
         }
 
-        let mut all = Indexing::handle_command(None, base_request(doc_id, pc_id)).unwrap();
+        let mut all = Indexing::handle_command(None, base_request(doc_id, ip_id)).unwrap();
         all.extend(events);
         let updated = Indexing::from_events(&all).unwrap();
         assert_eq!(updated.status, IndexingStatus::Chunking);
@@ -491,10 +499,10 @@ mod tests {
     #[test]
     fn complete_chunking_is_idempotent() {
         let doc_id = Uuid::new_v4();
-        let pc_id = Uuid::new_v4();
+        let ip_id = Uuid::new_v4();
         let chunk_set_id = Uuid::new_v4();
 
-        let mut events = Indexing::handle_command(None, base_request(doc_id, pc_id)).unwrap();
+        let mut events = Indexing::handle_command(None, base_request(doc_id, ip_id)).unwrap();
         events.push(IndexingEvent::ChunkingCompleted(ChunkingCompleted {
             chunk_set_id,
             chunk_count: 10,
@@ -519,9 +527,9 @@ mod tests {
     #[test]
     fn full_pipeline_sequence_ends_at_indexed() {
         let doc_id = Uuid::new_v4();
-        let pc_id = Uuid::new_v4();
+        let ip_id = Uuid::new_v4();
 
-        let mut events = Indexing::handle_command(None, base_request(doc_id, pc_id)).unwrap();
+        let mut events = Indexing::handle_command(None, base_request(doc_id, ip_id)).unwrap();
         events.push(IndexingEvent::ChunkingCompleted(ChunkingCompleted {
             chunk_set_id: Uuid::new_v4(),
             chunk_count: 10,
@@ -547,9 +555,9 @@ mod tests {
     #[test]
     fn fail_then_retry_resets_to_previous_stage() {
         let doc_id = Uuid::new_v4();
-        let pc_id = Uuid::new_v4();
+        let ip_id = Uuid::new_v4();
 
-        let mut events = Indexing::handle_command(None, base_request(doc_id, pc_id)).unwrap();
+        let mut events = Indexing::handle_command(None, base_request(doc_id, ip_id)).unwrap();
         events.push(IndexingEvent::ChunkingCompleted(ChunkingCompleted {
             chunk_set_id: Uuid::new_v4(),
             chunk_count: 10,
@@ -583,8 +591,8 @@ mod tests {
     #[test]
     fn retry_when_not_failed_returns_error() {
         let doc_id = Uuid::new_v4();
-        let pc_id = Uuid::new_v4();
-        let indexing = base_state(doc_id, pc_id);
+        let ip_id = Uuid::new_v4();
+        let indexing = base_state(doc_id, ip_id);
 
         let err = Indexing::handle_command(
             Some(&indexing),
@@ -601,9 +609,9 @@ mod tests {
     #[test]
     fn remove_is_idempotent() {
         let doc_id = Uuid::new_v4();
-        let pc_id = Uuid::new_v4();
+        let ip_id = Uuid::new_v4();
 
-        let mut events = Indexing::handle_command(None, base_request(doc_id, pc_id)).unwrap();
+        let mut events = Indexing::handle_command(None, base_request(doc_id, ip_id)).unwrap();
         events.push(IndexingEvent::IndexingRemoved(IndexingRemoved {
             occurred_at: now(),
         }));
@@ -619,24 +627,38 @@ mod tests {
     }
 
     #[test]
-    fn two_different_pipeline_ids_produce_different_aggregate_ids() {
+    fn two_different_index_profile_ids_produce_different_aggregate_ids() {
         let doc_id = Uuid::new_v4();
-        let pc1 = Uuid::new_v4();
-        let pc2 = Uuid::new_v4();
+        let ip1 = Uuid::new_v4();
+        let ip2 = Uuid::new_v4();
 
         assert_ne!(
-            Indexing::compute_id(doc_id, pc1),
-            Indexing::compute_id(doc_id, pc2)
+            Indexing::compute_id(doc_id, ip1, &sample_chunking()),
+            Indexing::compute_id(doc_id, ip2, &sample_chunking())
+        );
+    }
+
+    #[test]
+    fn different_chunking_configs_produce_different_aggregate_ids() {
+        let doc_id = Uuid::new_v4();
+        let ip_id = Uuid::new_v4();
+        let other = ChunkingConfig::Section(SectionChunkingConfig {
+            max_section_tokens: 1024,
+        });
+
+        assert_ne!(
+            Indexing::compute_id(doc_id, ip_id, &sample_chunking()),
+            Indexing::compute_id(doc_id, ip_id, &other)
         );
     }
 
     #[test]
     fn same_inputs_produce_same_aggregate_id() {
         let doc_id = Uuid::new_v4();
-        let pc_id = Uuid::new_v4();
+        let ip_id = Uuid::new_v4();
         assert_eq!(
-            Indexing::compute_id(doc_id, pc_id),
-            Indexing::compute_id(doc_id, pc_id)
+            Indexing::compute_id(doc_id, ip_id, &sample_chunking()),
+            Indexing::compute_id(doc_id, ip_id, &sample_chunking())
         );
     }
 
@@ -655,10 +677,10 @@ mod tests {
     #[test]
     fn complete_embedding_is_idempotent_when_already_embedding() {
         let doc_id = Uuid::new_v4();
-        let pc_id = Uuid::new_v4();
+        let ip_id = Uuid::new_v4();
         let embedding_set_id = Uuid::new_v4();
 
-        let mut events = Indexing::handle_command(None, base_request(doc_id, pc_id)).unwrap();
+        let mut events = Indexing::handle_command(None, base_request(doc_id, ip_id)).unwrap();
         events.push(IndexingEvent::ChunkingCompleted(ChunkingCompleted {
             chunk_set_id: Uuid::new_v4(),
             chunk_count: 10,

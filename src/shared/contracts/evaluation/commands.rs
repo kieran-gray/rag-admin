@@ -8,7 +8,9 @@ use crate::shared::{
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunEvaluationRequestDto {
     pub dataset_id: Uuid,
-    pub pipeline_configuration_id: Uuid,
+    pub index_profile_id: Uuid,
+    #[serde(default)]
+    pub retrieval_profile_id: Option<Uuid>,
     pub variants: Vec<ChunkingVariant>,
     pub options: Vec<EvaluationRunOptions>,
     #[serde(default)]
@@ -18,6 +20,8 @@ pub struct RunEvaluationRequestDto {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunOptimizationRequestDto {
     pub dataset_id: Uuid,
-    pub pipeline_configuration_id: Uuid,
+    pub index_profile_id: Uuid,
+    #[serde(default)]
+    pub retrieval_profile_id: Option<Uuid>,
     pub optimization: OptimizationConfig,
 }

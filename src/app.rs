@@ -11,7 +11,7 @@ use crate::ui::components::shell::AppShell;
 use crate::ui::pages::{
     configuration::{
         catalog::CatalogPage, chunking::ChunkingPage, connectors::ConnectorsPage,
-        pipelines::PipelinesPage,
+        profiles::ProfilesPage,
     },
     document_detail::DocumentDetailPage,
     documents::{DocumentByIdRedirect, DocumentsPage},
@@ -131,8 +131,16 @@ pub fn App() -> impl IntoView {
                         view=CatalogPage
                     />
                     <Route
-                        path=(StaticSegment("configuration"), StaticSegment("pipelines"))
-                        view=PipelinesPage
+                        path=(StaticSegment("configuration"), StaticSegment("profiles"))
+                        view=ProfilesPage
+                    />
+                    <Route
+                        path=(StaticSegment("configuration"), StaticSegment("index-profiles"))
+                        view=|| view! { <RedirectTo to="/configuration/profiles" /> }
+                    />
+                    <Route
+                        path=(StaticSegment("configuration"), StaticSegment("retrieval-profiles"))
+                        view=|| view! { <RedirectTo to="/configuration/profiles" /> }
                     />
                     <Route
                         path=(StaticSegment("configuration"), StaticSegment("chunking"))
@@ -168,7 +176,7 @@ pub fn App() -> impl IntoView {
                     />
                     <Route
                         path=StaticSegment("pipelines")
-                        view=|| view! { <RedirectTo to="/configuration/pipelines" /> }
+                        view=|| view! { <RedirectTo to="/configuration/profiles" /> }
                     />
                     <Route
                         path=StaticSegment("chunking")

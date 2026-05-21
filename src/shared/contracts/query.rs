@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryRequest {
-    pub pipeline_configuration_id: Uuid,
+    pub retrieval_profile_id: Uuid,
     pub query: String,
     pub top_k: u32,
     pub min_score: f32,
@@ -27,7 +27,7 @@ pub struct QueryHit {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryResult {
-    pub pipeline_configuration_id: Uuid,
+    pub retrieval_profile_id: Uuid,
     pub query: String,
     pub hits: Vec<QueryHit>,
 }

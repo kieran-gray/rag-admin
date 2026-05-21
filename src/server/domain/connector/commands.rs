@@ -30,8 +30,9 @@ pub struct UnregisterConnector {
 
 pub struct SetConnectorDefaults {
     pub connector_id: Uuid,
-    pub pipeline_configuration_id: Option<Uuid>,
+    pub index_profile_id: Option<Uuid>,
     pub chunking_configuration_id: Option<Uuid>,
+    pub retrieval_profile_id: Option<Uuid>,
     pub occurred_at: Timestamp,
 }
 

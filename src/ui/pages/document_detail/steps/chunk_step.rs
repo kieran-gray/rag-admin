@@ -20,11 +20,11 @@ pub fn ChunkStep(
     let (error, set_error) = signal::<Option<String>>(None);
 
     let active_indexing: Signal<Option<IndexingDto>> = Signal::derive(move || {
-        let pid = selection.pipeline_id.get()?;
+        let pid = selection.index_profile_id.get()?;
         indexings
             .get()
             .into_iter()
-            .find(|ix| ix.pipeline_configuration_id == pid && !ix.removed)
+            .find(|ix| ix.index_profile_id == pid && !ix.removed)
     });
 
     let chunk_status: Signal<ChunkStatus> =
@@ -34,8 +34,8 @@ pub fn ChunkStep(
         if busy.get_untracked() {
             return;
         }
-        let Some(pipeline_id) = selection.pipeline_id.get() else {
-            set_error.set(Some("Pick a pipeline first.".into()));
+        let Some(index_profile_id) = selection.index_profile_id.get() else {
+            set_error.set(Some("Pick an index profile first.".into()));
             return;
         };
         let Some(chunking_id) = selection.chunking_id.get() else {
@@ -57,7 +57,7 @@ pub fn ChunkStep(
         set_error.set(None);
 
         spawn_local(async move {
-            match request_indexing(slug, pipeline_id, config, false).await {
+            match request_indexing(slug, index_profile_id, config, false).await {
                 Ok(_) => {
                     set_busy.set(false);
                 }
@@ -96,7 +96,7 @@ pub fn ChunkStep(
                         type="button"
                         class="btn btn-primary"
                         disabled=move || busy.get()
-                            || selection.pipeline_id.get().is_none()
+                            || selection.index_profile_id.get().is_none()
                             || selection.chunking_id.get().is_none()
                         on:click=run_chunk
                     >
@@ -227,7 +227,7 @@ fn ChunkPreview(active_indexing: Signal<Option<IndexingDto>>) -> impl IntoView {
                 let Some(ix) = active_indexing.get() else {
                     return view! {
                         <EmptyState
-                            title="Pick a pipeline to begin"
+                            title="Pick an index profile to begin"
                             body="Once you run chunking, the resulting chunks appear here.".to_string()
                         />
                     }.into_any();

@@ -31,6 +31,7 @@ pub trait ConnectorSyncRepository: Send + Sync {
         &self,
         connector_id: Uuid,
         limit: u32,
+        offset: u32,
     ) -> Result<Vec<ConnectorSyncSummary>, ConnectorSyncRepositoryError>;
 
     async fn latest_for_connector(

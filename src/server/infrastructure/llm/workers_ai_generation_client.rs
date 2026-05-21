@@ -10,8 +10,10 @@ use tracing::info;
 use crate::server::application::llm::ports::{
     GenerationClient, GenerationRequest, GenerationResponse, GenerationResponseFormat,
 };
+use crate::server::application::llm::GenerationClientRegistry;
 use crate::server::application::AppError;
 use crate::server::infrastructure::shared::clients::{CloudflareApi, CLOUDFLARE_API_BASE};
+use crate::shared::reference_data::AiProviderKind;
 
 pub struct WorkersAiGenerationClient {
     api: Arc<CloudflareApi>,
@@ -21,6 +23,13 @@ impl WorkersAiGenerationClient {
     pub fn new(api: Arc<CloudflareApi>) -> Arc<Self> {
         Arc::new(Self { api })
     }
+}
+
+pub fn register(registry: &mut GenerationClientRegistry, api: Arc<CloudflareApi>) {
+    registry.register(
+        AiProviderKind::Cloudflare,
+        WorkersAiGenerationClient::new(api),
+    );
 }
 
 #[derive(Serialize)]

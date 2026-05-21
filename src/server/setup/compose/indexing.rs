@@ -5,7 +5,7 @@ use sqlx::PgPool;
 use tokio::sync::Notify;
 
 use crate::server::application::chunking::ChunkerRegistry;
-use crate::server::application::configuration::PipelineResolver;
+use crate::server::application::configuration::IndexProfileResolver;
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::indexing::ports::KvStore;
 use crate::server::application::indexing::{
@@ -39,7 +39,7 @@ pub struct IndexingDeps<'a> {
     pub chunker_registry: Arc<ChunkerRegistry>,
     pub embedding_service: Arc<EmbeddingService>,
     pub vector_index_resolver: Arc<VectorIndexResolver>,
-    pub pipeline_resolver: Arc<PipelineResolver>,
+    pub index_profile_resolver: Arc<IndexProfileResolver>,
     pub kv_store: Arc<dyn KvStore>,
     pub wakeups: &'a mut HashMap<String, Arc<Notify>>,
 }
@@ -58,7 +58,7 @@ impl IndexingServices {
             chunker_registry,
             embedding_service,
             vector_index_resolver,
-            pipeline_resolver,
+            index_profile_resolver,
             kv_store,
             wakeups,
         } = deps;
@@ -81,7 +81,7 @@ impl IndexingServices {
             embedding_service,
             Arc::clone(&repos.embedding_set),
             vector_index_resolver,
-            pipeline_resolver,
+            index_profile_resolver,
             kv_store,
             Arc::clone(&wirings.indexing.command_processor),
             job_registry,

@@ -216,7 +216,7 @@ pub(super) fn RegistryDeleteDialog(
         <Dialog
             open=Signal::derive(move || target.get().is_some())
             title="Confirm delete".to_string()
-            subtitle="Downstream pipelines referencing this entry must be removed first.".to_string()
+            subtitle="Downstream profiles referencing this entry must be removed first.".to_string()
             on_close=close
         >
             <div class="space-y-4">

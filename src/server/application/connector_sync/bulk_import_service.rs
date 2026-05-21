@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::server::application::configuration::{
-    ChunkingConfigurationQueryService, PipelineResolver,
+    ChunkingConfigurationQueryService, IndexProfileResolver,
 };
 use crate::server::application::source_document::SourceDocumentIngestService;
 use crate::server::application::AppError;
@@ -25,19 +25,19 @@ pub struct BulkImportResult {
 
 pub struct BulkImportService {
     ingest_service: Arc<SourceDocumentIngestService>,
-    pipeline_resolver: Arc<PipelineResolver>,
+    index_profile_resolver: Arc<IndexProfileResolver>,
     chunking_query_service: Arc<ChunkingConfigurationQueryService>,
 }
 
 impl BulkImportService {
     pub fn new(
         ingest_service: Arc<SourceDocumentIngestService>,
-        pipeline_resolver: Arc<PipelineResolver>,
+        index_profile_resolver: Arc<IndexProfileResolver>,
         chunking_query_service: Arc<ChunkingConfigurationQueryService>,
     ) -> Arc<Self> {
         Arc::new(Self {
             ingest_service,
-            pipeline_resolver,
+            index_profile_resolver,
             chunking_query_service,
         })
     }
@@ -48,9 +48,9 @@ impl BulkImportService {
         source_ref_keys: Vec<String>,
         index_after_import: bool,
     ) -> Result<BulkImportResult, AppError> {
-        let resolved_pipeline = if index_after_import {
+        let resolved_index_profile = if index_after_import {
             Some(
-                self.pipeline_resolver
+                self.index_profile_resolver
                     .resolve_for_connector(connector_id)
                     .await?,
             )
@@ -96,15 +96,10 @@ impl BulkImportService {
             };
             imported += 1;
 
-            if let (Some(pipeline), Some(chunking)) = (&resolved_pipeline, &chunking_config) {
+            if let (Some(profile), Some(chunking)) = (&resolved_index_profile, &chunking_config) {
                 match self
                     .ingest_service
-                    .request_indexing(
-                        source_ref,
-                        pipeline.pipeline_configuration_id,
-                        *chunking,
-                        true,
-                    )
+                    .request_indexing(source_ref, profile.index_profile_id, *chunking, true)
                     .await
                 {
                     Ok(_) => indexed += 1,

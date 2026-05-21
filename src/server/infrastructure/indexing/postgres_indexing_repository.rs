@@ -28,7 +28,7 @@ impl IndexingRepository for PostgresIndexingRepository {
         let row: Option<IndexingRow> = sqlx::query_as(
             "
             SELECT
-                indexing_id, document_id, pipeline_configuration_id, document_version,
+                indexing_id, document_id, index_profile_id, document_version,
                 chunking_config, chunk_set_id, embedding_set_id, status, failure_stage,
                 attempts, removed, auto_advance
             FROM indexings
@@ -52,14 +52,14 @@ impl IndexingRepository for PostgresIndexingRepository {
         sqlx::query(
             "
             INSERT INTO indexings (
-                indexing_id, document_id, pipeline_configuration_id, document_version,
+                indexing_id, document_id, index_profile_id, document_version,
                 chunking_config, chunk_set_id, embedding_set_id, status, failure_stage,
                 attempts, removed, auto_advance, updated_at
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
             ON CONFLICT (indexing_id) DO UPDATE SET
                 document_id = EXCLUDED.document_id,
-                pipeline_configuration_id = EXCLUDED.pipeline_configuration_id,
+                index_profile_id = EXCLUDED.index_profile_id,
                 document_version = EXCLUDED.document_version,
                 chunking_config = EXCLUDED.chunking_config,
                 chunk_set_id = EXCLUDED.chunk_set_id,
@@ -74,7 +74,7 @@ impl IndexingRepository for PostgresIndexingRepository {
         )
         .bind(read_model.indexing_id)
         .bind(read_model.document_id)
-        .bind(read_model.pipeline_configuration_id)
+        .bind(read_model.index_profile_id)
         .bind(read_model.document_version as i32)
         .bind(&chunking_config)
         .bind(read_model.chunk_set_id)
@@ -98,7 +98,7 @@ impl IndexingRepository for PostgresIndexingRepository {
         let rows: Vec<IndexingRow> = sqlx::query_as(
             "
             SELECT
-                indexing_id, document_id, pipeline_configuration_id, document_version,
+                indexing_id, document_id, index_profile_id, document_version,
                 chunking_config, chunk_set_id, embedding_set_id, status, failure_stage,
                 attempts, removed, auto_advance
             FROM indexings
@@ -125,7 +125,7 @@ impl IndexingRepository for PostgresIndexingRepository {
         let rows: Vec<IndexingRow> = sqlx::query_as(
             "
             SELECT
-                indexing_id, document_id, pipeline_configuration_id, document_version,
+                indexing_id, document_id, index_profile_id, document_version,
                 chunking_config, chunk_set_id, embedding_set_id, status, failure_stage,
                 attempts, removed, auto_advance
             FROM indexings
@@ -146,7 +146,7 @@ impl IndexingRepository for PostgresIndexingRepository {
 struct IndexingRow {
     indexing_id: Uuid,
     document_id: Uuid,
-    pipeline_configuration_id: Uuid,
+    index_profile_id: Uuid,
     document_version: i32,
     chunking_config: serde_json::Value,
     chunk_set_id: Option<Uuid>,
@@ -171,7 +171,7 @@ impl TryFrom<IndexingRow> for IndexingReadModel {
         Ok(Self {
             indexing_id: row.indexing_id,
             document_id: row.document_id,
-            pipeline_configuration_id: row.pipeline_configuration_id,
+            index_profile_id: row.index_profile_id,
             document_version: row.document_version as u32,
             chunking_config,
             chunk_set_id: row.chunk_set_id,

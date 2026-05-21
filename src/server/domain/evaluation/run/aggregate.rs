@@ -70,7 +70,8 @@ pub struct ScoredVariantKey {
 pub struct EvaluationRun {
     pub run_id: Uuid,
     pub dataset_id: Uuid,
-    pub pipeline_configuration_id: Uuid,
+    pub index_profile_id: Uuid,
+    pub retrieval_profile_id: Option<Uuid>,
     pub document_id: Uuid,
     pub document_version: u32,
     pub variants: Vec<ChunkingVariant>,
@@ -90,7 +91,8 @@ impl EvaluationRun {
         Self {
             run_id: e.run_id,
             dataset_id: e.dataset_id,
-            pipeline_configuration_id: e.pipeline_configuration_id,
+            index_profile_id: e.index_profile_id,
+            retrieval_profile_id: e.retrieval_profile_id,
             document_id: e.document_id,
             document_version: e.document_version,
             variants: e.variants.to_vec(),
@@ -193,7 +195,8 @@ impl Aggregate for EvaluationRun {
                 None => Ok(vec![Self::Event::RunRequested(RunRequested {
                     run_id: cmd.run_id,
                     dataset_id: cmd.dataset_id,
-                    pipeline_configuration_id: cmd.pipeline_configuration_id,
+                    index_profile_id: cmd.index_profile_id,
+                    retrieval_profile_id: cmd.retrieval_profile_id,
                     document_id: cmd.document_id,
                     document_version: cmd.document_version,
                     variants: cmd.variants.into_iter().collect(),
@@ -378,7 +381,6 @@ mod tests {
             document_content_hash: "abc123".to_string(),
             dataset_content_hash: "abc123".to_string(),
             embedding_model_snapshot: serde_json::Value::Null,
-            generation_model_snapshot: serde_json::Value::Null,
         }
     }
 
@@ -387,7 +389,8 @@ mod tests {
         EvaluationRunCommand::RequestRun(RequestRun {
             run_id,
             dataset_id,
-            pipeline_configuration_id: Uuid::new_v4(),
+            index_profile_id: Uuid::new_v4(),
+            retrieval_profile_id: None,
             document_id: Uuid::new_v4(),
             document_version: 1,
             variants: vec![ChunkingVariant {
@@ -407,7 +410,8 @@ mod tests {
         EvaluationRunEvent::RunRequested(RunRequested {
             run_id,
             dataset_id,
-            pipeline_configuration_id: Uuid::new_v4(),
+            index_profile_id: Uuid::new_v4(),
+            retrieval_profile_id: None,
             document_id: Uuid::new_v4(),
             document_version: 1,
             variants: vec![ChunkingVariant {
@@ -752,7 +756,8 @@ mod tests {
             let cmd = EvaluationRunCommand::RequestRun(RequestRun {
                 run_id,
                 dataset_id,
-                pipeline_configuration_id: Uuid::new_v4(),
+                index_profile_id: Uuid::new_v4(),
+                retrieval_profile_id: None,
                 document_id: Uuid::new_v4(),
                 document_version: 1,
                 variants: vec![],
@@ -809,7 +814,8 @@ mod tests {
         let cmd = EvaluationRunCommand::RequestRun(RequestRun {
             run_id,
             dataset_id,
-            pipeline_configuration_id: Uuid::new_v4(),
+            index_profile_id: Uuid::new_v4(),
+            retrieval_profile_id: None,
             document_id: Uuid::new_v4(),
             document_version: 1,
             variants,
@@ -847,7 +853,8 @@ mod tests {
         let cmd = EvaluationRunCommand::RequestRun(RequestRun {
             run_id,
             dataset_id,
-            pipeline_configuration_id: Uuid::new_v4(),
+            index_profile_id: Uuid::new_v4(),
+            retrieval_profile_id: None,
             document_id: Uuid::new_v4(),
             document_version: 1,
             variants,

@@ -3,7 +3,8 @@ pub mod chunking_configuration;
 pub mod defaults;
 pub mod embedding_model;
 pub mod generation_model;
-pub mod pipeline_configuration;
+pub mod index_profile;
+pub mod retrieval_profile;
 pub mod sweep_template;
 pub mod vector_index;
 

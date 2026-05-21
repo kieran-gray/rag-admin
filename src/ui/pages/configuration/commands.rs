@@ -6,12 +6,13 @@ use uuid::Uuid;
 
 use crate::server_functions::configuration::{
     apply_chunking_configuration_command, apply_embedding_model_command,
-    apply_generation_model_command, apply_pipeline_configuration_command,
+    apply_generation_model_command, apply_index_profile_command, apply_retrieval_profile_command,
     apply_sweep_template_command, apply_vector_index_command,
 };
 use crate::shared::contracts::{
     ChunkingConfigurationCommandDto, EmbeddingModelCommandDto, GenerationModelCommandDto,
-    PipelineConfigurationCommandDto, SweepTemplateCommandDto, VectorIndexCommandDto,
+    IndexProfileCommandDto, RetrievalProfileCommandDto, SweepTemplateCommandDto,
+    VectorIndexCommandDto,
 };
 use crate::ui::components::primitives::InlineStatusMessage;
 
@@ -89,8 +90,8 @@ pub fn run_vector_index_command<F>(
     );
 }
 
-pub fn run_pipeline_configuration_command<F>(
-    command: PipelineConfigurationCommandDto,
+pub fn run_index_profile_command<F>(
+    command: IndexProfileCommandDto,
     success_message: &'static str,
     set_busy: WriteSignal<bool>,
     set_status: WriteSignal<Option<InlineStatusMessage>>,
@@ -101,11 +102,29 @@ pub fn run_pipeline_configuration_command<F>(
     F: FnOnce() + 'static,
 {
     run_command(
-        async move {
-            apply_pipeline_configuration_command(command)
-                .await
-                .map(|_| ())
-        },
+        async move { apply_index_profile_command(command).await.map(|_| ()) },
+        success_message,
+        set_busy,
+        set_status,
+        dialog_status,
+        set_refresh,
+        on_success,
+    );
+}
+
+pub fn run_retrieval_profile_command<F>(
+    command: RetrievalProfileCommandDto,
+    success_message: &'static str,
+    set_busy: WriteSignal<bool>,
+    set_status: WriteSignal<Option<InlineStatusMessage>>,
+    dialog_status: Option<WriteSignal<Option<String>>>,
+    set_refresh: WriteSignal<u32>,
+    on_success: F,
+) where
+    F: FnOnce() + 'static,
+{
+    run_command(
+        async move { apply_retrieval_profile_command(command).await.map(|_| ()) },
         success_message,
         set_busy,
         set_status,

@@ -1,11 +1,11 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use uuid::Uuid;
 
 use crate::server::application::llm::ports::{
-    GenerationClient, GenerationRequest, GenerationResponse, GenerationResponseFormat,
+    GenerationRequest, GenerationResponse, GenerationResponseFormat,
 };
+use crate::server::application::llm::GenerationClientRegistry;
 use crate::server::application::AppError;
 use crate::server::domain::configuration::generation_model::GenerationModelRepository;
 use crate::shared::reference_data::AiProviderKind;
@@ -26,13 +26,13 @@ pub struct GenerationPrompt {
 }
 
 pub struct GenerationService {
-    clients: HashMap<AiProviderKind, Arc<dyn GenerationClient>>,
+    clients: GenerationClientRegistry,
     generation_models: Arc<dyn GenerationModelRepository>,
 }
 
 impl GenerationService {
     pub fn new(
-        clients: HashMap<AiProviderKind, Arc<dyn GenerationClient>>,
+        clients: GenerationClientRegistry,
         generation_models: Arc<dyn GenerationModelRepository>,
     ) -> Arc<Self> {
         Arc::new(Self {

@@ -1,30 +1,30 @@
 use leptos::prelude::*;
 use uuid::Uuid;
 
-use crate::shared::contracts::{ChunkingConfigurationDto, IndexingDto, PipelineConfigurationDto};
+use crate::shared::contracts::{ChunkingConfigurationDto, IndexProfileDto, IndexingDto};
 
 #[derive(Clone, Copy)]
 pub struct ConfigSelection {
-    pub pipeline_id: RwSignal<Option<Uuid>>,
+    pub index_profile_id: RwSignal<Option<Uuid>>,
     pub chunking_id: RwSignal<Option<Uuid>>,
 }
 
 impl ConfigSelection {
     pub fn new(
-        pipelines: &[PipelineConfigurationDto],
+        index_profiles: &[IndexProfileDto],
         chunking: &[ChunkingConfigurationDto],
         indexings: &[IndexingDto],
     ) -> Self {
-        let initial_pipeline = indexings
+        let initial_index_profile = indexings
             .iter()
             .find(|i| !i.removed)
-            .map(|i| i.pipeline_configuration_id)
+            .map(|i| i.index_profile_id)
             .or_else(|| {
-                pipelines
+                index_profiles
                     .iter()
                     .find(|p| p.is_default)
-                    .or_else(|| pipelines.first())
-                    .map(|p| p.pipeline_configuration_id)
+                    .or_else(|| index_profiles.first())
+                    .map(|p| p.index_profile_id)
             });
 
         let initial_chunking = chunking
@@ -34,7 +34,7 @@ impl ConfigSelection {
             .map(|c| c.chunking_configuration_id);
 
         Self {
-            pipeline_id: RwSignal::new(initial_pipeline),
+            index_profile_id: RwSignal::new(initial_index_profile),
             chunking_id: RwSignal::new(initial_chunking),
         }
     }

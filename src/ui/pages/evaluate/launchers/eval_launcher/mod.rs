@@ -7,7 +7,7 @@ use leptos::prelude::*;
 use uuid::Uuid;
 
 use crate::shared::contracts::{
-    ChunkingConfigurationDto, PipelineConfigurationDto, RunEvaluationRequestDto, SweepTemplateDto,
+    ChunkingConfigurationDto, IndexProfileDto, RunEvaluationRequestDto, SweepTemplateDto,
 };
 use crate::shared::reference_data::ChunkStrategy;
 use crate::shared::{ChunkingVariant, EvaluationAutotuneRequest, EvaluationRunOptions};
@@ -51,12 +51,12 @@ pub struct LauncherCallbacks {
 
 #[component]
 pub fn EvaluationLauncher(
-    pipelines: StoredValue<Vec<PipelineConfigurationDto>>,
+    index_profiles: StoredValue<Vec<IndexProfileDto>>,
     chunking_configurations: StoredValue<Vec<ChunkingConfigurationDto>>,
     sweep_templates: StoredValue<Vec<SweepTemplateDto>>,
     active_dataset: ReadSignal<Option<Uuid>>,
-    active_pipeline: ReadSignal<Option<Uuid>>,
-    set_active_pipeline: WriteSignal<Option<Uuid>>,
+    active_index_profile: ReadSignal<Option<Uuid>>,
+    set_active_index_profile: WriteSignal<Option<Uuid>>,
     running: ReadSignal<bool>,
     callbacks: LauncherCallbacks,
 ) -> impl IntoView {
@@ -82,18 +82,7 @@ pub fn EvaluationLauncher(
 
     let (custom_variants, set_custom_variants) = signal::<Vec<ChunkingVariant>>(Vec::new());
 
-    let active_gen_model: Signal<Uuid> = Signal::derive(move || {
-        active_pipeline
-            .get()
-            .and_then(|pid| {
-                pipelines.with_value(|ps| {
-                    ps.iter()
-                        .find(|p| p.pipeline_configuration_id == pid)
-                        .map(|p| p.generation_model_id)
-                })
-            })
-            .unwrap_or_else(Uuid::nil)
-    });
+    let active_gen_model: Signal<Uuid> = Signal::derive(Uuid::nil);
 
     let initial_sweep_template_id = sweep_templates.with_value(|tpls| {
         let stored = load_sweep_template_pref()
@@ -265,7 +254,7 @@ pub fn EvaluationLauncher(
         let Some(dataset_id) = active_dataset.get() else {
             return;
         };
-        let Some(pipeline_id) = active_pipeline.get() else {
+        let Some(index_profile_id) = active_index_profile.get() else {
             return;
         };
         let variants = match variants_computed.get() {
@@ -284,7 +273,8 @@ pub fn EvaluationLauncher(
 
         callbacks.on_start.run(RunEvaluationRequestDto {
             dataset_id,
-            pipeline_configuration_id: pipeline_id,
+            index_profile_id,
+            retrieval_profile_id: None,
             variants,
             options,
             autotune,
@@ -294,7 +284,7 @@ pub fn EvaluationLauncher(
     let can_start = move || {
         !running.get()
             && active_dataset.get().is_some()
-            && active_pipeline.get().is_some()
+            && active_index_profile.get().is_some()
             && cost_summary.with(Result::is_ok)
     };
 
@@ -315,10 +305,10 @@ pub fn EvaluationLauncher(
                         }).collect_view()}
                 </div>
 
-                <PipelineRow
-                    pipelines=pipelines
-                    active_pipeline=active_pipeline
-                    set_active_pipeline=set_active_pipeline
+                <IndexProfileRow
+                    index_profiles=index_profiles
+                    active_index_profile=active_index_profile
+                    set_active_index_profile=set_active_index_profile
                 />
 
                 <Section
@@ -401,8 +391,8 @@ pub fn EvaluationLauncher(
                             "Running…"
                         } else if active_dataset.get().is_none() {
                             "Select a dataset"
-                        } else if active_pipeline.get().is_none() {
-                            "Select a pipeline"
+                        } else if active_index_profile.get().is_none() {
+                            "Select an index profile"
                         } else if cost_summary.with(Result::is_err) {
                             "Fix errors above"
                         } else {
@@ -447,31 +437,31 @@ fn Section(
 }
 
 #[component]
-fn PipelineRow(
-    pipelines: StoredValue<Vec<PipelineConfigurationDto>>,
-    active_pipeline: ReadSignal<Option<Uuid>>,
-    set_active_pipeline: WriteSignal<Option<Uuid>>,
+fn IndexProfileRow(
+    index_profiles: StoredValue<Vec<IndexProfileDto>>,
+    active_index_profile: ReadSignal<Option<Uuid>>,
+    set_active_index_profile: WriteSignal<Option<Uuid>>,
 ) -> impl IntoView {
     view! {
         <div class="flex items-center gap-3">
-            <span class="eyebrow shrink-0">"Pipeline"</span>
+            <span class="eyebrow shrink-0">"Index profile"</span>
             <select
                 class="input max-w-md"
                 on:change=move |ev| {
                     let v = event_target_value(&ev);
                     if v.is_empty() {
-                        set_active_pipeline.set(None);
+                        set_active_index_profile.set(None);
                     } else if let Ok(id) = v.parse::<Uuid>() {
-                        set_active_pipeline.set(Some(id));
+                        set_active_index_profile.set(Some(id));
                     }
                 }
             >
-                <option value="">"— select pipeline —"</option>
+                <option value="">"— select index profile —"</option>
                 {move || {
-                    let ps = pipelines.get_value();
+                    let ps = index_profiles.get_value();
                     ps.into_iter().map(|pc| {
-                        let id = pc.pipeline_configuration_id;
-                        let selected = active_pipeline.get() == Some(id);
+                        let id = pc.index_profile_id;
+                        let selected = active_index_profile.get() == Some(id);
                         view! {
                             <option value=id.to_string() selected=selected>
                                 {pc.name}

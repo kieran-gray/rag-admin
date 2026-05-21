@@ -8,14 +8,12 @@ use steps::{ChunkStep, ConfigSelection, DocumentStep, EmbedStep, IndexStep};
 
 use super::shared::{document_type_label, indexing_milestone, indexing_summary, short_hash};
 
-use crate::server_functions::configuration::{
-    get_chunking_configurations, get_pipeline_configurations,
-};
+use crate::server_functions::configuration::{get_chunking_configurations, get_index_profiles};
 use crate::server_functions::source_document::{
     delete_document, get_document_detail_by_source_ref,
 };
 use crate::shared::contracts::{
-    aggregate_type, ChunkingConfigurationDto, IndexingDto, PipelineConfigurationDto,
+    aggregate_type, ChunkingConfigurationDto, IndexProfileDto, IndexingDto,
     SourceDocumentDetailDto, SourceDocumentDto,
 };
 use crate::ui::components::app::event_bus::use_invalidator;
@@ -48,19 +46,19 @@ pub fn DocumentDetailPage() -> impl IntoView {
         },
     );
 
-    let pipeline_invalidator = use_invalidator(|e| {
+    let index_profile_invalidator = use_invalidator(|e| {
         e.from_any(&[
             aggregate_type::EMBEDDING_MODEL_CATALOG,
             aggregate_type::GENERATION_MODEL_CATALOG,
             aggregate_type::VECTOR_INDEX_CATALOG,
         ])
     });
-    let pipelines = Resource::new(
-        move || pipeline_invalidator.get(),
-        |_| async move { get_pipeline_configurations().await.unwrap_or_default() },
+    let index_profiles = Resource::new(
+        move || index_profile_invalidator.get(),
+        |_| async move { get_index_profiles().await.unwrap_or_default() },
     );
     let chunking_configurations = Resource::new(
-        move || pipeline_invalidator.get(),
+        move || index_profile_invalidator.get(),
         |_| async move { get_chunking_configurations().await.unwrap_or_default() },
     );
     view! {
@@ -69,7 +67,7 @@ pub fn DocumentDetailPage() -> impl IntoView {
                 <p class="muted">"Loading document…"</p>
             }>
                 {move || {
-                    let pipelines = pipelines.get().unwrap_or_default();
+                    let index_profiles = index_profiles.get().unwrap_or_default();
                     let chunking_configurations = chunking_configurations.get().unwrap_or_default();
                     detail.get().map(|res| match res {
                         Err(e) => view! {
@@ -86,7 +84,7 @@ pub fn DocumentDetailPage() -> impl IntoView {
                         Ok(Some(existing)) => view! {
                             <DocumentWorkspace
                                 detail=existing
-                                pipelines=pipelines
+                                index_profiles=index_profiles
                                 chunking_configurations=chunking_configurations
                                 source_ref=source_ref.get()
                                 initial_tab=initial_tab.get()
@@ -147,7 +145,7 @@ enum StepState {
 #[component]
 fn DocumentWorkspace(
     detail: SourceDocumentDetailDto,
-    pipelines: Vec<PipelineConfigurationDto>,
+    index_profiles: Vec<IndexProfileDto>,
     chunking_configurations: Vec<ChunkingConfigurationDto>,
     source_ref: String,
     initial_tab: Option<WorkflowStep>,
@@ -156,22 +154,23 @@ fn DocumentWorkspace(
         derive_header(&detail.document, &detail.indexings);
     let (status_kind, status_label) = header_status;
 
-    let selection = ConfigSelection::new(&pipelines, &chunking_configurations, &detail.indexings);
+    let selection =
+        ConfigSelection::new(&index_profiles, &chunking_configurations, &detail.indexings);
     let initial_step_value = initial_tab.unwrap_or_else(|| initial_step(&detail.indexings));
     let (active_step, set_active_step) = signal(initial_step_value);
 
-    let pipelines_stored = StoredValue::new(pipelines.clone());
+    let index_profiles_stored = StoredValue::new(index_profiles.clone());
     let chunking_stored = StoredValue::new(chunking_configurations.clone());
     let indexings_stored = StoredValue::new(detail.indexings.clone());
     let indexings_signal: Signal<Vec<IndexingDto>> =
         Signal::derive(move || indexings_stored.get_value());
 
     let active_indexing: Signal<Option<IndexingDto>> = Signal::derive(move || {
-        let pid = selection.pipeline_id.get()?;
+        let pid = selection.index_profile_id.get()?;
         indexings_signal
             .get()
             .into_iter()
-            .find(|ix| ix.pipeline_configuration_id == pid && !ix.removed)
+            .find(|ix| ix.index_profile_id == pid && !ix.removed)
     });
 
     let step_state = move |step: WorkflowStep| -> StepState {
@@ -295,7 +294,7 @@ fn DocumentWorkspace(
                         WorkflowStep::Document => view! {
                             <DocumentStep
                                 selection=selection
-                                pipelines=pipelines_stored
+                                index_profiles=index_profiles_stored
                                 chunking_configurations=chunking_stored
                                 indexings=indexings_signal
                                 source_ref=source_ref
@@ -314,7 +313,7 @@ fn DocumentWorkspace(
                         WorkflowStep::Embed => view! {
                             <EmbedStep
                                 selection=selection
-                                pipelines=pipelines_stored
+                                index_profiles=index_profiles_stored
                                 indexings=indexings_signal
                                 on_back=on_back_to_chunk
                                 on_advance=on_advance_to_index
@@ -323,7 +322,7 @@ fn DocumentWorkspace(
                         WorkflowStep::Index => view! {
                             <IndexStep
                                 selection=selection
-                                pipelines=pipelines_stored
+                                index_profiles=index_profiles_stored
                                 indexings=indexings_signal
                                 on_back=on_back_to_embed
                             />

@@ -38,10 +38,11 @@ pub async fn run_connector_sync(connector_id: uuid::Uuid) -> Result<uuid::Uuid, 
 pub async fn list_connector_syncs(
     connector_id: uuid::Uuid,
     limit: u32,
+    offset: u32,
 ) -> Result<Vec<ConnectorSyncSummaryDto>, ServerFnError> {
     let summaries = ctx::<Arc<ConnectorServices>>()?
         .connector_sync_query_service
-        .list_syncs(connector_id, limit)
+        .list_syncs(connector_id, limit, offset)
         .await
         .map_err(|e| map_app_error(&e))?;
     Ok(summaries

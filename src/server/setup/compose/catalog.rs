@@ -8,15 +8,14 @@ use crate::server::application::configuration::{
     ChunkingConfigurationCatalogCommandHandler, ChunkingConfigurationQueryService,
     ConfigurationDefaultsCommandHandler, ConfigurationQueryService,
     EmbeddingModelCatalogCommandHandler, GenerationModelCatalogCommandHandler,
-    PipelineConfigurationCatalogCommandHandler, PipelineConfigurationQueryService,
-    PipelineResolver, SweepTemplateCommandHandler, SweepTemplateQueryService,
-    VectorIndexCatalogCommandHandler,
+    IndexProfileCatalogCommandHandler, IndexProfileQueryService, IndexProfileResolver,
+    RetrievalProfileCatalogCommandHandler, RetrievalProfileQueryService, RetrievalProfileResolver,
+    SweepTemplateCommandHandler, SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
 };
 use crate::server::application::embedding::EmbeddingService;
-use crate::server::application::indexing::VectorIndexResolver;
+use crate::server::application::indexing::{VectorIndexProviderRegistry, VectorIndexResolver};
 use crate::server::application::llm::GenerationService;
 use crate::server::application::ports::IdGenerator;
-use crate::server::application::source_document::ports::VectorIndexProvider;
 use crate::server::domain::configuration::chunking_configuration::{
     make_chunking_configuration_projector, ChunkingConfigurationCatalog,
 };
@@ -29,8 +28,11 @@ use crate::server::domain::configuration::embedding_model::{
 use crate::server::domain::configuration::generation_model::{
     make_generation_model_projector, GenerationModelCatalog,
 };
-use crate::server::domain::configuration::pipeline_configuration::{
-    make_pipeline_configuration_projector, PipelineConfigurationCatalog,
+use crate::server::domain::configuration::index_profile::{
+    make_index_profile_projector, IndexProfileCatalog,
+};
+use crate::server::domain::configuration::retrieval_profile::{
+    make_retrieval_profile_projector, RetrievalProfileCatalog,
 };
 use crate::server::domain::configuration::sweep_template::{SweepTemplate, SweepTemplateProjector};
 use crate::server::domain::configuration::vector_index::{
@@ -38,27 +40,29 @@ use crate::server::domain::configuration::vector_index::{
 };
 use crate::server::infrastructure::shared::clients::CloudflareApi;
 use crate::server::infrastructure::vector::{
-    CloudflareVectorIndexProvider, PostgresVectorIndexProvider,
+    cloudflare_vector_index_factory as cf_vector, postgres_vector_index as pg_vector,
 };
 use crate::server::setup::compose::aggregates::{spawn_driver, AggregateWirings};
 use crate::server::setup::compose::repositories::Repositories;
 use crate::server::setup::exceptions::SetupError;
-use crate::shared::reference_data::VectorStoreKind;
 use event_sourcing::event_bus::EventBus;
 
 pub struct CatalogServices {
     pub embedding_model_command_handler: Arc<EmbeddingModelCatalogCommandHandler>,
     pub generation_model_command_handler: Arc<GenerationModelCatalogCommandHandler>,
     pub vector_index_command_handler: Arc<VectorIndexCatalogCommandHandler>,
-    pub pipeline_configuration_command_handler: Arc<PipelineConfigurationCatalogCommandHandler>,
+    pub index_profile_command_handler: Arc<IndexProfileCatalogCommandHandler>,
+    pub retrieval_profile_command_handler: Arc<RetrievalProfileCatalogCommandHandler>,
     pub chunking_configuration_command_handler: Arc<ChunkingConfigurationCatalogCommandHandler>,
     pub sweep_template_command_handler: Arc<SweepTemplateCommandHandler>,
     pub configuration_defaults_command_handler: Arc<ConfigurationDefaultsCommandHandler>,
     pub configuration_query_service: Arc<ConfigurationQueryService>,
-    pub pipeline_configuration_query_service: Arc<PipelineConfigurationQueryService>,
+    pub index_profile_query_service: Arc<IndexProfileQueryService>,
+    pub retrieval_profile_query_service: Arc<RetrievalProfileQueryService>,
     pub chunking_configuration_query_service: Arc<ChunkingConfigurationQueryService>,
     pub sweep_template_query_service: Arc<SweepTemplateQueryService>,
-    pub pipeline_resolver: Arc<PipelineResolver>,
+    pub index_profile_resolver: Arc<IndexProfileResolver>,
+    pub retrieval_profile_resolver: Arc<RetrievalProfileResolver>,
     pub vector_index_resolver: Arc<VectorIndexResolver>,
 }
 
@@ -88,27 +92,26 @@ impl CatalogServices {
             wakeups,
         } = deps;
 
-        let vector_providers: HashMap<VectorStoreKind, Arc<dyn VectorIndexProvider>> =
-            HashMap::from([
-                (
-                    VectorStoreKind::CloudflareVectorize,
-                    CloudflareVectorIndexProvider::new(cf_api) as Arc<dyn VectorIndexProvider>,
-                ),
-                (
-                    VectorStoreKind::Postgres,
-                    PostgresVectorIndexProvider::new(pool) as Arc<dyn VectorIndexProvider>,
-                ),
-            ]);
+        let mut vector_providers = VectorIndexProviderRegistry::new();
+        cf_vector::register(&mut vector_providers, cf_api);
+        pg_vector::register(&mut vector_providers, pool);
         let vector_index_resolver =
             VectorIndexResolver::new(vector_providers, Arc::clone(&repos.vector_index));
 
-        let pipeline_resolver = PipelineResolver::new(
-            Arc::clone(&repos.pipeline_configuration),
+        let index_profile_resolver = IndexProfileResolver::new(
+            Arc::clone(&repos.index_profile),
             Arc::clone(&repos.connector),
             Arc::clone(&repos.configuration_defaults),
-            embedding_service,
-            generation_service,
+            Arc::clone(&embedding_service),
             Arc::clone(&vector_index_resolver),
+        );
+
+        let retrieval_profile_resolver = RetrievalProfileResolver::new(
+            Arc::clone(&repos.retrieval_profile),
+            Arc::clone(&repos.connector),
+            Arc::clone(&repos.configuration_defaults),
+            Arc::clone(&index_profile_resolver),
+            Arc::clone(&generation_service),
         );
 
         let embedding_model_command_handler = EmbeddingModelCatalogCommandHandler::new(Arc::clone(
@@ -128,14 +131,18 @@ impl CatalogServices {
             Arc::clone(&configuration_defaults_command_handler),
             Arc::clone(&id_generator),
         );
-        let pipeline_configuration_command_handler =
-            PipelineConfigurationCatalogCommandHandler::new(
-                Arc::clone(&wirings.pipeline_configuration.command_processor),
-                Arc::clone(&repos.embedding_model),
-                Arc::clone(&repos.generation_model),
-                Arc::clone(&repos.vector_index),
-                Arc::clone(&configuration_defaults_command_handler),
-            );
+        let index_profile_command_handler = IndexProfileCatalogCommandHandler::new(
+            Arc::clone(&wirings.index_profile.command_processor),
+            Arc::clone(&repos.embedding_model),
+            Arc::clone(&repos.vector_index),
+            Arc::clone(&configuration_defaults_command_handler),
+        );
+        let retrieval_profile_command_handler = RetrievalProfileCatalogCommandHandler::new(
+            Arc::clone(&wirings.retrieval_profile.command_processor),
+            Arc::clone(&repos.index_profile),
+            Arc::clone(&repos.generation_model),
+            Arc::clone(&configuration_defaults_command_handler),
+        );
         let chunking_configuration_command_handler =
             ChunkingConfigurationCatalogCommandHandler::new(
                 Arc::clone(&wirings.chunking_configuration.command_processor),
@@ -146,12 +153,19 @@ impl CatalogServices {
             Arc::clone(&repos.embedding_model),
             Arc::clone(&repos.generation_model),
             Arc::clone(&repos.vector_index),
+            Arc::clone(&repos.index_profile),
+            Arc::clone(&repos.configuration_defaults),
         );
-        let pipeline_configuration_query_service = PipelineConfigurationQueryService::new(
-            Arc::clone(&repos.pipeline_configuration),
+        let index_profile_query_service = IndexProfileQueryService::new(
+            Arc::clone(&repos.index_profile),
             Arc::clone(&repos.embedding_model),
-            Arc::clone(&repos.generation_model),
             Arc::clone(&repos.vector_index),
+            Arc::clone(&repos.configuration_defaults),
+        );
+        let retrieval_profile_query_service = RetrievalProfileQueryService::new(
+            Arc::clone(&repos.retrieval_profile),
+            Arc::clone(&repos.index_profile),
+            Arc::clone(&repos.generation_model),
             Arc::clone(&repos.configuration_defaults),
         );
         let chunking_configuration_query_service = ChunkingConfigurationQueryService::new(
@@ -168,15 +182,18 @@ impl CatalogServices {
             embedding_model_command_handler,
             generation_model_command_handler,
             vector_index_command_handler,
-            pipeline_configuration_command_handler,
+            index_profile_command_handler,
+            retrieval_profile_command_handler,
             chunking_configuration_command_handler,
             sweep_template_command_handler,
             configuration_defaults_command_handler,
             configuration_query_service,
-            pipeline_configuration_query_service,
+            index_profile_query_service,
+            retrieval_profile_query_service,
             chunking_configuration_query_service,
             sweep_template_query_service,
-            pipeline_resolver,
+            index_profile_resolver,
+            retrieval_profile_resolver,
             vector_index_resolver,
         })
     }
@@ -239,12 +256,21 @@ fn spawn_drivers(
         Arc::clone(event_bus),
         wakeups,
     );
-    spawn_driver::<PipelineConfigurationCatalog, ()>(
-        Arc::clone(&wirings.pipeline_configuration.event_store),
-        vec![Arc::new(make_pipeline_configuration_projector(Arc::clone(
-            &repos.pipeline_configuration,
-        )
-            as _))],
+    spawn_driver::<IndexProfileCatalog, ()>(
+        Arc::clone(&wirings.index_profile.event_store),
+        vec![Arc::new(make_index_profile_projector(
+            Arc::clone(&repos.index_profile) as _,
+        ))],
+        None,
+        Arc::clone(&repos.checkpoint),
+        Arc::clone(event_bus),
+        wakeups,
+    );
+    spawn_driver::<RetrievalProfileCatalog, ()>(
+        Arc::clone(&wirings.retrieval_profile.event_store),
+        vec![Arc::new(make_retrieval_profile_projector(
+            Arc::clone(&repos.retrieval_profile) as _,
+        ))],
         None,
         Arc::clone(&repos.checkpoint),
         Arc::clone(event_bus),

@@ -2,9 +2,11 @@ pub mod chunking_configuration_command_handler;
 pub mod configuration_defaults_command_handler;
 pub mod embedding_model_command_handler;
 pub mod generation_model_command_handler;
-pub mod pipeline_configuration_command_handler;
-pub mod pipeline_resolver;
+pub mod index_profile_command_handler;
+pub mod index_profile_resolver;
 pub mod query_service;
+pub mod retrieval_profile_command_handler;
+pub mod retrieval_profile_resolver;
 pub mod sweep_template_command_handler;
 pub mod vector_index_command_handler;
 
@@ -12,11 +14,13 @@ pub use chunking_configuration_command_handler::ChunkingConfigurationCatalogComm
 pub use configuration_defaults_command_handler::ConfigurationDefaultsCommandHandler;
 pub use embedding_model_command_handler::EmbeddingModelCatalogCommandHandler;
 pub use generation_model_command_handler::GenerationModelCatalogCommandHandler;
-pub use pipeline_configuration_command_handler::PipelineConfigurationCatalogCommandHandler;
-pub use pipeline_resolver::{PipelineResolver, ResolvedPipeline};
+pub use index_profile_command_handler::IndexProfileCatalogCommandHandler;
+pub use index_profile_resolver::{IndexProfileResolver, ResolvedIndexProfile};
 pub use query_service::{
-    ChunkingConfigurationQueryService, ConfigurationQueryService,
-    PipelineConfigurationQueryService, SweepTemplateQueryService,
+    ChunkingConfigurationQueryService, ConfigurationQueryService, IndexProfileQueryService,
+    RetrievalProfileQueryService, SweepTemplateQueryService,
 };
+pub use retrieval_profile_command_handler::RetrievalProfileCatalogCommandHandler;
+pub use retrieval_profile_resolver::{ResolvedRetrievalProfile, RetrievalProfileResolver};
 pub use sweep_template_command_handler::SweepTemplateCommandHandler;
 pub use vector_index_command_handler::VectorIndexCatalogCommandHandler;

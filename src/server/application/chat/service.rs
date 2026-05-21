@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
-use crate::server::application::configuration::PipelineResolver;
+use crate::server::application::configuration::RetrievalProfileResolver;
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::indexing::ports::vector_index::VectorQuery;
 use crate::server::application::indexing::VectorIndexResolver;
@@ -24,7 +24,7 @@ struct RetrievedChunk {
 }
 
 pub struct ChatService {
-    pipeline_resolver: Arc<PipelineResolver>,
+    retrieval_profile_resolver: Arc<RetrievalProfileResolver>,
     embedding_service: Arc<EmbeddingService>,
     vector_index_resolver: Arc<VectorIndexResolver>,
     generation_service: Arc<GenerationService>,
@@ -33,14 +33,14 @@ pub struct ChatService {
 
 impl ChatService {
     pub fn new(
-        pipeline_resolver: Arc<PipelineResolver>,
+        retrieval_profile_resolver: Arc<RetrievalProfileResolver>,
         embedding_service: Arc<EmbeddingService>,
         vector_index_resolver: Arc<VectorIndexResolver>,
         generation_service: Arc<GenerationService>,
         source_document_repository: Arc<dyn SourceDocumentRepository>,
     ) -> Arc<Self> {
         Arc::new(Self {
-            pipeline_resolver,
+            retrieval_profile_resolver,
             embedding_service,
             vector_index_resolver,
             generation_service,
@@ -55,21 +55,26 @@ impl ChatService {
         let top_k = req.top_k.clamp(1, 50);
         let min_score = req.min_score.clamp(0.0, 1.0);
 
-        let pipeline = self
-            .pipeline_resolver
-            .resolve(req.pipeline_configuration_id)
+        let profile = self
+            .retrieval_profile_resolver
+            .resolve(req.retrieval_profile_id)
             .await?;
 
         let embeddings = self
             .embedding_service
-            .embed_with_resolved(&pipeline.embedding_model, slice::from_ref(&req.query))
+            .embed_with_resolved(
+                &profile.index_profile.embedding_model,
+                slice::from_ref(&req.query),
+            )
             .await?;
         let query_vector = embeddings
             .into_iter()
             .next()
             .ok_or_else(|| AppError::Internal("embedder returned no vector for query".into()))?;
 
-        let vector_index = self.vector_index_resolver.build(&pipeline.vector_index)?;
+        let vector_index = self
+            .vector_index_resolver
+            .build(&profile.index_profile.vector_index)?;
         let matches = vector_index
             .query(&VectorQuery {
                 vector: query_vector,
@@ -149,7 +154,7 @@ impl ChatService {
             let response = self
                 .generation_service
                 .generate(
-                    pipeline.generation_model.generation_model_id,
+                    profile.generation_model.generation_model_id,
                     GenerationPrompt {
                         system: SYSTEM_PROMPT.to_string(),
                         user: prompt,
@@ -162,10 +167,10 @@ impl ChatService {
         };
 
         Ok(ChatResponse {
-            pipeline_configuration_id: req.pipeline_configuration_id,
+            retrieval_profile_id: req.retrieval_profile_id,
             query: req.query,
             answer,
-            model: pipeline.generation_model.model,
+            model: profile.generation_model.model,
             hits: retrieved.into_iter().map(|r| r.hit).collect(),
         })
     }

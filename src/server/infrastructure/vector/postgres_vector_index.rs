@@ -7,10 +7,12 @@ use sqlx::PgPool;
 use crate::server::application::indexing::ports::vector_index::{
     VectorIndex, VectorIndexDescription, VectorMatch, VectorQuery,
 };
+use crate::server::application::indexing::VectorIndexProviderRegistry;
 use crate::server::application::source_document::ports::VectorIndexProvider;
 use crate::server::application::AppError;
 use crate::server::domain::VectorRecord;
 use crate::server::infrastructure::shared::sql::pgvector_codec::format_vector_literal;
+use crate::shared::reference_data::VectorStoreKind;
 
 pub struct PostgresVectorIndex {
     pool: PgPool,
@@ -122,4 +124,11 @@ impl VectorIndexProvider for PostgresVectorIndexProvider {
     fn build(&self, index_name: &str, dimensions: u32) -> Arc<dyn VectorIndex> {
         PostgresVectorIndex::new(self.pool.clone(), index_name.to_owned(), dimensions)
     }
+}
+
+pub fn register(registry: &mut VectorIndexProviderRegistry, pool: PgPool) {
+    registry.register(
+        VectorStoreKind::Postgres,
+        PostgresVectorIndexProvider::new(pool),
+    );
 }

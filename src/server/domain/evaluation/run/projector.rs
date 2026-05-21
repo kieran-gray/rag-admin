@@ -41,7 +41,8 @@ impl Projector<EvaluationRunEvent> for EvaluationRunProjector {
                         .insert_summary(NewRunSummary {
                             run_id: e.run_id,
                             dataset_id: e.dataset_id,
-                            pipeline_configuration_id: e.pipeline_configuration_id,
+                            index_profile_id: e.index_profile_id,
+                            retrieval_profile_id: e.retrieval_profile_id,
                             document_id: e.document_id,
                             document_version: e.document_version,
                             variants: e.variants.to_vec(),

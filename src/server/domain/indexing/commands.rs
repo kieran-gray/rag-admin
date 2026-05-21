@@ -7,7 +7,7 @@ use super::status::IngestStage;
 
 pub struct RequestIngest {
     pub document_id: Uuid,
-    pub pipeline_configuration_id: Uuid,
+    pub index_profile_id: Uuid,
     pub document_version: u32,
     pub chunking_config: ChunkingConfig,
     pub request_id: Uuid,

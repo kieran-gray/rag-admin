@@ -156,7 +156,7 @@ pub struct SourceDocumentDto {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexingDto {
     pub indexing_id: Uuid,
-    pub pipeline_configuration_id: Uuid,
+    pub index_profile_id: Uuid,
     pub document_version: u32,
     pub status: String,
     pub attempts: u32,

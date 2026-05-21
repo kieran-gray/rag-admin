@@ -161,7 +161,7 @@ fn EmbeddingModelPicker(
         <label class="playground-picker-label">
             <span class="eyebrow">"Model"</span>
             <select
-                class="playground-pipeline-picker"
+                class="playground-profile-picker"
                 disabled=disabled
                 on:change=move |ev| set_value.set(event_target_value(&ev))
             >

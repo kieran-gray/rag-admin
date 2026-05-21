@@ -349,7 +349,7 @@ fn block_to_dto(block: &Block) -> MarkdownBlockDto {
 fn map_indexing_to_dto(i: &IndexingReadModel) -> IndexingDto {
     IndexingDto {
         indexing_id: i.indexing_id,
-        pipeline_configuration_id: i.pipeline_configuration_id,
+        index_profile_id: i.index_profile_id,
         document_version: i.document_version,
         status: format!("{:?}", i.status),
         attempts: i.attempts,

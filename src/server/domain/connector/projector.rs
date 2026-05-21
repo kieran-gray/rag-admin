@@ -44,8 +44,9 @@ impl Projector<ConnectorEvent> for ConnectorProjector {
                             deleted: false,
                             created_at: e.occurred_at.to_string(),
                             updated_at: e.occurred_at.to_string(),
-                            default_pipeline_configuration_id: None,
+                            default_index_profile_id: None,
                             default_chunking_configuration_id: None,
+                            default_retrieval_profile_id: None,
                         })
                         .await?;
                 }
@@ -70,8 +71,9 @@ impl Projector<ConnectorEvent> for ConnectorProjector {
                 }
                 ConnectorEvent::ConnectorDefaultsSet(e) => {
                     if let Some(mut m) = self.repository.load(connector_id).await? {
-                        m.default_pipeline_configuration_id = e.pipeline_configuration_id;
+                        m.default_index_profile_id = e.index_profile_id;
                         m.default_chunking_configuration_id = e.chunking_configuration_id;
+                        m.default_retrieval_profile_id = e.retrieval_profile_id;
                         m.updated_at = e.occurred_at.to_string();
                         self.repository.save(m).await?;
                     }
@@ -254,16 +256,18 @@ mod tests {
 
     fn defaults_set(
         connector_id: Uuid,
-        pipeline: Option<Uuid>,
+        index_profile: Option<Uuid>,
         chunking: Option<Uuid>,
+        retrieval_profile: Option<Uuid>,
         when: &str,
         log_position: i64,
     ) -> EventEnvelope<ConnectorEvent> {
         envelope(
             connector_id,
             ConnectorEvent::ConnectorDefaultsSet(ConnectorDefaultsSet {
-                pipeline_configuration_id: pipeline,
+                index_profile_id: index_profile,
                 chunking_configuration_id: chunking,
+                retrieval_profile_id: retrieval_profile,
                 occurred_at: when.into(),
             }),
             log_position,
@@ -293,8 +297,9 @@ mod tests {
         assert_eq!(m.created_at, "2024-01-01T00:00:00Z");
         assert_eq!(m.updated_at, "2024-01-01T00:00:00Z");
         assert!(!m.deleted);
-        assert!(m.default_pipeline_configuration_id.is_none());
+        assert!(m.default_index_profile_id.is_none());
         assert!(m.default_chunking_configuration_id.is_none());
+        assert!(m.default_retrieval_profile_id.is_none());
         assert!(matches!(m.config, ConnectorConfig::Sitemap(_)));
     }
 
@@ -359,20 +364,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn defaults_set_writes_both_optional_fields() {
+    async fn defaults_set_writes_all_optional_fields() {
         let repo = Arc::new(InMemConnectorRepo::default());
         let projector = ConnectorProjector::new(repo.clone());
         let id = Uuid::new_v4();
-        let pipeline = Uuid::new_v4();
+        let index_profile = Uuid::new_v4();
         let chunking = Uuid::new_v4();
+        let retrieval_profile = Uuid::new_v4();
 
         projector
             .project(&[
                 registered(id, "docs", "https://x", "2024-01-01T00:00:00Z", 1),
                 defaults_set(
                     id,
-                    Some(pipeline),
+                    Some(index_profile),
                     Some(chunking),
+                    Some(retrieval_profile),
                     "2024-04-01T00:00:00Z",
                     2,
                 ),
@@ -381,8 +388,9 @@ mod tests {
             .expect("project");
 
         let m = repo.get(id).unwrap();
-        assert_eq!(m.default_pipeline_configuration_id, Some(pipeline));
+        assert_eq!(m.default_index_profile_id, Some(index_profile));
         assert_eq!(m.default_chunking_configuration_id, Some(chunking));
+        assert_eq!(m.default_retrieval_profile_id, Some(retrieval_profile));
         assert_eq!(m.updated_at, "2024-04-01T00:00:00Z");
     }
 
@@ -399,17 +407,19 @@ mod tests {
                     id,
                     Some(Uuid::new_v4()),
                     Some(Uuid::new_v4()),
+                    Some(Uuid::new_v4()),
                     "2024-04-01T00:00:00Z",
                     2,
                 ),
-                defaults_set(id, None, None, "2024-05-01T00:00:00Z", 3),
+                defaults_set(id, None, None, None, "2024-05-01T00:00:00Z", 3),
             ])
             .await
             .expect("project");
 
         let m = repo.get(id).unwrap();
-        assert!(m.default_pipeline_configuration_id.is_none());
+        assert!(m.default_index_profile_id.is_none());
         assert!(m.default_chunking_configuration_id.is_none());
+        assert!(m.default_retrieval_profile_id.is_none());
         assert_eq!(m.updated_at, "2024-05-01T00:00:00Z");
     }
 
@@ -448,7 +458,14 @@ mod tests {
         let id = Uuid::new_v4();
 
         projector
-            .project(&[defaults_set(id, None, None, "2024-01-01T00:00:00Z", 1)])
+            .project(&[defaults_set(
+                id,
+                None,
+                None,
+                None,
+                "2024-01-01T00:00:00Z",
+                1,
+            )])
             .await
             .expect("project");
 
@@ -474,14 +491,21 @@ mod tests {
         let repo = Arc::new(InMemConnectorRepo::default());
         let projector = ConnectorProjector::new(repo.clone());
         let id = Uuid::new_v4();
-        let pipeline = Uuid::new_v4();
+        let index_profile = Uuid::new_v4();
 
         projector
             .project(&[
                 registered(id, "old", "https://x", "2024-01-01T00:00:00Z", 1),
                 renamed(id, "new", "2024-02-01T00:00:00Z", 2),
                 config_updated(id, "https://y", "2024-03-01T00:00:00Z", 3),
-                defaults_set(id, Some(pipeline), None, "2024-04-01T00:00:00Z", 4),
+                defaults_set(
+                    id,
+                    Some(index_profile),
+                    None,
+                    None,
+                    "2024-04-01T00:00:00Z",
+                    4,
+                ),
                 unregistered(id, "2024-05-01T00:00:00Z", 5),
             ])
             .await
@@ -492,7 +516,7 @@ mod tests {
         assert_eq!(m.name, "new");
         let ConnectorConfig::Sitemap(c) = &m.config;
         assert_eq!(c.url, "https://y");
-        assert_eq!(m.default_pipeline_configuration_id, Some(pipeline));
+        assert_eq!(m.default_index_profile_id, Some(index_profile));
         assert_eq!(m.updated_at, "2024-05-01T00:00:00Z");
     }
 

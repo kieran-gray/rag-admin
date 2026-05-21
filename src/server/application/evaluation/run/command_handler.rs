@@ -3,7 +3,7 @@ use std::sync::Arc;
 use serde_json::json;
 use uuid::Uuid;
 
-use crate::server::application::configuration::PipelineResolver;
+use crate::server::application::configuration::IndexProfileResolver;
 use crate::server::application::evaluation::query_service::EvaluationQueryService;
 use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::AppError;
@@ -22,7 +22,7 @@ pub struct EvaluationRunCommandHandler {
     processor: Arc<CommandProcessor<EvaluationRun>>,
     queries: Arc<EvaluationQueryService>,
     source_documents: Arc<dyn SourceDocumentRepository>,
-    pipeline_resolver: Arc<PipelineResolver>,
+    index_profile_resolver: Arc<IndexProfileResolver>,
     clock: Arc<dyn Clock>,
     id_generator: Arc<dyn IdGenerator>,
 }
@@ -32,7 +32,7 @@ impl EvaluationRunCommandHandler {
         processor: Arc<CommandProcessor<EvaluationRun>>,
         queries: Arc<EvaluationQueryService>,
         source_documents: Arc<dyn SourceDocumentRepository>,
-        pipeline_resolver: Arc<PipelineResolver>,
+        index_profile_resolver: Arc<IndexProfileResolver>,
         clock: Arc<dyn Clock>,
         id_generator: Arc<dyn IdGenerator>,
     ) -> Arc<Self> {
@@ -40,7 +40,7 @@ impl EvaluationRunCommandHandler {
             processor,
             queries,
             source_documents,
-            pipeline_resolver,
+            index_profile_resolver,
             clock,
             id_generator,
         })
@@ -51,7 +51,7 @@ impl EvaluationRunCommandHandler {
         dataset_content_hash: &str,
         document_id: Uuid,
         document_version: u32,
-        pipeline_configuration_id: Uuid,
+        index_profile_id: Uuid,
     ) -> Result<RunFingerprint, AppError> {
         let document = self
             .source_documents
@@ -75,27 +75,21 @@ impl EvaluationRunCommandHandler {
             ));
         }
 
-        let pipeline = self
-            .pipeline_resolver
-            .resolve(pipeline_configuration_id)
+        let index_profile = self
+            .index_profile_resolver
+            .resolve(index_profile_id)
             .await?;
         let embedding_model_snapshot = json!({
-            "embedding_model_id": pipeline.embedding_model.embedding_model_id,
-            "kind": pipeline.embedding_model.kind.as_str(),
-            "model": pipeline.embedding_model.model,
-            "dimensions": pipeline.embedding_model.dimensions,
-        });
-        let generation_model_snapshot = json!({
-            "generation_model_id": pipeline.generation_model.generation_model_id,
-            "kind": pipeline.generation_model.kind.as_str(),
-            "model": pipeline.generation_model.model,
+            "embedding_model_id": index_profile.embedding_model.embedding_model_id,
+            "kind": index_profile.embedding_model.kind.as_str(),
+            "model": index_profile.embedding_model.model,
+            "dimensions": index_profile.embedding_model.dimensions,
         });
 
         Ok(RunFingerprint {
             document_content_hash,
             dataset_content_hash: dataset_content_hash.to_string(),
             embedding_model_snapshot,
-            generation_model_snapshot,
         })
     }
 
@@ -119,7 +113,7 @@ impl EvaluationRunCommandHandler {
                 &dataset.content_hash,
                 dataset.document_id,
                 dataset.document_version,
-                request.pipeline_configuration_id,
+                request.index_profile_id,
             )
             .await?;
 
@@ -130,7 +124,8 @@ impl EvaluationRunCommandHandler {
                 EvaluationRunCommand::RequestRun(RequestRun {
                     run_id,
                     dataset_id: request.dataset_id,
-                    pipeline_configuration_id: request.pipeline_configuration_id,
+                    index_profile_id: request.index_profile_id,
+                    retrieval_profile_id: request.retrieval_profile_id,
                     document_id: dataset.document_id,
                     document_version: dataset.document_version,
                     variants: Vec::new(),
@@ -170,7 +165,7 @@ impl EvaluationRunCommandHandler {
                 &dataset.content_hash,
                 dataset.document_id,
                 dataset.document_version,
-                request.pipeline_configuration_id,
+                request.index_profile_id,
             )
             .await?;
 
@@ -181,7 +176,8 @@ impl EvaluationRunCommandHandler {
                 EvaluationRunCommand::RequestRun(RequestRun {
                     run_id,
                     dataset_id: request.dataset_id,
-                    pipeline_configuration_id: request.pipeline_configuration_id,
+                    index_profile_id: request.index_profile_id,
+                    retrieval_profile_id: request.retrieval_profile_id,
                     document_id: dataset.document_id,
                     document_version: dataset.document_version,
                     variants: request.variants.into_iter().map(Into::into).collect(),
@@ -232,7 +228,7 @@ impl EvaluationRunCommandHandler {
                 &dataset.content_hash,
                 run.document_id,
                 run.document_version,
-                run.pipeline_configuration_id,
+                run.index_profile_id,
             )
             .await?;
 
@@ -243,7 +239,8 @@ impl EvaluationRunCommandHandler {
                 EvaluationRunCommand::RequestRun(RequestRun {
                     run_id: new_run_id,
                     dataset_id: run.dataset_id,
-                    pipeline_configuration_id: run.pipeline_configuration_id,
+                    index_profile_id: run.index_profile_id,
+                    retrieval_profile_id: run.retrieval_profile_id,
                     document_id: run.document_id,
                     document_version: run.document_version,
                     variants: Vec::new(),

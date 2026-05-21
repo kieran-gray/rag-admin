@@ -1,9 +1,8 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use uuid::Uuid;
 
-use crate::server::application::embedding::ports::Embedder;
+use crate::server::application::embedding::EmbedderRegistry;
 use crate::server::application::AppError;
 use crate::server::domain::configuration::embedding_model::EmbeddingModelRepository;
 use crate::shared::reference_data::AiProviderKind;
@@ -18,13 +17,13 @@ pub struct ResolvedEmbeddingModel {
 }
 
 pub struct EmbeddingService {
-    embedders: HashMap<AiProviderKind, Arc<dyn Embedder>>,
+    embedders: EmbedderRegistry,
     embedding_models: Arc<dyn EmbeddingModelRepository>,
 }
 
 impl EmbeddingService {
     pub fn new(
-        embedders: HashMap<AiProviderKind, Arc<dyn Embedder>>,
+        embedders: EmbedderRegistry,
         embedding_models: Arc<dyn EmbeddingModelRepository>,
     ) -> Arc<Self> {
         Arc::new(Self {

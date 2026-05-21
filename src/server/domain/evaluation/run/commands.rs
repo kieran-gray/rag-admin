@@ -12,7 +12,8 @@ use super::{events::RetrievalTraceEntry, scoring_policy::ScoringPolicy};
 pub struct RequestRun {
     pub run_id: Uuid,
     pub dataset_id: Uuid,
-    pub pipeline_configuration_id: Uuid,
+    pub index_profile_id: Uuid,
+    pub retrieval_profile_id: Option<Uuid>,
     pub document_id: Uuid,
     pub document_version: u32,
     pub variants: Vec<ChunkingVariant>,

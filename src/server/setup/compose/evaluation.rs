@@ -5,7 +5,7 @@ use sqlx::PgPool;
 use tokio::sync::Notify;
 
 use crate::server::application::chunking::ChunkerRegistry;
-use crate::server::application::configuration::PipelineResolver;
+use crate::server::application::configuration::{IndexProfileResolver, RetrievalProfileResolver};
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::evaluation::dataset::EvaluationDatasetEffectExecutor;
 use crate::server::application::evaluation::ports::{EvaluationGenerator, LlmJudge, Retriever};
@@ -56,7 +56,8 @@ pub struct EvaluationDeps<'a> {
     pub chunker_registry: Arc<ChunkerRegistry>,
     pub embedding_service: Arc<EmbeddingService>,
     pub generation_service: Arc<GenerationService>,
-    pub pipeline_resolver: Arc<PipelineResolver>,
+    pub index_profile_resolver: Arc<IndexProfileResolver>,
+    pub retrieval_profile_resolver: Arc<RetrievalProfileResolver>,
     pub source_document_query_service: Arc<SourceDocumentQueryService>,
     pub wakeups: &'a mut HashMap<String, Arc<Notify>>,
 }
@@ -75,7 +76,8 @@ impl EvaluationServices {
             chunker_registry,
             embedding_service,
             generation_service,
-            pipeline_resolver,
+            index_profile_resolver,
+            retrieval_profile_resolver,
             source_document_query_service,
             wakeups,
         } = deps;
@@ -92,7 +94,7 @@ impl EvaluationServices {
 
         let evaluation_dataset_command_handler = EvaluationDatasetCommandHandler::new(
             Arc::clone(&wirings.dataset.command_processor),
-            Arc::clone(&pipeline_resolver),
+            Arc::clone(&retrieval_profile_resolver),
             source_document_query_service,
             Arc::clone(&clock),
             Arc::clone(&id_generator),
@@ -101,7 +103,7 @@ impl EvaluationServices {
             Arc::clone(&wirings.run.command_processor),
             Arc::clone(&evaluation_query_service),
             Arc::clone(&repos.source_document),
-            Arc::clone(&pipeline_resolver),
+            Arc::clone(&index_profile_resolver),
             Arc::clone(&clock),
             Arc::clone(&id_generator),
         );
@@ -134,7 +136,8 @@ impl EvaluationServices {
             Arc::clone(&repos.embedding_set),
             Arc::clone(&repos.evaluation_dataset),
             evaluation_retriever,
-            pipeline_resolver,
+            index_profile_resolver,
+            Arc::clone(&generation_service),
             Arc::clone(&clock),
             Arc::clone(&id_generator),
         );

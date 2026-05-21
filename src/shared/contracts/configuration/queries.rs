@@ -33,18 +33,32 @@ pub struct ConfigurationDto {
     pub embedding_models: Vec<EmbeddingModelDto>,
     pub generation_models: Vec<GenerationModelDto>,
     pub vector_indexes: Vec<VectorIndexDto>,
+    pub index_profiles: Vec<IndexProfileDto>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct PipelineConfigurationDto {
-    pub pipeline_configuration_id: Uuid,
+pub struct IndexProfileDto {
+    pub index_profile_id: Uuid,
     pub name: String,
     pub embedding_model_id: Uuid,
     pub embedding_model_name: Option<String>,
-    pub generation_model_id: Uuid,
-    pub generation_model_name: Option<String>,
     pub vector_index_id: Uuid,
     pub vector_index_name: Option<String>,
+    pub dimensions: u32,
+    pub is_default: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RetrievalProfileDto {
+    pub retrieval_profile_id: Uuid,
+    pub name: String,
+    pub index_profile_id: Uuid,
+    pub index_profile_name: Option<String>,
+    pub generation_model_id: Uuid,
+    pub generation_model_name: Option<String>,
+    pub reranker_model_id: Option<Uuid>,
+    pub default_top_k: u32,
+    pub default_min_score_milli: u32,
     pub is_default: bool,
 }
 

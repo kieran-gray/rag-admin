@@ -90,8 +90,9 @@ impl ConnectorCommandHandler {
                         d.connector_id,
                         ConnectorCommand::SetConnectorDefaults(SetConnectorDefaults {
                             connector_id: d.connector_id,
-                            pipeline_configuration_id: d.pipeline_configuration_id,
+                            index_profile_id: d.index_profile_id,
                             chunking_configuration_id: d.chunking_configuration_id,
+                            retrieval_profile_id: d.retrieval_profile_id,
                             occurred_at: self.clock.now(),
                         }),
                     )

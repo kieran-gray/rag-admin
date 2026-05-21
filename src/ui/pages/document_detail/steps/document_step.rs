@@ -5,8 +5,7 @@ use uuid::Uuid;
 
 use crate::server_functions::source_document::{get_document_source, request_indexing};
 use crate::shared::contracts::{
-    ChunkingConfigurationDto, IndexingDto, MarkdownBlockDto, MarkdownBlockKindDto,
-    PipelineConfigurationDto,
+    ChunkingConfigurationDto, IndexProfileDto, IndexingDto, MarkdownBlockDto, MarkdownBlockKindDto,
 };
 use crate::ui::components::primitives::{EmptyState, Help, Status, StatusPill, Surface};
 use crate::ui::pages::document_detail::steps::ConfigSelection;
@@ -14,7 +13,7 @@ use crate::ui::pages::document_detail::steps::ConfigSelection;
 #[component]
 pub fn DocumentStep(
     selection: ConfigSelection,
-    pipelines: StoredValue<Vec<PipelineConfigurationDto>>,
+    index_profiles: StoredValue<Vec<IndexProfileDto>>,
     chunking_configurations: StoredValue<Vec<ChunkingConfigurationDto>>,
     indexings: Signal<Vec<IndexingDto>>,
     source_ref: String,
@@ -25,11 +24,11 @@ pub fn DocumentStep(
     let (error, set_error) = signal::<Option<String>>(None);
 
     let active_indexing: Signal<Option<IndexingDto>> = Signal::derive(move || {
-        let pid = selection.pipeline_id.get()?;
+        let pid = selection.index_profile_id.get()?;
         indexings
             .get()
             .into_iter()
-            .find(|ix| ix.pipeline_configuration_id == pid && !ix.removed)
+            .find(|ix| ix.index_profile_id == pid && !ix.removed)
     });
 
     let document_status: Signal<DocumentStatus> =
@@ -39,8 +38,8 @@ pub fn DocumentStep(
         if busy.get_untracked() {
             return;
         }
-        let Some(pipeline_id) = selection.pipeline_id.get() else {
-            set_error.set(Some("Pick a pipeline first.".into()));
+        let Some(index_profile_id) = selection.index_profile_id.get() else {
+            set_error.set(Some("Pick an index profile first.".into()));
             return;
         };
         let default_chunking = chunking_configurations.with_value(|cs| {
@@ -59,7 +58,7 @@ pub fn DocumentStep(
         set_error.set(None);
 
         spawn_local(async move {
-            match request_indexing(slug, pipeline_id, config, true).await {
+            match request_indexing(slug, index_profile_id, config, true).await {
                 Ok(_) => set_busy.set(false),
                 Err(e) => {
                     set_busy.set(false);
@@ -84,18 +83,18 @@ pub fn DocumentStep(
 
     let auto_index_disabled = move || {
         busy.get()
-            || selection.pipeline_id.get().is_none()
+            || selection.index_profile_id.get().is_none()
             || matches!(document_status.get(), DocumentStatus::InFlight)
     };
 
     view! {
         <div class="space-y-6">
             <Surface
-                title="Pipeline".to_string()
+                title="Index profile".to_string()
                 actions=Box::new(move || view! {
                     <Help title="What does auto-index do?".to_string()>
                         <p>
-                            "Auto-index runs chunking, embedding, and indexing end-to-end using the default chunking strategy for the selected pipeline. Use this when you want a one-shot ingest and don't need to tune the chunking step."
+                            "Auto-index runs chunking, embedding, and indexing end-to-end using the default chunking strategy for the selected index profile. Use this when you want a one-shot ingest and don't need to tune the chunking step."
                         </p>
                         <p class="mt-3">
                             "To pick a non-default chunking strategy or inspect intermediate output, step through the workflow with "
@@ -105,7 +104,7 @@ pub fn DocumentStep(
                     </Help>
                 }.into_any())
             >
-                <PipelineSelect selection=selection pipelines=pipelines />
+                <IndexProfileSelect selection=selection index_profiles=index_profiles />
 
                 <div class="flex items-center justify-between gap-3 mt-4 pt-3 border-t border-[var(--color-border)]">
                     <DocumentStatusLine status=document_status />
@@ -160,22 +159,22 @@ pub fn DocumentStep(
 }
 
 #[component]
-fn PipelineSelect(
+fn IndexProfileSelect(
     selection: ConfigSelection,
-    pipelines: StoredValue<Vec<PipelineConfigurationDto>>,
+    index_profiles: StoredValue<Vec<IndexProfileDto>>,
 ) -> impl IntoView {
     view! {
         <label class="flex flex-col gap-1 text-sm">
-            <span class="eyebrow">"Pipeline"</span>
+            <span class="eyebrow">"Index profile"</span>
             <select
                 class="input"
                 on:change=move |ev| {
-                    selection.pipeline_id.set(Uuid::parse_str(&event_target_value(&ev)).ok());
+                    selection.index_profile_id.set(Uuid::parse_str(&event_target_value(&ev)).ok());
                 }
             >
-                {move || pipelines.with_value(|ps| {
+                {move || index_profiles.with_value(|ps| {
                     ps.iter().map(|p| {
-                        let id = p.pipeline_configuration_id;
+                        let id = p.index_profile_id;
                         let suffix = if p.is_default { " · default" } else { "" };
                         let name = p.name.clone();
                         let embedding = p.embedding_model_name.clone().unwrap_or_default();
@@ -184,7 +183,7 @@ fn PipelineSelect(
                         } else {
                             format!("{name}{suffix} · {embedding}")
                         };
-                        let selected = selection.pipeline_id.get() == Some(id);
+                        let selected = selection.index_profile_id.get() == Some(id);
                         view! { <option value=id.to_string() selected=selected>{label}</option> }
                     }).collect_view()
                 })}

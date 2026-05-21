@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::server::application::AppError;
 use crate::server::domain::configuration::defaults::{
     ConfigurationDefaults, ConfigurationDefaultsCommand, SetDefaultChunkingConfiguration,
-    SetDefaultPipelineConfiguration, SetDefaultSweepTemplate,
+    SetDefaultIndexProfile, SetDefaultRetrievalProfile, SetDefaultSweepTemplate,
 };
 use event_sourcing::CommandProcessor;
 
@@ -29,14 +29,21 @@ impl ConfigurationDefaultsCommandHandler {
         .await
     }
 
-    pub async fn set_default_pipeline_configuration(&self, id: Uuid) -> Result<(), AppError> {
-        self.dispatch(
-            ConfigurationDefaultsCommand::SetDefaultPipelineConfiguration(
-                SetDefaultPipelineConfiguration {
-                    pipeline_configuration_id: id,
-                },
-            ),
-        )
+    pub async fn set_default_index_profile(&self, id: Uuid) -> Result<(), AppError> {
+        self.dispatch(ConfigurationDefaultsCommand::SetDefaultIndexProfile(
+            SetDefaultIndexProfile {
+                index_profile_id: id,
+            },
+        ))
+        .await
+    }
+
+    pub async fn set_default_retrieval_profile(&self, id: Uuid) -> Result<(), AppError> {
+        self.dispatch(ConfigurationDefaultsCommand::SetDefaultRetrievalProfile(
+            SetDefaultRetrievalProfile {
+                retrieval_profile_id: id,
+            },
+        ))
         .await
     }
 

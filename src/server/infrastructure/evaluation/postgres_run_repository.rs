@@ -39,7 +39,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         let row: Option<RunRow> = sqlx::query_as(
             "
             SELECT
-                run_id, dataset_id, pipeline_configuration_id, document_id, document_version,
+                run_id, dataset_id, index_profile_id, retrieval_profile_id, document_id, document_version,
                 variants, options, autotune_request, optimization,
                 status, variants_count, variants_prepared, variants_scored, failure_reason,
                 scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
@@ -70,7 +70,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         let rows: Vec<RunRow> = sqlx::query_as(
             "
             SELECT
-                run_id, dataset_id, pipeline_configuration_id, document_id, document_version,
+                run_id, dataset_id, index_profile_id, retrieval_profile_id, document_id, document_version,
                 variants, options, autotune_request, optimization,
                 status, variants_count, variants_prepared, variants_scored, failure_reason,
                 scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
@@ -97,7 +97,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         let rows: Vec<RunRow> = sqlx::query_as(
             "
             SELECT
-                run_id, dataset_id, pipeline_configuration_id, document_id, document_version,
+                run_id, dataset_id, index_profile_id, retrieval_profile_id, document_id, document_version,
                 variants, options, autotune_request, optimization,
                 status, variants_count, variants_prepared, variants_scored, failure_reason,
                 scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
@@ -124,7 +124,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         let rows: Vec<RunRow> = sqlx::query_as(
             "
             SELECT
-                run_id, dataset_id, pipeline_configuration_id, document_id, document_version,
+                run_id, dataset_id, index_profile_id, retrieval_profile_id, document_id, document_version,
                 variants, options, autotune_request, optimization,
                 status, variants_count, variants_prepared, variants_scored, failure_reason,
                 scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
@@ -190,7 +190,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
 
         let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
             "SELECT
-                run_id, dataset_id, pipeline_configuration_id, document_id, document_version,
+                run_id, dataset_id, index_profile_id, retrieval_profile_id, document_id, document_version,
                 variants, options, autotune_request, optimization,
                 status, variants_count, variants_prepared, variants_scored, failure_reason,
                 scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
@@ -378,19 +378,21 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         sqlx::query(
             "
             INSERT INTO evaluation_runs (
-                run_id, dataset_id, pipeline_configuration_id, document_id, document_version,
+                run_id, dataset_id, index_profile_id, retrieval_profile_id,
+                document_id, document_version,
                 variants, options, autotune_request, optimization,
                 status, variants_count, variants_prepared, variants_scored, failure_reason,
                 scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
                 scoring_precision_omega_weight, fingerprint, created_at, updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, 0, 0, NULL, $11, $12, $13, $14, $15, $16, NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11, 0, 0, NULL, $12, $13, $14, $15, $16, $17, NOW())
             ON CONFLICT (run_id) DO NOTHING
             ",
         )
         .bind(summary.run_id)
         .bind(summary.dataset_id)
-        .bind(summary.pipeline_configuration_id)
+        .bind(summary.index_profile_id)
+        .bind(summary.retrieval_profile_id)
         .bind(summary.document_id)
         .bind(summary.document_version as i32)
         .bind(&variants)
@@ -660,7 +662,8 @@ fn status_filter_order(status: RunStatusFilter) -> u8 {
 struct RunRow {
     run_id: Uuid,
     dataset_id: Uuid,
-    pipeline_configuration_id: Uuid,
+    index_profile_id: Uuid,
+    retrieval_profile_id: Option<Uuid>,
     document_id: Uuid,
     document_version: i32,
     variants: serde_json::Value,
@@ -704,7 +707,8 @@ impl TryFrom<RunRow> for EvaluationRunReadModel {
         Ok(Self {
             run_id: row.run_id,
             dataset_id: row.dataset_id,
-            pipeline_configuration_id: row.pipeline_configuration_id,
+            index_profile_id: row.index_profile_id,
+            retrieval_profile_id: row.retrieval_profile_id,
             document_id: row.document_id,
             document_version: row.document_version as u32,
             variants,

@@ -20,7 +20,9 @@ pub trait ConfigurationDefaultsRepository: Send + Sync {
 
     async fn set_chunking_configuration(&self, id: Uuid) -> Result<(), ProjectionError>;
 
-    async fn set_pipeline_configuration(&self, id: Uuid) -> Result<(), ProjectionError>;
+    async fn set_index_profile(&self, id: Uuid) -> Result<(), ProjectionError>;
+
+    async fn set_retrieval_profile(&self, id: Uuid) -> Result<(), ProjectionError>;
 }
 
 impl From<ConfigurationDefaultsRepositoryError> for ProjectionError {

@@ -112,20 +112,22 @@ pub fn ChunkingPage() -> impl IntoView {
                 }}
             </Transition>
 
-            {move || configuration.get().map(|res| match res {
-                Ok(cfg) => view! {
-                    <ChunkingFormDialog
-                        config=cfg
-                        form_mode=form_mode
-                        set_form_mode=set_form_mode
-                        busy=busy
-                        set_busy=set_busy
-                        set_status=set_status
-                        set_refresh=set_refresh
-                    />
-                }.into_any(),
-                Err(_) => ().into_any(),
-            })}
+            <Transition fallback=|| ().into_any()>
+                {move || configuration.get().map(|res| match res {
+                    Ok(cfg) => view! {
+                        <ChunkingFormDialog
+                            config=cfg
+                            form_mode=form_mode
+                            set_form_mode=set_form_mode
+                            busy=busy
+                            set_busy=set_busy
+                            set_status=set_status
+                            set_refresh=set_refresh
+                        />
+                    }.into_any(),
+                    Err(_) => ().into_any(),
+                })}
+            </Transition>
 
             <DeleteConfirmDialog
                 target=delete_target

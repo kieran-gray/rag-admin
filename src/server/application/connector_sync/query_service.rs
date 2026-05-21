@@ -58,10 +58,11 @@ impl ConnectorSyncQueryService {
         &self,
         connector_id: Uuid,
         limit: u32,
+        offset: u32,
     ) -> Result<Vec<ConnectorSyncSummary>, AppError> {
         Ok(self
             .sync_repository
-            .list_for_connector(connector_id, limit)
+            .list_for_connector(connector_id, limit, offset)
             .await?)
     }
 

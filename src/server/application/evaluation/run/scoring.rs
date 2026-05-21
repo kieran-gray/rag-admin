@@ -4,10 +4,10 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::server::application::chunking::ChunkerRegistry;
-use crate::server::application::configuration::PipelineResolver;
+use crate::server::application::configuration::IndexProfileResolver;
 use crate::server::application::embedding::{EmbeddingService, ResolvedEmbeddingModel};
 use crate::server::application::evaluation::ports::{RetrievalQuery, RetrievedChunk, Retriever};
-use crate::server::application::llm::ResolvedGenerationModel;
+use crate::server::application::llm::{GenerationService, ResolvedGenerationModel};
 use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::source_document::ports::BlobStore;
 use crate::server::application::AppError;
@@ -77,7 +77,8 @@ pub struct TrialScorer {
     embedding_set_repository: Arc<dyn EmbeddingSetRepository>,
     dataset_repository: Arc<dyn EvaluationDatasetRepository>,
     retriever: Arc<dyn Retriever>,
-    pipeline_resolver: Arc<PipelineResolver>,
+    index_profile_resolver: Arc<IndexProfileResolver>,
+    generation_service: Arc<GenerationService>,
     clock: Arc<dyn Clock>,
     id_generator: Arc<dyn IdGenerator>,
 }
@@ -93,7 +94,8 @@ impl TrialScorer {
         embedding_set_repository: Arc<dyn EmbeddingSetRepository>,
         dataset_repository: Arc<dyn EvaluationDatasetRepository>,
         retriever: Arc<dyn Retriever>,
-        pipeline_resolver: Arc<PipelineResolver>,
+        index_profile_resolver: Arc<IndexProfileResolver>,
+        generation_service: Arc<GenerationService>,
         clock: Arc<dyn Clock>,
         id_generator: Arc<dyn IdGenerator>,
     ) -> Arc<Self> {
@@ -106,7 +108,8 @@ impl TrialScorer {
             embedding_set_repository,
             dataset_repository,
             retriever,
-            pipeline_resolver,
+            index_profile_resolver,
+            generation_service,
             clock,
             id_generator,
         })
@@ -115,7 +118,7 @@ impl TrialScorer {
     pub async fn load_run_context(
         &self,
         dataset_id: Uuid,
-        pipeline_configuration_id: Uuid,
+        index_profile_id: Uuid,
     ) -> Result<RunContext, AppError> {
         let dataset = self
             .dataset_repository
@@ -144,12 +147,15 @@ impl TrialScorer {
         let plain_text = String::from_utf8(bytes)
             .map_err(|e| AppError::Internal(format!("document content is not valid UTF-8: {e}")))?;
 
-        let pipeline = self
-            .pipeline_resolver
-            .resolve(pipeline_configuration_id)
+        let index_profile = self
+            .index_profile_resolver
+            .resolve(index_profile_id)
             .await?;
-        let embedding_model = pipeline.embedding_model.clone();
-        let generation_model = pipeline.generation_model.clone();
+        let embedding_model = index_profile.embedding_model.clone();
+        let generation_model = self
+            .generation_service
+            .resolve(dataset.generation_model_id)
+            .await?;
 
         let question_texts: Vec<String> = questions.iter().map(|q| q.question.clone()).collect();
         let question_embeddings = self

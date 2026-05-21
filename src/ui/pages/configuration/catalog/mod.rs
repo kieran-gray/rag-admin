@@ -116,7 +116,7 @@ pub fn CatalogPage() -> impl IntoView {
         <div>
             <PageHeader
                 title="Catalog"
-                subtitle="Models and vector indexes that pipelines and chunking configurations compose.".to_string()
+                subtitle="Models and vector indexes that profiles and chunking configurations compose.".to_string()
             />
 
             <StatusBanner status=status />

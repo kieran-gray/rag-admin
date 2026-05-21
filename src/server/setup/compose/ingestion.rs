@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tokio::sync::Notify;
 
 use crate::server::application::configuration::{
-    ChunkingConfigurationQueryService, PipelineResolver,
+    ChunkingConfigurationQueryService, IndexProfileResolver,
 };
 use crate::server::application::connector::{ConnectorQueryService, ConnectorRegistry};
 use crate::server::application::connector_sync::BulkImportService;
@@ -43,7 +43,7 @@ pub struct IngestionDeps<'a> {
     pub wirings: &'a AggregateWirings,
     pub event_bus: Arc<EventBus>,
     pub markdown_parser: Arc<dyn MarkdownParser>,
-    pub pipeline_resolver: Arc<PipelineResolver>,
+    pub index_profile_resolver: Arc<IndexProfileResolver>,
     pub chunking_configuration_query_service: Arc<ChunkingConfigurationQueryService>,
     pub connector_registry: Arc<ConnectorRegistry>,
     pub connector_query_service: Arc<ConnectorQueryService>,
@@ -62,7 +62,7 @@ impl IngestionServices {
             wirings,
             event_bus,
             markdown_parser,
-            pipeline_resolver,
+            index_profile_resolver,
             chunking_configuration_query_service,
             connector_registry,
             connector_query_service,
@@ -99,7 +99,7 @@ impl IngestionServices {
                 blob_store: Arc::clone(&repos.blob_store),
                 connector_registry,
                 connector_query_service,
-                pipeline_resolver: Arc::clone(&pipeline_resolver),
+                index_profile_resolver: Arc::clone(&index_profile_resolver),
                 http_client: http_port,
                 normalizer_registry,
                 clock,
@@ -108,7 +108,7 @@ impl IngestionServices {
 
         let bulk_import_service = BulkImportService::new(
             Arc::clone(&source_document_ingest_service),
-            pipeline_resolver,
+            index_profile_resolver,
             chunking_configuration_query_service,
         );
 

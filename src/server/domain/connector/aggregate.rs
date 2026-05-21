@@ -18,8 +18,9 @@ pub struct Connector {
     pub name: String,
     pub config: ConnectorConfig,
     pub deleted: bool,
-    pub default_pipeline_configuration_id: Option<Uuid>,
+    pub default_index_profile_id: Option<Uuid>,
     pub default_chunking_configuration_id: Option<Uuid>,
+    pub default_retrieval_profile_id: Option<Uuid>,
 }
 
 impl Aggregate for Connector {
@@ -44,8 +45,9 @@ impl Aggregate for Connector {
                 self.deleted = true;
             }
             ConnectorEvent::ConnectorDefaultsSet(e) => {
-                self.default_pipeline_configuration_id = e.pipeline_configuration_id;
+                self.default_index_profile_id = e.index_profile_id;
                 self.default_chunking_configuration_id = e.chunking_configuration_id;
+                self.default_retrieval_profile_id = e.retrieval_profile_id;
             }
         }
     }
@@ -119,15 +121,17 @@ impl Aggregate for Connector {
                 if connector.deleted {
                     return Err(ConnectorError::AlreadyDeleted);
                 }
-                if connector.default_pipeline_configuration_id == cmd.pipeline_configuration_id
+                if connector.default_index_profile_id == cmd.index_profile_id
                     && connector.default_chunking_configuration_id == cmd.chunking_configuration_id
+                    && connector.default_retrieval_profile_id == cmd.retrieval_profile_id
                 {
                     return Ok(vec![]);
                 }
                 Ok(vec![ConnectorEvent::ConnectorDefaultsSet(
                     ConnectorDefaultsSet {
-                        pipeline_configuration_id: cmd.pipeline_configuration_id,
+                        index_profile_id: cmd.index_profile_id,
                         chunking_configuration_id: cmd.chunking_configuration_id,
+                        retrieval_profile_id: cmd.retrieval_profile_id,
                         occurred_at: cmd.occurred_at,
                     },
                 )])
@@ -146,8 +150,9 @@ impl Aggregate for Connector {
                         name: e.name.clone(),
                         config: e.config.clone(),
                         deleted: false,
-                        default_pipeline_configuration_id: None,
+                        default_index_profile_id: None,
                         default_chunking_configuration_id: None,
+                        default_retrieval_profile_id: None,
                     });
                 }
                 (Some(_), ConnectorEvent::ConnectorRegistered(_)) | (None, _) => return None,
@@ -305,14 +310,16 @@ mod tests {
         let id = Uuid::new_v4();
         let mut events = Connector::handle_command(None, register(id, "a")).unwrap();
         let state = Connector::from_events(&events).unwrap();
-        let pipeline_id = Uuid::new_v4();
+        let index_profile_id = Uuid::new_v4();
         let chunking_id = Uuid::new_v4();
+        let retrieval_profile_id = Uuid::new_v4();
         let new = Connector::handle_command(
             Some(&state),
             ConnectorCommand::SetConnectorDefaults(super::super::commands::SetConnectorDefaults {
                 connector_id: id,
-                pipeline_configuration_id: Some(pipeline_id),
+                index_profile_id: Some(index_profile_id),
                 chunking_configuration_id: Some(chunking_id),
+                retrieval_profile_id: Some(retrieval_profile_id),
                 occurred_at: now(),
             }),
         )
@@ -320,15 +327,19 @@ mod tests {
         assert_eq!(new.len(), 1);
         events.extend(new);
         let state = Connector::from_events(&events).unwrap();
-        assert_eq!(state.default_pipeline_configuration_id, Some(pipeline_id));
+        assert_eq!(state.default_index_profile_id, Some(index_profile_id));
         assert_eq!(state.default_chunking_configuration_id, Some(chunking_id));
+        assert_eq!(
+            state.default_retrieval_profile_id,
+            Some(retrieval_profile_id)
+        );
     }
 
     #[test]
     fn set_defaults_is_idempotent_when_unchanged() {
         let id = Uuid::new_v4();
         let mut events = Connector::handle_command(None, register(id, "a")).unwrap();
-        let pipeline_id = Uuid::new_v4();
+        let index_profile_id = Uuid::new_v4();
         let state = Connector::from_events(&events).unwrap();
         events.extend(
             Connector::handle_command(
@@ -336,8 +347,9 @@ mod tests {
                 ConnectorCommand::SetConnectorDefaults(
                     super::super::commands::SetConnectorDefaults {
                         connector_id: id,
-                        pipeline_configuration_id: Some(pipeline_id),
+                        index_profile_id: Some(index_profile_id),
                         chunking_configuration_id: None,
+                        retrieval_profile_id: None,
                         occurred_at: now(),
                     },
                 ),
@@ -350,8 +362,9 @@ mod tests {
             Some(&state),
             ConnectorCommand::SetConnectorDefaults(super::super::commands::SetConnectorDefaults {
                 connector_id: id,
-                pipeline_configuration_id: Some(pipeline_id),
+                index_profile_id: Some(index_profile_id),
                 chunking_configuration_id: None,
+                retrieval_profile_id: None,
                 occurred_at: now(),
             }),
         )
@@ -363,7 +376,7 @@ mod tests {
     fn set_defaults_can_clear_to_none() {
         let id = Uuid::new_v4();
         let mut events = Connector::handle_command(None, register(id, "a")).unwrap();
-        let pipeline_id = Uuid::new_v4();
+        let index_profile_id = Uuid::new_v4();
         let state = Connector::from_events(&events).unwrap();
         events.extend(
             Connector::handle_command(
@@ -371,8 +384,9 @@ mod tests {
                 ConnectorCommand::SetConnectorDefaults(
                     super::super::commands::SetConnectorDefaults {
                         connector_id: id,
-                        pipeline_configuration_id: Some(pipeline_id),
+                        index_profile_id: Some(index_profile_id),
                         chunking_configuration_id: None,
+                        retrieval_profile_id: None,
                         occurred_at: now(),
                     },
                 ),
@@ -386,8 +400,9 @@ mod tests {
                 ConnectorCommand::SetConnectorDefaults(
                     super::super::commands::SetConnectorDefaults {
                         connector_id: id,
-                        pipeline_configuration_id: None,
+                        index_profile_id: None,
                         chunking_configuration_id: None,
+                        retrieval_profile_id: None,
                         occurred_at: now(),
                     },
                 ),
@@ -395,7 +410,7 @@ mod tests {
             .unwrap(),
         );
         let state = Connector::from_events(&events).unwrap();
-        assert_eq!(state.default_pipeline_configuration_id, None);
+        assert_eq!(state.default_index_profile_id, None);
     }
 
     #[test]

@@ -47,8 +47,9 @@ fn read_model_to_dto(model: ConnectorReadModel) -> ConnectorDto {
         connector_id: model.connector_id,
         name: model.name,
         config: config_domain_to_dto(model.config),
-        default_pipeline_configuration_id: model.default_pipeline_configuration_id,
+        default_index_profile_id: model.default_index_profile_id,
         default_chunking_configuration_id: model.default_chunking_configuration_id,
+        default_retrieval_profile_id: model.default_retrieval_profile_id,
     }
 }
 

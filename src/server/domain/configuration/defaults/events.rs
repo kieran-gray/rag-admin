@@ -7,8 +7,13 @@ pub struct DefaultChunkingConfigurationSet {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct DefaultPipelineConfigurationSet {
-    pub pipeline_configuration_id: Uuid,
+pub struct DefaultIndexProfileSet {
+    pub index_profile_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DefaultRetrievalProfileSet {
+    pub retrieval_profile_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -20,6 +25,7 @@ pub struct DefaultSweepTemplateSet {
 #[serde(tag = "type", content = "data")]
 pub enum ConfigurationDefaultsEvent {
     DefaultChunkingConfigurationSet(DefaultChunkingConfigurationSet),
-    DefaultPipelineConfigurationSet(DefaultPipelineConfigurationSet),
+    DefaultIndexProfileSet(DefaultIndexProfileSet),
+    DefaultRetrievalProfileSet(DefaultRetrievalProfileSet),
     DefaultSweepTemplateSet(DefaultSweepTemplateSet),
 }

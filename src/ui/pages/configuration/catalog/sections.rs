@@ -33,7 +33,7 @@ pub(super) fn EmbeddingModelsSection(
                     view! {
                         <EmptyState
                             title="No embedding models yet"
-                            body="Register the embedding models you want pipelines to use.".to_string()
+                            body="Register the embedding models you want index profiles to use.".to_string()
                         />
                     }.into_any()
                 } else {

@@ -4,13 +4,13 @@ use leptos::task::spawn_local;
 use uuid::Uuid;
 
 use crate::server_functions::configuration::{
-    get_chunking_configurations, get_pipeline_configurations,
+    get_chunking_configurations, get_index_profiles, get_retrieval_profiles,
 };
 use crate::server_functions::connector::apply_connector_command;
 use crate::shared::contracts::{
     ChunkingConfigurationDto, ConnectorCommandDto, ConnectorConfigDto, ConnectorDto,
-    ConnectorKindDto, PipelineConfigurationDto, RegisterConnectorDto, SetConnectorDefaultsDto,
-    SitemapConfigDto, UpdateConnectorConfigDto,
+    ConnectorKindDto, IndexProfileDto, RegisterConnectorDto, RetrievalProfileDto,
+    SetConnectorDefaultsDto, SitemapConfigDto, UpdateConnectorConfigDto,
 };
 use crate::ui::components::primitives::{Dialog, InlineStatusMessage};
 
@@ -62,7 +62,14 @@ fn ConnectorFormBody(
     set_refresh: WriteSignal<u32>,
     on_close: Callback<()>,
 ) -> impl IntoView {
-    let (name_initial, sitemap_initial, edit_id, pipeline_initial, chunking_initial) = match &form {
+    let (
+        name_initial,
+        sitemap_initial,
+        edit_id,
+        index_profile_initial,
+        chunking_initial,
+        retrieval_profile_initial,
+    ) = match &form {
         ConnectorForm::Add => (
             String::new(),
             SitemapConfigDto {
@@ -73,14 +80,16 @@ fn ConnectorFormBody(
             None,
             None,
             None,
+            None,
         ),
         ConnectorForm::Edit(c) => match &c.config {
             ConnectorConfigDto::Sitemap(s) => (
                 c.name.clone(),
                 s.clone(),
                 Some(c.connector_id),
-                c.default_pipeline_configuration_id,
+                c.default_index_profile_id,
                 c.default_chunking_configuration_id,
+                c.default_retrieval_profile_id,
             ),
         },
     };
@@ -89,18 +98,20 @@ fn ConnectorFormBody(
     let (url, set_url) = signal(sitemap_initial.url);
     let (include, set_include) = signal(sitemap_initial.include_patterns.join("\n"));
     let (exclude, set_exclude) = signal(sitemap_initial.exclude_patterns.join("\n"));
-    let (pipeline_default, set_pipeline_default) = signal(pipeline_initial);
+    let (index_profile_default, set_index_profile_default) = signal(index_profile_initial);
     let (chunking_default, set_chunking_default) = signal(chunking_initial);
+    let (retrieval_profile_default, set_retrieval_profile_default) =
+        signal(retrieval_profile_initial);
     let (dialog_status, set_dialog_status) = signal::<Option<String>>(None);
     let is_edit = edit_id.is_some();
 
-    let pipelines = Resource::new(
+    let index_profiles = Resource::new(
         || (),
-        |_| async move {
-            get_pipeline_configurations()
-                .await
-                .map_err(|e| e.to_string())
-        },
+        |_| async move { get_index_profiles().await.map_err(|e| e.to_string()) },
+    );
+    let retrieval_profiles = Resource::new(
+        || (),
+        |_| async move { get_retrieval_profiles().await.map_err(|e| e.to_string()) },
     );
     let chunkings = Resource::new(
         || (),
@@ -143,8 +154,9 @@ fn ConnectorFormBody(
             }),
         };
 
-        let pipeline_default_value = pipeline_default.get_untracked();
+        let index_profile_default_value = index_profile_default.get_untracked();
         let chunking_default_value = chunking_default.get_untracked();
+        let retrieval_profile_default_value = retrieval_profile_default.get_untracked();
         let success_message = if is_edit {
             "Connector updated"
         } else {
@@ -170,8 +182,9 @@ fn ConnectorFormBody(
                 let defaults_cmd =
                     ConnectorCommandDto::SetConnectorDefaults(SetConnectorDefaultsDto {
                         connector_id,
-                        pipeline_configuration_id: pipeline_default_value,
+                        index_profile_id: index_profile_default_value,
                         chunking_configuration_id: chunking_default_value,
+                        retrieval_profile_id: retrieval_profile_default_value,
                     });
                 if let Err(e) = apply_connector_command(defaults_cmd).await {
                     set_dialog_status.set(Some(format!("COMMAND_FAULT (defaults): {e}")));
@@ -236,10 +249,13 @@ fn ConnectorFormBody(
             </label>
 
             <DefaultsSection
-                pipelines=pipelines
+                index_profiles=index_profiles
+                retrieval_profiles=retrieval_profiles
                 chunkings=chunkings
-                pipeline_default=pipeline_default
-                set_pipeline_default=set_pipeline_default
+                index_profile_default=index_profile_default
+                set_index_profile_default=set_index_profile_default
+                retrieval_profile_default=retrieval_profile_default
+                set_retrieval_profile_default=set_retrieval_profile_default
                 chunking_default=chunking_default
                 set_chunking_default=set_chunking_default
             />
@@ -271,40 +287,80 @@ fn KindReadonly(kind: ConnectorKindDto) -> impl IntoView {
 }
 
 #[component]
+#[allow(clippy::too_many_arguments)]
 fn DefaultsSection(
-    pipelines: Resource<Result<Vec<PipelineConfigurationDto>, String>>,
+    index_profiles: Resource<Result<Vec<IndexProfileDto>, String>>,
+    retrieval_profiles: Resource<Result<Vec<RetrievalProfileDto>, String>>,
     chunkings: Resource<Result<Vec<ChunkingConfigurationDto>, String>>,
-    pipeline_default: ReadSignal<Option<Uuid>>,
-    set_pipeline_default: WriteSignal<Option<Uuid>>,
+    index_profile_default: ReadSignal<Option<Uuid>>,
+    set_index_profile_default: WriteSignal<Option<Uuid>>,
+    retrieval_profile_default: ReadSignal<Option<Uuid>>,
+    set_retrieval_profile_default: WriteSignal<Option<Uuid>>,
     chunking_default: ReadSignal<Option<Uuid>>,
     set_chunking_default: WriteSignal<Option<Uuid>>,
 ) -> impl IntoView {
     view! {
         <fieldset class="flex flex-col gap-3 border border-[var(--color-border)] rounded p-3">
-            <legend class="text-xs uppercase tracking-wide muted px-1">"Ingestion defaults"</legend>
+            <legend class="text-xs uppercase tracking-wide muted px-1">"Connector defaults"</legend>
             <p class="text-xs muted">
                 "Documents imported via this connector use these defaults. Leave blank to use the application defaults."
             </p>
 
             <label class="flex flex-col gap-1 text-sm">
-                <span class="muted">"Default pipeline"</span>
-                <Suspense fallback=|| view! { <span class="faint text-xs">"Loading pipelines…"</span> }>
-                    {move || pipelines.get().map(|res| match res {
+                <span class="muted">"Default index profile"</span>
+                <Suspense fallback=|| view! { <span class="faint text-xs">"Loading index profiles…"</span> }>
+                    {move || index_profiles.get().map(|res| match res {
                         Err(e) => view! { <div class="log-line-error text-xs">{e}</div> }.into_any(),
                         Ok(list) => view! {
                             <select
                                 class="input"
                                 on:change=move |ev| {
                                     let value = event_target_value(&ev);
-                                    set_pipeline_default.set(Uuid::parse_str(&value).ok());
+                                    set_index_profile_default.set(Uuid::parse_str(&value).ok());
                                 }
                             >
-                                <option value="" selected=move || pipeline_default.get().is_none()>
+                                <option value="" selected=move || index_profile_default.get().is_none()>
                                     "— Use application default —"
                                 </option>
                                 {list.into_iter().map(|p| {
-                                    let id = p.pipeline_configuration_id;
-                                    let is_selected = pipeline_default.get_untracked() == Some(id);
+                                    let id = p.index_profile_id;
+                                    let is_selected = index_profile_default.get_untracked() == Some(id);
+                                    let label = if p.is_default {
+                                        format!("{} (app default)", p.name)
+                                    } else {
+                                        p.name
+                                    };
+                                    view! {
+                                        <option value=id.to_string() selected=is_selected>
+                                            {label}
+                                        </option>
+                                    }
+                                }).collect_view()}
+                            </select>
+                        }.into_any(),
+                    })}
+                </Suspense>
+            </label>
+
+            <label class="flex flex-col gap-1 text-sm">
+                <span class="muted">"Default retrieval profile"</span>
+                <Suspense fallback=|| view! { <span class="faint text-xs">"Loading retrieval profiles…"</span> }>
+                    {move || retrieval_profiles.get().map(|res| match res {
+                        Err(e) => view! { <div class="log-line-error text-xs">{e}</div> }.into_any(),
+                        Ok(list) => view! {
+                            <select
+                                class="input"
+                                on:change=move |ev| {
+                                    let value = event_target_value(&ev);
+                                    set_retrieval_profile_default.set(Uuid::parse_str(&value).ok());
+                                }
+                            >
+                                <option value="" selected=move || retrieval_profile_default.get().is_none()>
+                                    "— Use application default —"
+                                </option>
+                                {list.into_iter().map(|p| {
+                                    let id = p.retrieval_profile_id;
+                                    let is_selected = retrieval_profile_default.get_untracked() == Some(id);
                                     let label = if p.is_default {
                                         format!("{} (app default)", p.name)
                                     } else {

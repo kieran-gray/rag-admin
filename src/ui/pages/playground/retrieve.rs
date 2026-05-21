@@ -2,15 +2,15 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use uuid::Uuid;
 
-use crate::server_functions::configuration::get_pipeline_configurations;
+use crate::server_functions::configuration::get_retrieval_profiles;
 use crate::server_functions::query::query_documents;
-use crate::shared::contracts::{PipelineConfigurationDto, QueryHit, QueryRequest, QueryResult};
+use crate::shared::contracts::{QueryHit, QueryRequest, QueryResult, RetrievalProfileDto};
 use crate::ui::components::primitives::{EmptyState, PageHeader, Surface};
 
 #[derive(Clone)]
 struct HistoryEntry {
     query: String,
-    pipeline_id: Uuid,
+    retrieval_profile_id: Uuid,
     top_k: u32,
     min_score: f32,
     result: Option<QueryResult>,
@@ -25,30 +25,30 @@ struct MarkedRelevant {
 
 #[component]
 pub fn RetrievePage() -> impl IntoView {
-    let pipelines = Resource::new(
+    let retrieval_profiles = Resource::new(
         || (),
-        |_| async move { get_pipeline_configurations().await.unwrap_or_default() },
+        |_| async move { get_retrieval_profiles().await.unwrap_or_default() },
     );
 
     view! {
         <div>
             <PageHeader
                 title="Retrieve"
-                subtitle="Run retrieval against any pipeline. Results route back to the source document for chunking iteration.".to_string()
+                subtitle="Run retrieval against any retrieval profile. Results route back to the source document for chunking iteration.".to_string()
             />
             <Transition fallback=|| view! { <Surface><p class="muted">"Loading…"</p></Surface> }>
-                {move || pipelines.get().map(|pipelines| {
-                    if pipelines.is_empty() {
+                {move || retrieval_profiles.get().map(|profiles| {
+                    if profiles.is_empty() {
                         view! {
                             <Surface>
                                 <EmptyState
-                                    title="No pipelines configured"
-                                    body="Create a pipeline on the Pipelines page before running queries.".to_string()
+                                    title="No retrieval profiles configured"
+                                    body="Create a retrieval profile on the Profiles page before running queries.".to_string()
                                 />
                             </Surface>
                         }.into_any()
                     } else {
-                        view! { <PlaygroundBody pipelines=pipelines /> }.into_any()
+                        view! { <PlaygroundBody retrieval_profiles=profiles /> }.into_any()
                     }
                 })}
             </Transition>
@@ -57,15 +57,15 @@ pub fn RetrievePage() -> impl IntoView {
 }
 
 #[component]
-fn PlaygroundBody(pipelines: Vec<PipelineConfigurationDto>) -> impl IntoView {
-    let pipelines_stored = StoredValue::new(pipelines.clone());
-    let initial_pipeline = pipelines
+fn PlaygroundBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView {
+    let retrieval_profiles_stored = StoredValue::new(retrieval_profiles.clone());
+    let initial_retrieval_profile = retrieval_profiles
         .first()
-        .map(|p| p.pipeline_configuration_id)
+        .map(|p| p.retrieval_profile_id)
         .unwrap_or_default();
 
     let (query, set_query) = signal(String::new());
-    let (pipeline_id, set_pipeline_id) = signal(initial_pipeline);
+    let (retrieval_profile_id, set_retrieval_profile_id) = signal(initial_retrieval_profile);
     let (top_k, set_top_k) = signal::<u32>(8);
     let (min_score, set_min_score) = signal::<f32>(0.4);
     let (busy, set_busy) = signal(false);
@@ -82,7 +82,7 @@ fn PlaygroundBody(pipelines: Vec<PipelineConfigurationDto>) -> impl IntoView {
         set_error.set(None);
         spawn_local(async move {
             let req = QueryRequest {
-                pipeline_configuration_id: pid,
+                retrieval_profile_id: pid,
                 query: q.clone(),
                 top_k: k,
                 min_score: m,
@@ -92,7 +92,7 @@ fn PlaygroundBody(pipelines: Vec<PipelineConfigurationDto>) -> impl IntoView {
                 Ok(res) => {
                     let entry = HistoryEntry {
                         query: q.clone(),
-                        pipeline_id: pid,
+                        retrieval_profile_id: pid,
                         top_k: k,
                         min_score: m,
                         result: Some(res.clone()),
@@ -100,7 +100,8 @@ fn PlaygroundBody(pipelines: Vec<PipelineConfigurationDto>) -> impl IntoView {
                     };
                     set_history.update(|h| {
                         h.retain(|e| {
-                            !(e.query == entry.query && e.pipeline_id == entry.pipeline_id)
+                            !(e.query == entry.query
+                                && e.retrieval_profile_id == entry.retrieval_profile_id)
                         });
                         h.insert(0, entry);
                         h.truncate(20);
@@ -113,7 +114,7 @@ fn PlaygroundBody(pipelines: Vec<PipelineConfigurationDto>) -> impl IntoView {
                             0,
                             HistoryEntry {
                                 query: q.clone(),
-                                pipeline_id: pid,
+                                retrieval_profile_id: pid,
                                 top_k: k,
                                 min_score: m,
                                 result: None,
@@ -130,15 +131,25 @@ fn PlaygroundBody(pipelines: Vec<PipelineConfigurationDto>) -> impl IntoView {
     };
 
     let submit = move |_| {
-        run_query(query.get(), pipeline_id.get(), top_k.get(), min_score.get());
+        run_query(
+            query.get(),
+            retrieval_profile_id.get(),
+            top_k.get(),
+            min_score.get(),
+        );
     };
 
     let on_history_click = move |entry: HistoryEntry| {
         set_query.set(entry.query.clone());
-        set_pipeline_id.set(entry.pipeline_id);
+        set_retrieval_profile_id.set(entry.retrieval_profile_id);
         set_top_k.set(entry.top_k);
         set_min_score.set(entry.min_score);
-        run_query(entry.query, entry.pipeline_id, entry.top_k, entry.min_score);
+        run_query(
+            entry.query,
+            entry.retrieval_profile_id,
+            entry.top_k,
+            entry.min_score,
+        );
     };
 
     let toggle_mark = move |query_text: String, chunk_id: Uuid| {
@@ -165,10 +176,10 @@ fn PlaygroundBody(pipelines: Vec<PipelineConfigurationDto>) -> impl IntoView {
         <div class="playground-grid">
             <div class="playground-main">
                 <Surface title="Query".to_string() actions=Box::new(move || view! {
-                    <PipelinePicker
-                        pipelines=pipelines_stored.get_value()
-                        value=pipeline_id
-                        set_value=set_pipeline_id
+                    <RetrievalProfilePicker
+                        profiles=retrieval_profiles_stored.get_value()
+                        value=retrieval_profile_id
+                        set_value=set_retrieval_profile_id
                     />
                 }.into_any())>
                     <textarea
@@ -303,24 +314,24 @@ fn PlaygroundBody(pipelines: Vec<PipelineConfigurationDto>) -> impl IntoView {
 }
 
 #[component]
-fn PipelinePicker(
-    pipelines: Vec<PipelineConfigurationDto>,
+fn RetrievalProfilePicker(
+    profiles: Vec<RetrievalProfileDto>,
     value: ReadSignal<Uuid>,
     set_value: WriteSignal<Uuid>,
 ) -> impl IntoView {
     view! {
         <label class="playground-picker-label">
-            <span class="eyebrow">"Pipeline"</span>
+            <span class="eyebrow">"Retrieval profile"</span>
             <select
-                class="playground-pipeline-picker"
+                class="playground-profile-picker"
                 on:change=move |ev| {
                     if let Ok(uuid) = Uuid::parse_str(&event_target_value(&ev)) {
                         set_value.set(uuid);
                     }
                 }
             >
-                {pipelines.into_iter().map(|p| {
-                    let pid = p.pipeline_configuration_id;
+                {profiles.into_iter().map(|p| {
+                    let pid = p.retrieval_profile_id;
                     let id_str = pid.to_string();
                     view! {
                         <option value=id_str.clone() selected=move || value.get() == pid>

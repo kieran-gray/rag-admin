@@ -1,10 +1,9 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use uuid::Uuid;
 
 use crate::server::application::indexing::ports::VectorIndex;
-use crate::server::application::source_document::ports::VectorIndexProvider;
+use crate::server::application::indexing::VectorIndexProviderRegistry;
 use crate::server::application::AppError;
 use crate::server::domain::configuration::vector_index::VectorIndexRepository;
 use crate::shared::reference_data::VectorStoreKind;
@@ -18,13 +17,13 @@ pub struct ResolvedVectorIndex {
 }
 
 pub struct VectorIndexResolver {
-    providers: HashMap<VectorStoreKind, Arc<dyn VectorIndexProvider>>,
+    providers: VectorIndexProviderRegistry,
     vector_indexes: Arc<dyn VectorIndexRepository>,
 }
 
 impl VectorIndexResolver {
     pub fn new(
-        providers: HashMap<VectorStoreKind, Arc<dyn VectorIndexProvider>>,
+        providers: VectorIndexProviderRegistry,
         vector_indexes: Arc<dyn VectorIndexRepository>,
     ) -> Arc<Self> {
         Arc::new(Self {

@@ -25,7 +25,7 @@ impl ConfigurationDefaultsRepository for PostgresConfigurationDefaultsRepository
         &self,
     ) -> Result<ConfigurationDefaultsReadModel, ConfigurationDefaultsRepositoryError> {
         let row: Option<ConfigurationDefaultsRow> = sqlx::query_as(
-            "SELECT chunking_configuration_id, pipeline_configuration_id, sweep_template_id
+            "SELECT chunking_configuration_id, index_profile_id, retrieval_profile_id, sweep_template_id
              FROM configuration_defaults
              WHERE id = 1",
         )
@@ -48,23 +48,37 @@ impl ConfigurationDefaultsRepository for PostgresConfigurationDefaultsRepository
         .map_err(|e| ProjectionError::Storage(format!("set default chunking: {e}")))
     }
 
-    async fn set_pipeline_configuration(&self, id: Uuid) -> Result<(), ProjectionError> {
+    async fn set_index_profile(&self, id: Uuid) -> Result<(), ProjectionError> {
         sqlx::query(
-            "INSERT INTO configuration_defaults (id, pipeline_configuration_id)
+            "INSERT INTO configuration_defaults (id, index_profile_id)
              VALUES (1, $1)
-             ON CONFLICT (id) DO UPDATE SET pipeline_configuration_id = $1",
+             ON CONFLICT (id) DO UPDATE SET index_profile_id = $1",
         )
         .bind(id)
         .execute(&self.pool)
         .await
         .map(|_| ())
-        .map_err(|e| ProjectionError::Storage(format!("set default pipeline: {e}")))
+        .map_err(|e| ProjectionError::Storage(format!("set default index profile: {e}")))
+    }
+
+    async fn set_retrieval_profile(&self, id: Uuid) -> Result<(), ProjectionError> {
+        sqlx::query(
+            "INSERT INTO configuration_defaults (id, retrieval_profile_id)
+             VALUES (1, $1)
+             ON CONFLICT (id) DO UPDATE SET retrieval_profile_id = $1",
+        )
+        .bind(id)
+        .execute(&self.pool)
+        .await
+        .map(|_| ())
+        .map_err(|e| ProjectionError::Storage(format!("set default retrieval profile: {e}")))
     }
 }
 
 struct ConfigurationDefaultsRow {
     chunking_configuration_id: Option<Uuid>,
-    pipeline_configuration_id: Option<Uuid>,
+    index_profile_id: Option<Uuid>,
+    retrieval_profile_id: Option<Uuid>,
     sweep_template_id: Option<Uuid>,
 }
 
@@ -73,7 +87,8 @@ impl sqlx::FromRow<'_, PgRow> for ConfigurationDefaultsRow {
         use sqlx::Row;
         Ok(Self {
             chunking_configuration_id: row.try_get("chunking_configuration_id")?,
-            pipeline_configuration_id: row.try_get("pipeline_configuration_id")?,
+            index_profile_id: row.try_get("index_profile_id")?,
+            retrieval_profile_id: row.try_get("retrieval_profile_id")?,
             sweep_template_id: row.try_get("sweep_template_id")?,
         })
     }
@@ -83,7 +98,8 @@ impl From<ConfigurationDefaultsRow> for ConfigurationDefaultsReadModel {
     fn from(row: ConfigurationDefaultsRow) -> Self {
         Self {
             chunking_configuration_id: row.chunking_configuration_id,
-            pipeline_configuration_id: row.pipeline_configuration_id,
+            index_profile_id: row.index_profile_id,
+            retrieval_profile_id: row.retrieval_profile_id,
             sweep_template_id: row.sweep_template_id,
         }
     }

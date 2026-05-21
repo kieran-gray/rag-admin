@@ -10,12 +10,13 @@ use crate::server::domain::indexing::{
         IndexingCommand, RequestIngest, RequeueChunking, RequeueEmbedding, RequeueIndexing,
     },
 };
+use crate::server::domain::shared::value_objects::ChunkingConfig as DomainChunkingConfig;
 use crate::shared::ChunkingConfig;
 use event_sourcing::CommandProcessor;
 
 pub struct RequestIngestInput {
     pub document_id: Uuid,
-    pub pipeline_configuration_id: Uuid,
+    pub index_profile_id: Uuid,
     pub document_version: u32,
     pub chunking_config: ChunkingConfig,
     pub auto_advance: bool,
@@ -41,12 +42,14 @@ impl IndexingCommandHandler {
     }
 
     pub async fn request_ingest(&self, input: RequestIngestInput) -> Result<Uuid, AppError> {
-        let stream_id = Indexing::compute_id(input.document_id, input.pipeline_configuration_id);
+        let chunking_domain: DomainChunkingConfig = input.chunking_config.into();
+        let stream_id =
+            Indexing::compute_id(input.document_id, input.index_profile_id, &chunking_domain);
         let command = IndexingCommand::RequestIngest(RequestIngest {
             document_id: input.document_id,
-            pipeline_configuration_id: input.pipeline_configuration_id,
+            index_profile_id: input.index_profile_id,
             document_version: input.document_version,
-            chunking_config: input.chunking_config.into(),
+            chunking_config: chunking_domain,
             request_id: self.id_generator.new_uuid(),
             auto_advance: input.auto_advance,
             occurred_at: self.clock.now(),

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
-use crate::server::application::configuration::PipelineResolver;
+use crate::server::application::configuration::IndexProfileResolver;
 use crate::server::application::connector::{ConnectorQueryService, ConnectorRegistry};
 use crate::server::application::indexing::{
     command_handler::IndexingCommandHandler, RequestIngestInput,
@@ -27,7 +27,7 @@ pub struct SourceDocumentIngestServiceDeps {
     pub blob_store: Arc<dyn BlobStore>,
     pub connector_registry: Arc<ConnectorRegistry>,
     pub connector_query_service: Arc<ConnectorQueryService>,
-    pub pipeline_resolver: Arc<PipelineResolver>,
+    pub index_profile_resolver: Arc<IndexProfileResolver>,
     pub http_client: Arc<dyn HttpClient>,
     pub normalizer_registry: Arc<DocumentNormalizerRegistry>,
     pub clock: Arc<dyn Clock>,
@@ -41,7 +41,7 @@ pub struct SourceDocumentIngestService {
     blob_store: Arc<dyn BlobStore>,
     connector_registry: Arc<ConnectorRegistry>,
     connector_query_service: Arc<ConnectorQueryService>,
-    pipeline_resolver: Arc<PipelineResolver>,
+    index_profile_resolver: Arc<IndexProfileResolver>,
     http_client: Arc<dyn HttpClient>,
     normalizer_registry: Arc<DocumentNormalizerRegistry>,
     clock: Arc<dyn Clock>,
@@ -57,7 +57,7 @@ impl SourceDocumentIngestService {
             blob_store: deps.blob_store,
             connector_registry: deps.connector_registry,
             connector_query_service: deps.connector_query_service,
-            pipeline_resolver: deps.pipeline_resolver,
+            index_profile_resolver: deps.index_profile_resolver,
             http_client: deps.http_client,
             normalizer_registry: deps.normalizer_registry,
             clock: deps.clock,
@@ -193,7 +193,7 @@ impl SourceDocumentIngestService {
     pub async fn request_indexing(
         &self,
         source_ref: SourceRef,
-        pipeline_configuration_id: Uuid,
+        index_profile_id: Uuid,
         chunking_config: ChunkingConfig,
         auto_advance: bool,
     ) -> Result<Uuid, AppError> {
@@ -209,14 +209,14 @@ impl SourceDocumentIngestService {
             })?;
 
         let _ = self
-            .pipeline_resolver
-            .resolve(pipeline_configuration_id)
+            .index_profile_resolver
+            .resolve(index_profile_id)
             .await?;
 
         self.indexing_command_handler
             .request_ingest(RequestIngestInput {
                 document_id: document.document_id,
-                pipeline_configuration_id,
+                index_profile_id,
                 document_version: document.latest_version_number,
                 chunking_config,
                 auto_advance,

@@ -55,6 +55,7 @@ impl ConnectorSyncRepository for PostgresConnectorSyncRepository {
         &self,
         connector_id: Uuid,
         limit: u32,
+        offset: u32,
     ) -> Result<Vec<ConnectorSyncSummary>, ConnectorSyncRepositoryError> {
         let rows: Vec<SyncRow> = sqlx::query_as(
             "
@@ -63,11 +64,12 @@ impl ConnectorSyncRepository for PostgresConnectorSyncRepository {
             FROM connector_syncs
             WHERE connector_id = $1
             ORDER BY started_at DESC
-            LIMIT $2
+            LIMIT $2 OFFSET $3
             ",
         )
         .bind(connector_id)
         .bind(limit as i64)
+        .bind(offset as i64)
         .fetch_all(&self.pool)
         .await
         .map_err(|e| ConnectorSyncRepositoryError::Internal(format!("list_for_connector: {e}")))?;

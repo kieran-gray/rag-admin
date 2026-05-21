@@ -5,5 +5,4 @@ pub struct RunFingerprint {
     pub document_content_hash: String,
     pub dataset_content_hash: String,
     pub embedding_model_snapshot: serde_json::Value,
-    pub generation_model_snapshot: serde_json::Value,
 }

@@ -12,12 +12,12 @@ use state::EvaluateSelection;
 use steps::{DatasetStep, ResultsStep, RunStep};
 
 use crate::server_functions::configuration::{
-    get_chunking_configurations, get_pipeline_configurations, get_sweep_templates,
+    get_chunking_configurations, get_index_profiles, get_retrieval_profiles, get_sweep_templates,
 };
 use crate::server_functions::source_document::get_document_detail_by_source_ref;
 use crate::shared::contracts::{
-    aggregate_type, ChunkingConfigurationDto, PipelineConfigurationDto, SourceDocumentDetailDto,
-    SourceDocumentDto, SweepTemplateDto,
+    aggregate_type, ChunkingConfigurationDto, IndexProfileDto, RetrievalProfileDto,
+    SourceDocumentDetailDto, SourceDocumentDto, SweepTemplateDto,
 };
 use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{EmptyState, PageHeader, Surface};
@@ -52,7 +52,7 @@ pub fn EvaluatePage() -> impl IntoView {
         },
     );
 
-    let pipeline_invalidator = use_invalidator(|e| {
+    let index_profile_invalidator = use_invalidator(|e| {
         e.from_any(&[
             aggregate_type::EMBEDDING_MODEL_CATALOG,
             aggregate_type::GENERATION_MODEL_CATALOG,
@@ -60,16 +60,20 @@ pub fn EvaluatePage() -> impl IntoView {
             aggregate_type::SWEEP_TEMPLATE,
         ])
     });
-    let pipelines = Resource::new(
-        move || pipeline_invalidator.get(),
-        |_| async move { get_pipeline_configurations().await.unwrap_or_default() },
+    let index_profiles = Resource::new(
+        move || index_profile_invalidator.get(),
+        |_| async move { get_index_profiles().await.unwrap_or_default() },
+    );
+    let retrieval_profiles = Resource::new(
+        move || index_profile_invalidator.get(),
+        |_| async move { get_retrieval_profiles().await.unwrap_or_default() },
     );
     let chunking_configurations = Resource::new(
-        move || pipeline_invalidator.get(),
+        move || index_profile_invalidator.get(),
         |_| async move { get_chunking_configurations().await.unwrap_or_default() },
     );
     let sweep_templates = Resource::new(
-        move || pipeline_invalidator.get(),
+        move || index_profile_invalidator.get(),
         |_| async move { get_sweep_templates().await.unwrap_or_default() },
     );
 
@@ -77,7 +81,8 @@ pub fn EvaluatePage() -> impl IntoView {
         <div>
             <Transition fallback=|| view! { <p class="muted">"Loading document…"</p> }>
                 {move || {
-                    let pipelines = pipelines.get().unwrap_or_default();
+                    let index_profiles = index_profiles.get().unwrap_or_default();
+                    let retrieval_profiles = retrieval_profiles.get().unwrap_or_default();
                     let chunking_configurations = chunking_configurations.get().unwrap_or_default();
                     let sweep_templates = sweep_templates.get().unwrap_or_default();
                     detail.get().map(|res| match res {
@@ -92,7 +97,8 @@ pub fn EvaluatePage() -> impl IntoView {
                         Ok(Some(existing)) => view! {
                             <EvaluateWorkspace
                                 detail=existing
-                                pipelines=pipelines
+                                index_profiles=index_profiles
+                                retrieval_profiles=retrieval_profiles
                                 chunking_configurations=chunking_configurations
                                 sweep_templates=sweep_templates
                                 source_ref=source_ref.get()
@@ -152,7 +158,8 @@ enum StepState {
 #[component]
 fn EvaluateWorkspace(
     detail: SourceDocumentDetailDto,
-    pipelines: Vec<PipelineConfigurationDto>,
+    index_profiles: Vec<IndexProfileDto>,
+    retrieval_profiles: Vec<RetrievalProfileDto>,
     chunking_configurations: Vec<ChunkingConfigurationDto>,
     sweep_templates: Vec<SweepTemplateDto>,
     source_ref: String,
@@ -163,7 +170,12 @@ fn EvaluateWorkspace(
     let document_id = detail.document.document_id;
     let (header_eyebrow, header_title, header_subtitle) = derive_header(&detail.document);
 
-    let selection = EvaluateSelection::new(&pipelines, initial_dataset, initial_run);
+    let selection = EvaluateSelection::new(
+        &index_profiles,
+        &retrieval_profiles,
+        initial_dataset,
+        initial_run,
+    );
 
     let initial_step_value = initial_step.unwrap_or_else(|| {
         if initial_run.is_some() {
@@ -176,7 +188,7 @@ fn EvaluateWorkspace(
     });
     let (active_step, set_active_step) = signal(initial_step_value);
 
-    let pipelines_stored = StoredValue::new(pipelines);
+    let index_profiles_stored = StoredValue::new(index_profiles);
     let chunking_stored = StoredValue::new(chunking_configurations);
     let sweep_templates_stored = StoredValue::new(sweep_templates);
     let source_ref_stored = StoredValue::new(source_ref);
@@ -231,7 +243,7 @@ fn EvaluateWorkspace(
                 {move || {
                     let step = active_step.get();
                     let source_ref = source_ref_stored.get_value();
-                    let pipelines = pipelines_stored.get_value();
+                    let index_profiles = index_profiles_stored.get_value();
                     let chunking = chunking_stored.get_value();
                     let sweep = sweep_templates_stored.get_value();
                     match step {
@@ -239,7 +251,7 @@ fn EvaluateWorkspace(
                             <DatasetStep
                                 document_id=document_id
                                 selection=selection
-                                pipelines=pipelines_stored
+                                index_profiles=index_profiles_stored
                                 on_advance=on_advance_to_run
                             />
                         }.into_any(),
@@ -248,7 +260,7 @@ fn EvaluateWorkspace(
                                 document_id=document_id
                                 source_ref=&source_ref
                                 selection=selection
-                                pipelines=pipelines
+                                index_profiles=index_profiles
                                 chunking_configurations=chunking
                                 sweep_templates=sweep
                                 on_back=on_back_to_dataset

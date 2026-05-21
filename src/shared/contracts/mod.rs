@@ -19,14 +19,16 @@ pub use chat::{ChatRequest, ChatResponse};
 pub use configuration::{
     AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto,
     ChunkingConfigurationCommandDto, ChunkingConfigurationDto, ConfigurationDto,
-    CreateChunkingConfigurationDto, CreatePipelineConfigurationDto, CreateSweepTemplateDto,
-    DeleteChunkingConfigurationDto, DeletePipelineConfigurationDto, DeleteSweepTemplateDto,
-    EmbeddingModelCommandDto, EmbeddingModelDto, GenerationModelCommandDto, GenerationModelDto,
-    PipelineConfigurationCommandDto, PipelineConfigurationDto, RemoveEmbeddingModelDto,
-    RemoveGenerationModelDto, RemoveVectorIndexDto, SetDefaultSweepTemplateDto,
+    CreateChunkingConfigurationDto, CreateIndexProfileDto, CreateRetrievalProfileDto,
+    CreateSweepTemplateDto, DeleteChunkingConfigurationDto, DeleteIndexProfileDto,
+    DeleteRetrievalProfileDto, DeleteSweepTemplateDto, EmbeddingModelCommandDto, EmbeddingModelDto,
+    GenerationModelCommandDto, GenerationModelDto, IndexProfileCommandDto, IndexProfileDto,
+    RemoveEmbeddingModelDto, RemoveGenerationModelDto, RemoveVectorIndexDto,
+    RetrievalProfileCommandDto, RetrievalProfileDto, SetDefaultSweepTemplateDto,
     SweepTemplateCommandDto, SweepTemplateDto, UpdateChunkingConfigurationDto,
-    UpdateEmbeddingModelDto, UpdateGenerationModelDto, UpdatePipelineConfigurationDto,
-    UpdateSweepTemplateDto, UpdateVectorIndexDto, VectorIndexCommandDto, VectorIndexDto,
+    UpdateEmbeddingModelDto, UpdateGenerationModelDto, UpdateIndexProfileDto,
+    UpdateRetrievalProfileDto, UpdateSweepTemplateDto, UpdateVectorIndexDto, VectorIndexCommandDto,
+    VectorIndexDto,
 };
 pub use connector::{
     BulkImportFailureDto, BulkImportResultDto, ConnectorCommandDto, ConnectorConfigDto,

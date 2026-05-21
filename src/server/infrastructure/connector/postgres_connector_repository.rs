@@ -25,7 +25,8 @@ impl ConnectorRepository for PostgresConnectorRepository {
         let row: Option<ConnectorRow> = sqlx::query_as(
             "
             SELECT connector_id, name, config, deleted, created_at, updated_at,
-                   default_pipeline_configuration_id, default_chunking_configuration_id
+                   default_index_profile_id, default_chunking_configuration_id,
+                   default_retrieval_profile_id
             FROM connectors
             WHERE connector_id = $1
             ",
@@ -46,17 +47,19 @@ impl ConnectorRepository for PostgresConnectorRepository {
             "
             INSERT INTO connectors (
                 connector_id, name, kind, config, deleted, created_at, updated_at,
-                default_pipeline_configuration_id, default_chunking_configuration_id
+                default_index_profile_id, default_chunking_configuration_id,
+                default_retrieval_profile_id
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             ON CONFLICT (connector_id) DO UPDATE SET
                 name = EXCLUDED.name,
                 kind = EXCLUDED.kind,
                 config = EXCLUDED.config,
                 deleted = EXCLUDED.deleted,
                 updated_at = EXCLUDED.updated_at,
-                default_pipeline_configuration_id = EXCLUDED.default_pipeline_configuration_id,
-                default_chunking_configuration_id = EXCLUDED.default_chunking_configuration_id
+                default_index_profile_id = EXCLUDED.default_index_profile_id,
+                default_chunking_configuration_id = EXCLUDED.default_chunking_configuration_id,
+                default_retrieval_profile_id = EXCLUDED.default_retrieval_profile_id
             ",
         )
         .bind(read_model.connector_id)
@@ -66,8 +69,9 @@ impl ConnectorRepository for PostgresConnectorRepository {
         .bind(read_model.deleted)
         .bind(&read_model.created_at)
         .bind(&read_model.updated_at)
-        .bind(read_model.default_pipeline_configuration_id)
+        .bind(read_model.default_index_profile_id)
         .bind(read_model.default_chunking_configuration_id)
+        .bind(read_model.default_retrieval_profile_id)
         .execute(&self.pool)
         .await
         .map_err(|e| ConnectorRepositoryError::Internal(format!("save: {e}")))?;
@@ -100,7 +104,8 @@ impl ConnectorRepository for PostgresConnectorRepository {
         let rows: Vec<ConnectorRow> = sqlx::query_as(
             "
             SELECT connector_id, name, config, deleted, created_at, updated_at,
-                   default_pipeline_configuration_id, default_chunking_configuration_id
+                   default_index_profile_id, default_chunking_configuration_id,
+                   default_retrieval_profile_id
             FROM connectors
             WHERE NOT deleted
             ORDER BY created_at ASC
@@ -122,8 +127,9 @@ struct ConnectorRow {
     deleted: bool,
     created_at: String,
     updated_at: String,
-    default_pipeline_configuration_id: Option<Uuid>,
+    default_index_profile_id: Option<Uuid>,
     default_chunking_configuration_id: Option<Uuid>,
+    default_retrieval_profile_id: Option<Uuid>,
 }
 
 impl TryFrom<ConnectorRow> for ConnectorReadModel {
@@ -139,8 +145,9 @@ impl TryFrom<ConnectorRow> for ConnectorReadModel {
             deleted: row.deleted,
             created_at: row.created_at,
             updated_at: row.updated_at,
-            default_pipeline_configuration_id: row.default_pipeline_configuration_id,
+            default_index_profile_id: row.default_index_profile_id,
             default_chunking_configuration_id: row.default_chunking_configuration_id,
+            default_retrieval_profile_id: row.default_retrieval_profile_id,
         })
     }
 }

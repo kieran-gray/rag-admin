@@ -12,6 +12,7 @@ pub mod job;
 pub mod llm;
 pub mod markdown;
 pub mod ports;
+pub mod registry;
 pub mod retrieval;
 pub mod source_document;
 
@@ -23,3 +24,4 @@ pub use exceptions::AppError;
 pub use job::{
     InternalLogEvent, InternalLogLevel, Job, JobIdStrategy, JobMessage, JobRegistry, JobSession,
 };
+pub use registry::Registry;

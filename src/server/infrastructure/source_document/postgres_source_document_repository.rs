@@ -347,9 +347,7 @@ impl SourceDocumentRepository for PostgresSourceDocumentRepository {
         Ok(rows.into_iter().map(|r| r.0).collect())
     }
 
-    async fn connector_facets(
-        &self,
-    ) -> Result<Vec<(Uuid, u64)>, SourceDocumentRepositoryError> {
+    async fn connector_facets(&self) -> Result<Vec<(Uuid, u64)>, SourceDocumentRepositoryError> {
         let rows: Vec<(Uuid, i64)> = sqlx::query_as(
             "
             SELECT d.connector_id, COUNT(DISTINCT sd.document_id)

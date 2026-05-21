@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::server::application::chat::ChatService;
-use crate::server::application::configuration::PipelineResolver;
+use crate::server::application::configuration::RetrievalProfileResolver;
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::indexing::VectorIndexResolver;
 use crate::server::application::llm::GenerationService;
@@ -14,7 +14,7 @@ pub struct ChatServices {
 
 pub struct ChatDeps<'a> {
     pub repos: &'a Repositories,
-    pub pipeline_resolver: Arc<PipelineResolver>,
+    pub retrieval_profile_resolver: Arc<RetrievalProfileResolver>,
     pub embedding_service: Arc<EmbeddingService>,
     pub vector_index_resolver: Arc<VectorIndexResolver>,
     pub generation_service: Arc<GenerationService>,
@@ -23,7 +23,7 @@ pub struct ChatDeps<'a> {
 impl ChatServices {
     pub fn build(deps: ChatDeps<'_>) -> Result<Self, SetupError> {
         let chat_service = ChatService::new(
-            deps.pipeline_resolver,
+            deps.retrieval_profile_resolver,
             deps.embedding_service,
             deps.vector_index_resolver,
             deps.generation_service,

@@ -11,7 +11,7 @@ use crate::server::domain::shared::value_objects::ChunkingConfig;
 pub struct ExecuteVariantEffect {
     pub run_id: Uuid,
     pub dataset_id: Uuid,
-    pub pipeline_configuration_id: Uuid,
+    pub index_profile_id: Uuid,
     pub document_id: Uuid,
     pub document_version: u32,
     pub variant_label: String,
@@ -25,7 +25,7 @@ pub struct ExecuteVariantEffect {
 pub struct FinalizeRunEffect {
     pub run_id: Uuid,
     pub dataset_id: Uuid,
-    pub pipeline_configuration_id: Uuid,
+    pub index_profile_id: Uuid,
     pub autotune_request: Option<EvaluationAutotuneRequest>,
     pub scoring_policy: ScoringPolicy,
 }
@@ -34,7 +34,7 @@ pub struct FinalizeRunEffect {
 pub struct OptimizeRunEffect {
     pub run_id: Uuid,
     pub dataset_id: Uuid,
-    pub pipeline_configuration_id: Uuid,
+    pub index_profile_id: Uuid,
     pub document_id: Uuid,
     pub document_version: u32,
     pub optimization: OptimizationConfig,

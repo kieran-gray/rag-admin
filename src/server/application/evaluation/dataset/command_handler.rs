@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
-use crate::server::application::configuration::PipelineResolver;
+use crate::server::application::configuration::RetrievalProfileResolver;
 use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::source_document::SourceDocumentQueryService;
 use crate::server::application::AppError;
@@ -16,7 +16,7 @@ use event_sourcing::CommandProcessor;
 
 pub struct StartDatasetGenerationRequest {
     pub document_id: Uuid,
-    pub pipeline_configuration_id: Uuid,
+    pub retrieval_profile_id: Uuid,
     pub label: String,
     pub question_count: u32,
     pub excerpt_similarity_threshold_milli: u32,
@@ -25,7 +25,7 @@ pub struct StartDatasetGenerationRequest {
 
 pub struct EvaluationDatasetCommandHandler {
     processor: Arc<CommandProcessor<EvaluationDataset>>,
-    pipeline_resolver: Arc<PipelineResolver>,
+    retrieval_profile_resolver: Arc<RetrievalProfileResolver>,
     documents: Arc<SourceDocumentQueryService>,
     clock: Arc<dyn Clock>,
     id_generator: Arc<dyn IdGenerator>,
@@ -34,14 +34,14 @@ pub struct EvaluationDatasetCommandHandler {
 impl EvaluationDatasetCommandHandler {
     pub fn new(
         processor: Arc<CommandProcessor<EvaluationDataset>>,
-        pipeline_resolver: Arc<PipelineResolver>,
+        retrieval_profile_resolver: Arc<RetrievalProfileResolver>,
         documents: Arc<SourceDocumentQueryService>,
         clock: Arc<dyn Clock>,
         id_generator: Arc<dyn IdGenerator>,
     ) -> Arc<Self> {
         Arc::new(Self {
             processor,
-            pipeline_resolver,
+            retrieval_profile_resolver,
             documents,
             clock,
             id_generator,
@@ -52,9 +52,9 @@ impl EvaluationDatasetCommandHandler {
         &self,
         request: StartDatasetGenerationRequest,
     ) -> Result<EvaluationJobInfo, AppError> {
-        let pipeline = self
-            .pipeline_resolver
-            .resolve(request.pipeline_configuration_id)
+        let profile = self
+            .retrieval_profile_resolver
+            .resolve(request.retrieval_profile_id)
             .await?;
 
         let detail = self
@@ -82,15 +82,15 @@ impl EvaluationDatasetCommandHandler {
                     content_hash: document.latest_content_hash,
                     label: request.label,
                     target_question_count: target,
-                    generation_model_id: pipeline.generation_model.generation_model_id,
-                    generation_model: pipeline.generation_model.model.clone(),
+                    generation_model_id: profile.generation_model.generation_model_id,
+                    generation_model: profile.generation_model.model.clone(),
                     excerpt_similarity_threshold_milli: request
                         .excerpt_similarity_threshold_milli
                         .min(1000),
                     duplicate_similarity_threshold_milli: request
                         .duplicate_similarity_threshold_milli
                         .min(1000),
-                    embedding_model_id: pipeline.embedding_model.embedding_model_id,
+                    embedding_model_id: profile.index_profile.embedding_model.embedding_model_id,
                     max_attempts,
                     grammar_variants_enabled: true,
                     occurred_at,

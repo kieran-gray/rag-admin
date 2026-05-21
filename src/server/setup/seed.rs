@@ -5,16 +5,16 @@ use uuid::Uuid;
 use crate::server::application::configuration::{
     ChunkingConfigurationCatalogCommandHandler, ChunkingConfigurationQueryService,
     ConfigurationQueryService, EmbeddingModelCatalogCommandHandler,
-    GenerationModelCatalogCommandHandler, PipelineConfigurationCatalogCommandHandler,
-    PipelineConfigurationQueryService, SweepTemplateCommandHandler, SweepTemplateQueryService,
-    VectorIndexCatalogCommandHandler,
+    GenerationModelCatalogCommandHandler, IndexProfileCatalogCommandHandler,
+    IndexProfileQueryService, RetrievalProfileCatalogCommandHandler, RetrievalProfileQueryService,
+    SweepTemplateCommandHandler, SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
 };
 use crate::shared::contracts::{
     AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto,
-    ChunkingConfigurationCommandDto, CreateChunkingConfigurationDto,
-    CreatePipelineConfigurationDto, CreateSweepTemplateDto, EmbeddingModelCommandDto,
-    GenerationModelCommandDto, PipelineConfigurationCommandDto, SetDefaultSweepTemplateDto,
-    SweepTemplateCommandDto, VectorIndexCommandDto,
+    ChunkingConfigurationCommandDto, CreateChunkingConfigurationDto, CreateIndexProfileDto,
+    CreateRetrievalProfileDto, CreateSweepTemplateDto, EmbeddingModelCommandDto,
+    GenerationModelCommandDto, IndexProfileCommandDto, RetrievalProfileCommandDto,
+    SetDefaultSweepTemplateDto, SweepTemplateCommandDto, VectorIndexCommandDto,
 };
 use crate::shared::reference_data::{AiProviderKind, VectorStoreKind};
 use crate::shared::{
@@ -23,11 +23,14 @@ use crate::shared::{
 };
 
 const DEFAULT_SWEEP_NAME: &str = "default-sweep";
-const DEFAULT_PIPELINE_NAME: &str = "default";
-const DEFAULT_CHUNKING_NAME: &str = "section-384";
+const DEFAULT_INDEX_PROFILE_NAME: &str = "default";
+const DEFAULT_RETRIEVAL_PROFILE_NAME: &str = "default";
+const DEFAULT_CHUNKING_NAME: &str = "darn-500-50";
 const DEFAULT_VECTOR_INDEX_NAME: &str = "default-pgvector";
 const DEFAULT_EMBEDDING_MODEL: &str = "qwen3-embedding:0.6b";
 const DEFAULT_GENERATION_MODEL: &str = "gemma3:12b-it-qat";
+const DEFAULT_TOP_K: u32 = 8;
+const DEFAULT_MIN_SCORE_MILLI: u32 = 400;
 
 pub struct ChunkingSeed {
     pub name: &'static str,
@@ -156,19 +159,33 @@ pub async fn seed_if_empty(
     chunking_query: &Arc<ChunkingConfigurationQueryService>,
     sweep_template_query: &Arc<SweepTemplateQueryService>,
     configuration_query: &Arc<ConfigurationQueryService>,
-    pipeline_query: &Arc<PipelineConfigurationQueryService>,
+    index_profile_query: &Arc<IndexProfileQueryService>,
+    retrieval_profile_query: &Arc<RetrievalProfileQueryService>,
     embedding_handler: &Arc<EmbeddingModelCatalogCommandHandler>,
     generation_handler: &Arc<GenerationModelCatalogCommandHandler>,
     vector_index_handler: &Arc<VectorIndexCatalogCommandHandler>,
     chunking_handler: &Arc<ChunkingConfigurationCatalogCommandHandler>,
-    pipeline_handler: &Arc<PipelineConfigurationCatalogCommandHandler>,
+    index_profile_handler: &Arc<IndexProfileCatalogCommandHandler>,
+    retrieval_profile_handler: &Arc<RetrievalProfileCatalogCommandHandler>,
     sweep_template_handler: &Arc<SweepTemplateCommandHandler>,
 ) -> Result<(), String> {
     seed_models_if_empty(configuration_query, embedding_handler, generation_handler).await?;
     seed_vector_indexes_if_empty(configuration_query, vector_index_handler).await?;
     seed_chunking_configurations_if_empty(chunking_query, configuration_query, chunking_handler)
         .await?;
-    seed_default_pipeline_if_empty(configuration_query, pipeline_query, pipeline_handler).await?;
+    seed_default_index_profile_if_empty(
+        configuration_query,
+        index_profile_query,
+        index_profile_handler,
+    )
+    .await?;
+    seed_default_retrieval_profile_if_empty(
+        configuration_query,
+        index_profile_query,
+        retrieval_profile_query,
+        retrieval_profile_handler,
+    )
+    .await?;
     seed_default_sweep_template_if_empty(
         chunking_query,
         sweep_template_query,
@@ -178,12 +195,15 @@ pub async fn seed_if_empty(
     Ok(())
 }
 
-async fn seed_default_pipeline_if_empty(
+async fn seed_default_index_profile_if_empty(
     configuration_query: &Arc<ConfigurationQueryService>,
-    pipeline_query: &Arc<PipelineConfigurationQueryService>,
-    pipeline_handler: &Arc<PipelineConfigurationCatalogCommandHandler>,
+    index_profile_query: &Arc<IndexProfileQueryService>,
+    index_profile_handler: &Arc<IndexProfileCatalogCommandHandler>,
 ) -> Result<(), String> {
-    let existing = pipeline_query.list().await.map_err(|e| e.to_string())?;
+    let existing = index_profile_query
+        .list()
+        .await
+        .map_err(|e| e.to_string())?;
     if !existing.is_empty() {
         return Ok(());
     }
@@ -196,13 +216,6 @@ async fn seed_default_pipeline_if_empty(
     else {
         return Ok(());
     };
-    let Some(generation) = catalog
-        .generation_models
-        .iter()
-        .find(|m| m.model == DEFAULT_GENERATION_MODEL && m.kind == AiProviderKind::Ollama)
-    else {
-        return Ok(());
-    };
     let Some(vector_index) = catalog
         .vector_indexes
         .iter()
@@ -211,20 +224,68 @@ async fn seed_default_pipeline_if_empty(
         return Ok(());
     };
 
-    pipeline_handler
-        .handle_dto(
-            PipelineConfigurationCommandDto::CreatePipelineConfiguration(
-                CreatePipelineConfigurationDto {
-                    name: DEFAULT_PIPELINE_NAME.to_owned(),
-                    embedding_model_id: embedding.embedding_model_id,
-                    generation_model_id: generation.generation_model_id,
-                    vector_index_id: vector_index.index_id,
-                    is_default: true,
-                },
-            ),
-        )
+    index_profile_handler
+        .handle_dto(IndexProfileCommandDto::CreateIndexProfile(
+            CreateIndexProfileDto {
+                name: DEFAULT_INDEX_PROFILE_NAME.to_owned(),
+                embedding_model_id: embedding.embedding_model_id,
+                vector_index_id: vector_index.index_id,
+                is_default: true,
+            },
+        ))
         .await
-        .map_err(|e| format!("seed default pipeline: {e}"))?;
+        .map_err(|e| format!("seed default index profile: {e}"))?;
+    Ok(())
+}
+
+async fn seed_default_retrieval_profile_if_empty(
+    configuration_query: &Arc<ConfigurationQueryService>,
+    index_profile_query: &Arc<IndexProfileQueryService>,
+    retrieval_profile_query: &Arc<RetrievalProfileQueryService>,
+    retrieval_profile_handler: &Arc<RetrievalProfileCatalogCommandHandler>,
+) -> Result<(), String> {
+    let existing = retrieval_profile_query
+        .list()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !existing.is_empty() {
+        return Ok(());
+    }
+
+    let index_profiles = index_profile_query
+        .list()
+        .await
+        .map_err(|e| e.to_string())?;
+    let Some(index_profile) = index_profiles
+        .iter()
+        .find(|ip| ip.name == DEFAULT_INDEX_PROFILE_NAME)
+    else {
+        return Ok(());
+    };
+
+    let catalog = configuration_query.get().await.map_err(|e| e.to_string())?;
+    let Some(generation) = catalog
+        .generation_models
+        .iter()
+        .find(|m| m.model == DEFAULT_GENERATION_MODEL && m.kind == AiProviderKind::Ollama)
+    else {
+        return Ok(());
+    };
+
+    retrieval_profile_handler
+        .handle_dto(RetrievalProfileCommandDto::CreateRetrievalProfile(
+            CreateRetrievalProfileDto {
+                name: DEFAULT_RETRIEVAL_PROFILE_NAME.to_owned(),
+                index_profile_id: index_profile.index_profile_id,
+                generation_model_id: generation.generation_model_id,
+                reranker_model_id: None,
+                default_top_k: DEFAULT_TOP_K,
+                default_min_score_milli: DEFAULT_MIN_SCORE_MILLI,
+                is_default: true,
+            },
+        ))
+        .await
+        .map_err(|e| format!("seed default retrieval profile: {e}"))?;
     Ok(())
 }
 

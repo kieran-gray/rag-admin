@@ -13,7 +13,8 @@ use crate::server::domain::configuration::{
     chunking_configuration::ChunkingConfigurationRepositoryError,
     embedding_model::EmbeddingModelRepositoryError,
     generation_model::GenerationModelRepositoryError,
-    pipeline_configuration::PipelineConfigurationRepositoryError,
+    index_profile::IndexProfileRepositoryError,
+    retrieval_profile::RetrievalProfileRepositoryError,
     sweep_template::{SweepTemplateError, SweepTemplateRepositoryError},
     vector_index::VectorIndexRepositoryError,
 };
@@ -105,12 +106,18 @@ impl From<VectorIndexRepositoryError> for AppError {
     }
 }
 
-impl From<PipelineConfigurationRepositoryError> for AppError {
-    fn from(value: PipelineConfigurationRepositoryError) -> Self {
+impl From<IndexProfileRepositoryError> for AppError {
+    fn from(value: IndexProfileRepositoryError) -> Self {
         match value {
-            PipelineConfigurationRepositoryError::Internal(_) => {
-                AppError::Internal(value.to_string())
-            }
+            IndexProfileRepositoryError::Internal(_) => AppError::Internal(value.to_string()),
+        }
+    }
+}
+
+impl From<RetrievalProfileRepositoryError> for AppError {
+    fn from(value: RetrievalProfileRepositoryError) -> Self {
+        match value {
+            RetrievalProfileRepositoryError::Internal(_) => AppError::Internal(value.to_string()),
         }
     }
 }

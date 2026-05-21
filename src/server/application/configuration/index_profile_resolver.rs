@@ -4,45 +4,40 @@ use uuid::Uuid;
 
 use crate::server::application::embedding::{EmbeddingService, ResolvedEmbeddingModel};
 use crate::server::application::indexing::{ResolvedVectorIndex, VectorIndexResolver};
-use crate::server::application::llm::{GenerationService, ResolvedGenerationModel};
 use crate::server::application::AppError;
 use crate::server::domain::configuration::defaults::ConfigurationDefaultsRepository;
-use crate::server::domain::configuration::pipeline_configuration::PipelineConfigurationRepository;
+use crate::server::domain::configuration::index_profile::IndexProfileRepository;
 use crate::server::domain::connector::ConnectorRepository;
 
 #[derive(Debug, Clone)]
-pub struct ResolvedPipeline {
-    pub pipeline_configuration_id: Uuid,
+pub struct ResolvedIndexProfile {
+    pub index_profile_id: Uuid,
     pub name: String,
     pub embedding_model: ResolvedEmbeddingModel,
-    pub generation_model: ResolvedGenerationModel,
     pub vector_index: ResolvedVectorIndex,
 }
 
-pub struct PipelineResolver {
-    pipeline_repository: Arc<dyn PipelineConfigurationRepository>,
+pub struct IndexProfileResolver {
+    index_profile_repository: Arc<dyn IndexProfileRepository>,
     connector_repository: Arc<dyn ConnectorRepository>,
     defaults: Arc<dyn ConfigurationDefaultsRepository>,
     embedding_service: Arc<EmbeddingService>,
-    generation_service: Arc<GenerationService>,
     vector_index_resolver: Arc<VectorIndexResolver>,
 }
 
-impl PipelineResolver {
+impl IndexProfileResolver {
     pub fn new(
-        pipeline_repository: Arc<dyn PipelineConfigurationRepository>,
+        index_profile_repository: Arc<dyn IndexProfileRepository>,
         connector_repository: Arc<dyn ConnectorRepository>,
         defaults: Arc<dyn ConfigurationDefaultsRepository>,
         embedding_service: Arc<EmbeddingService>,
-        generation_service: Arc<GenerationService>,
         vector_index_resolver: Arc<VectorIndexResolver>,
     ) -> Arc<Self> {
         Arc::new(Self {
-            pipeline_repository,
+            index_profile_repository,
             connector_repository,
             defaults,
             embedding_service,
-            generation_service,
             vector_index_resolver,
         })
     }
@@ -50,7 +45,7 @@ impl PipelineResolver {
     pub async fn resolve_for_connector(
         &self,
         connector_id: Uuid,
-    ) -> Result<ResolvedPipeline, AppError> {
+    ) -> Result<ResolvedIndexProfile, AppError> {
         let connector = self
             .connector_repository
             .load(connector_id)
@@ -58,55 +53,45 @@ impl PipelineResolver {
             .filter(|m| !m.deleted)
             .ok_or_else(|| AppError::NotFound(format!("connector {connector_id} not found")))?;
 
-        let pipeline_id = match connector.default_pipeline_configuration_id {
+        let index_profile_id = match connector.default_index_profile_id {
             Some(id) => id,
             None => self
                 .defaults
                 .load()
                 .await?
-                .pipeline_configuration_id
+                .index_profile_id
                 .ok_or_else(|| {
                     AppError::Validation(
-                        "no default pipeline configured for connector or application".into(),
+                        "no default index profile configured for connector or application".into(),
                     )
                 })?,
         };
 
-        self.resolve(pipeline_id).await
+        self.resolve(index_profile_id).await
     }
 
-    pub async fn resolve(
-        &self,
-        pipeline_configuration_id: Uuid,
-    ) -> Result<ResolvedPipeline, AppError> {
-        let pc = self
-            .pipeline_repository
-            .find_by_id(pipeline_configuration_id)
+    pub async fn resolve(&self, index_profile_id: Uuid) -> Result<ResolvedIndexProfile, AppError> {
+        let ip = self
+            .index_profile_repository
+            .find_by_id(index_profile_id)
             .await?
             .ok_or_else(|| {
-                AppError::NotFound(format!(
-                    "pipeline configuration {pipeline_configuration_id} not found"
-                ))
+                AppError::NotFound(format!("index profile {index_profile_id} not found"))
             })?;
 
         let embedding_model = self
             .embedding_service
-            .resolve(pc.embedding_model_id)
-            .await?;
-        let generation_model = self
-            .generation_service
-            .resolve(pc.generation_model_id)
+            .resolve(ip.embedding_model_id)
             .await?;
         let vector_index = self
             .vector_index_resolver
-            .resolve(pc.vector_index_id)
+            .resolve(ip.vector_index_id)
             .await?;
 
-        Ok(ResolvedPipeline {
-            pipeline_configuration_id: pc.pipeline_configuration_id,
-            name: pc.name,
+        Ok(ResolvedIndexProfile {
+            index_profile_id: ip.index_profile_id,
+            name: ip.name,
             embedding_model,
-            generation_model,
             vector_index,
         })
     }

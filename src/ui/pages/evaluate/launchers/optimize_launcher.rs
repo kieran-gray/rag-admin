@@ -12,7 +12,7 @@ fn describe_budget(b: OptimizationBudget) -> String {
 #[component]
 pub fn OptimizeLauncher(
     dataset_id: Option<Uuid>,
-    pipeline_configuration_id: Option<Uuid>,
+    index_profile_id: Option<Uuid>,
     on_launch: Callback<RunOptimizationRequestDto>,
     busy: ReadSignal<bool>,
     #[prop(optional)] error: Option<ReadSignal<Option<String>>>,
@@ -29,16 +29,17 @@ pub fn OptimizeLauncher(
             ));
             return;
         };
-        let Some(pipeline) = pipeline_configuration_id else {
+        let Some(profile) = index_profile_id else {
             set_local_error.set(Some(
-                "Pick a pipeline before launching an optimization.".into(),
+                "Pick an index profile before launching an optimization.".into(),
             ));
             return;
         };
         set_local_error.set(None);
         on_launch.run(RunOptimizationRequestDto {
             dataset_id: ds,
-            pipeline_configuration_id: pipeline,
+            index_profile_id: profile,
+            retrieval_profile_id: None,
             optimization: OptimizationConfig {
                 budget: budget.get_untracked(),
                 scope: scope.get_untracked(),

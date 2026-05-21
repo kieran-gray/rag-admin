@@ -24,23 +24,20 @@ impl PostgresChunkingConfigurationRepository {
 #[async_trait]
 impl CatalogRepository<ChunkingConfiguration> for PostgresChunkingConfigurationRepository {
     async fn upsert(&self, entry: ChunkingConfiguration) -> Result<(), ProjectionError> {
-        let generation_model_id = generation_model_id(&entry.config);
         let config_json = serde_json::to_value(entry.config)
             .map_err(|e| ProjectionError::Storage(format!("serialize config: {e}")))?;
         sqlx::query(
             "
-            INSERT INTO chunking_configurations (id, name, generation_model_id, config)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO chunking_configurations (id, name, config)
+            VALUES ($1, $2, $3)
             ON CONFLICT (id) DO UPDATE SET
-                name                = $2,
-                generation_model_id = $3,
-                config              = $4,
-                updated_at          = NOW()
+                name       = $2,
+                config     = $3,
+                updated_at = NOW()
             ",
         )
         .bind(entry.chunking_configuration_id)
         .bind(&entry.name)
-        .bind(generation_model_id)
         .bind(&config_json)
         .execute(&self.pool)
         .await
@@ -90,13 +87,6 @@ impl ChunkingConfigurationRepository for PostgresChunkingConfigurationRepository
                     ChunkingConfigurationRepositoryError::Internal(format!("find_by_id: {e}"))
                 })?;
         row.map(TryInto::try_into).transpose()
-    }
-}
-
-fn generation_model_id(config: &ChunkingConfig) -> Option<Uuid> {
-    match config {
-        ChunkingConfig::Llm(llm) => Some(llm.generation_model_id),
-        _ => None,
     }
 }
 

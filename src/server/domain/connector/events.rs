@@ -32,8 +32,9 @@ pub struct ConnectorUnregistered {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ConnectorDefaultsSet {
-    pub pipeline_configuration_id: Option<uuid::Uuid>,
-    pub chunking_configuration_id: Option<uuid::Uuid>,
+    pub index_profile_id: Option<Uuid>,
+    pub chunking_configuration_id: Option<Uuid>,
+    pub retrieval_profile_id: Option<Uuid>,
     pub occurred_at: Timestamp,
 }
 

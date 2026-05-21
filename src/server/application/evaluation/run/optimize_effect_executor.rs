@@ -146,7 +146,7 @@ impl OptimizeRunEffectExecutor {
 
         let ctx = self
             .trial_scorer
-            .load_run_context(effect.dataset_id, effect.pipeline_configuration_id)
+            .load_run_context(effect.dataset_id, effect.index_profile_id)
             .await?;
 
         let split = three_way(seed, ctx.questions.len(), ThreeWayRatios::default());

@@ -8,12 +8,12 @@ pub mod repository;
 
 pub use aggregate::ConfigurationDefaults;
 pub use commands::{
-    ConfigurationDefaultsCommand, SetDefaultChunkingConfiguration, SetDefaultPipelineConfiguration,
-    SetDefaultSweepTemplate,
+    ConfigurationDefaultsCommand, SetDefaultChunkingConfiguration, SetDefaultIndexProfile,
+    SetDefaultRetrievalProfile, SetDefaultSweepTemplate,
 };
 pub use events::{
-    ConfigurationDefaultsEvent, DefaultChunkingConfigurationSet, DefaultPipelineConfigurationSet,
-    DefaultSweepTemplateSet,
+    ConfigurationDefaultsEvent, DefaultChunkingConfigurationSet, DefaultIndexProfileSet,
+    DefaultRetrievalProfileSet, DefaultSweepTemplateSet,
 };
 pub use exceptions::ConfigurationDefaultsError;
 pub use projector::make_configuration_defaults_projector;

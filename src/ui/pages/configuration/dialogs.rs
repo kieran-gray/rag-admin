@@ -1,5 +1,5 @@
 use crate::shared::contracts::{
-    EmbeddingModelDto, GenerationModelDto, PipelineConfigurationDto, VectorIndexDto,
+    EmbeddingModelDto, GenerationModelDto, IndexProfileDto, RetrievalProfileDto, VectorIndexDto,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -7,7 +7,8 @@ pub enum AddDialog {
     EmbeddingModel,
     GenerationModel,
     VectorIndex,
-    PipelineConfiguration,
+    IndexProfile,
+    RetrievalProfile,
 }
 
 #[derive(Debug, Clone)]
@@ -15,7 +16,8 @@ pub enum EditDialog {
     EmbeddingModel(EmbeddingModelDto),
     GenerationModel(GenerationModelDto),
     VectorIndex(VectorIndexDto),
-    PipelineConfiguration(PipelineConfigurationDto),
+    IndexProfile(IndexProfileDto),
+    RetrievalProfile(RetrievalProfileDto),
 }
 
 #[derive(Debug, Clone)]

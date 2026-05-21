@@ -13,14 +13,14 @@ pub use selection::ConfigSelection;
 use leptos::prelude::*;
 
 #[derive(Clone)]
-pub struct PipelineMetaDto {
+pub struct IndexProfileMetaDto {
     pub name: String,
     pub embedding_model: Option<String>,
     pub vector_index: Option<String>,
 }
 
-pub fn pipeline_meta_view(
-    meta: Option<PipelineMetaDto>,
+pub fn index_profile_meta_view(
+    meta: Option<IndexProfileMetaDto>,
     document_version: u32,
     target_kind: &'static str,
     target: Option<String>,
@@ -29,7 +29,7 @@ pub fn pipeline_meta_view(
 
     view! {
         <div class="flex items-center gap-3 flex-wrap text-sm">
-            <span class="eyebrow">"Pipeline"</span>
+            <span class="eyebrow">"Index profile"</span>
             <span class="font-medium">{name}</span>
             <span class="muted">{format!("· doc v{document_version}")}</span>
             {target.map(|t| view! {

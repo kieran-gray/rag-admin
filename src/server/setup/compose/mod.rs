@@ -123,7 +123,7 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         chunker_registry: Arc::clone(&platform.chunker_registry),
         embedding_service: Arc::clone(&platform.embedding_service),
         vector_index_resolver: Arc::clone(&catalog.vector_index_resolver),
-        pipeline_resolver: Arc::clone(&catalog.pipeline_resolver),
+        index_profile_resolver: Arc::clone(&catalog.index_profile_resolver),
         kv_store: Arc::clone(&repos.kv_store),
         wakeups: &mut wakeups,
     })?;
@@ -136,7 +136,7 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         wirings: &wirings,
         event_bus: Arc::clone(&platform.event_bus),
         markdown_parser: Arc::clone(&platform.markdown_parser),
-        pipeline_resolver: Arc::clone(&catalog.pipeline_resolver),
+        index_profile_resolver: Arc::clone(&catalog.index_profile_resolver),
         chunking_configuration_query_service: Arc::clone(
             &catalog.chunking_configuration_query_service,
         ),
@@ -149,14 +149,14 @@ pub async fn bootstrap() -> Result<App, SetupError> {
 
     let retrieval = RetrievalServices::build(RetrievalDeps {
         repos: &repos,
-        pipeline_resolver: Arc::clone(&catalog.pipeline_resolver),
+        retrieval_profile_resolver: Arc::clone(&catalog.retrieval_profile_resolver),
         embedding_service: Arc::clone(&platform.embedding_service),
         vector_index_resolver: Arc::clone(&catalog.vector_index_resolver),
     })?;
 
     let chat = ChatServices::build(ChatDeps {
         repos: &repos,
-        pipeline_resolver: Arc::clone(&catalog.pipeline_resolver),
+        retrieval_profile_resolver: Arc::clone(&catalog.retrieval_profile_resolver),
         embedding_service: Arc::clone(&platform.embedding_service),
         vector_index_resolver: Arc::clone(&catalog.vector_index_resolver),
         generation_service: Arc::clone(&platform.generation_service),
@@ -174,7 +174,8 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         chunker_registry: Arc::clone(&platform.chunker_registry),
         embedding_service: Arc::clone(&platform.embedding_service),
         generation_service: Arc::clone(&platform.generation_service),
-        pipeline_resolver: Arc::clone(&catalog.pipeline_resolver),
+        index_profile_resolver: Arc::clone(&catalog.index_profile_resolver),
+        retrieval_profile_resolver: Arc::clone(&catalog.retrieval_profile_resolver),
         source_document_query_service: Arc::clone(&ingestion.source_document_query_service),
         wakeups: &mut wakeups,
     })?;
@@ -222,12 +223,14 @@ impl App {
             &self.catalog.chunking_configuration_query_service,
             &self.catalog.sweep_template_query_service,
             &self.catalog.configuration_query_service,
-            &self.catalog.pipeline_configuration_query_service,
+            &self.catalog.index_profile_query_service,
+            &self.catalog.retrieval_profile_query_service,
             &self.catalog.embedding_model_command_handler,
             &self.catalog.generation_model_command_handler,
             &self.catalog.vector_index_command_handler,
             &self.catalog.chunking_configuration_command_handler,
-            &self.catalog.pipeline_configuration_command_handler,
+            &self.catalog.index_profile_command_handler,
+            &self.catalog.retrieval_profile_command_handler,
             &self.catalog.sweep_template_command_handler,
         )
         .await
