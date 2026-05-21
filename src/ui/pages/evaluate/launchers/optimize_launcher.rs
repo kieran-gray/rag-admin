@@ -29,8 +29,7 @@ pub fn OptimizeLauncher(
             .map(|c| c.chunking_configuration_id)
             .or_else(|| cs.first().map(|c| c.chunking_configuration_id))
     });
-    let (pinned_chunking_id, set_pinned_chunking_id) =
-        signal::<Option<Uuid>>(default_pinned_id);
+    let (pinned_chunking_id, set_pinned_chunking_id) = signal::<Option<Uuid>>(default_pinned_id);
 
     let on_click = move |_| {
         let Some(ds) = dataset_id else {

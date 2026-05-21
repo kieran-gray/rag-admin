@@ -11,9 +11,7 @@ use crate::server::domain::evaluation::run::events::RetrievalTraceEntry;
 use crate::server::domain::evaluation::scoring::{
     bootstrap_ci, mean, precision_omega, score_question, score_trick_question, std_dev,
 };
-use crate::shared::{
-    EvaluationMetrics, EvaluationRunOptions, EvaluationScorePolicy,
-};
+use crate::shared::{EvaluationMetrics, EvaluationRunOptions, EvaluationScorePolicy};
 
 use super::run_context::{PreparedVariant, QuestionSubset};
 

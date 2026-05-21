@@ -95,8 +95,6 @@ fn complete_when_all_variants_scored(
         partition_key: run.run_id,
         job_type: "complete_run",
         idempotency_key: IdempotencyKey::new(run.run_id, log_position, "complete_run"),
-        payload: EvaluationRunEffect::CompleteRun(CompleteRunEffect {
-            run_id: run.run_id,
-        }),
+        payload: EvaluationRunEffect::CompleteRun(CompleteRunEffect { run_id: run.run_id }),
     }]
 }

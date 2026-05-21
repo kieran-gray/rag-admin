@@ -39,10 +39,7 @@ pub trait ChunkSetRepository: Send + Sync {
         pinned: bool,
     ) -> Result<(), ChunkSetRepositoryError>;
 
-    async fn delete_unused(
-        &self,
-        older_than_seconds: u64,
-    ) -> Result<u64, ChunkSetRepositoryError>;
+    async fn delete_unused(&self, older_than_seconds: u64) -> Result<u64, ChunkSetRepositoryError>;
 
     async fn list_all_with_referrers(
         &self,

@@ -125,10 +125,7 @@ impl VectorIndex for NamedVectorizeIndex {
                     MetadataFilterOperation::Equal => "$eq",
                     MetadataFilterOperation::NotEqual => "$ne",
                 };
-                filter_map.insert(
-                    f.field.clone(),
-                    serde_json::json!({ op: f.value.clone() }),
-                );
+                filter_map.insert(f.field.clone(), serde_json::json!({ op: f.value.clone() }));
             }
             body_map.insert("filter".to_string(), serde_json::Value::Object(filter_map));
         }

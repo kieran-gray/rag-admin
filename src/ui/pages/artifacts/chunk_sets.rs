@@ -181,11 +181,20 @@ fn ChunkSetRow(
     let in_use = cs.in_use();
     let strategy = cs.chunking_config.strategy().as_str();
     let short_id = id.to_string().chars().take(8).collect::<String>();
-    let when = cs.created_at.get(..16).unwrap_or(&cs.created_at).to_string();
+    let when = cs
+        .created_at
+        .get(..16)
+        .unwrap_or(&cs.created_at)
+        .to_string();
     let chunk_count = cs.chunk_count;
     let indexing_refs = cs.indexing_refs;
     let variant_result_refs = cs.variant_result_refs;
-    let doc_short = cs.document_id.to_string().chars().take(8).collect::<String>();
+    let doc_short = cs
+        .document_id
+        .to_string()
+        .chars()
+        .take(8)
+        .collect::<String>();
 
     view! {
         <Surface>

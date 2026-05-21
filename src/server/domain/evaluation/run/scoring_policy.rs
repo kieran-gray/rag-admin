@@ -13,10 +13,10 @@ pub struct ScoringWeights {
 impl Default for ScoringWeights {
     fn default() -> Self {
         Self {
-            recall: 0.5,
-            iou: 0.2,
-            precision: 0.4,
-            precision_omega: 0.2,
+            recall: 0.40,
+            iou: 0.25,
+            precision: 0.20,
+            precision_omega: 0.15,
         }
     }
 }

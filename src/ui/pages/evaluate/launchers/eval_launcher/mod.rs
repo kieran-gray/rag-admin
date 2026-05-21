@@ -41,8 +41,6 @@ impl Preset {
     }
 }
 
-
-
 #[derive(Clone, Copy)]
 pub struct LauncherCallbacks {
     pub on_start: Callback<RunEvaluationRequestDto>,

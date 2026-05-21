@@ -57,7 +57,9 @@ pub fn DatasetStep(
     });
 
     Effect::new(move |_| {
-        let Some(Some(cfg)) = catalog.get() else { return };
+        let Some(Some(cfg)) = catalog.get() else {
+            return;
+        };
         if generation_model_id.get_untracked().is_none() {
             if let Some(m) = cfg.generation_models.first() {
                 set_generation_model_id.set(Some(m.generation_model_id));

@@ -46,7 +46,9 @@ pub async fn get_chunk_sets_for_document(
     prefix = "/api",
     endpoint = "set_chunk_set_pinned"
 )]
-pub async fn set_chunk_set_pinned(request: SetChunkSetPinnedRequestDto) -> Result<(), ServerFnError> {
+pub async fn set_chunk_set_pinned(
+    request: SetChunkSetPinnedRequestDto,
+) -> Result<(), ServerFnError> {
     ctx::<Arc<IndexingServices>>()?
         .chunk_set_command_handler
         .set_pinned(request.chunk_set_id, request.pinned)

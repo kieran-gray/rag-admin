@@ -937,7 +937,6 @@ impl OptimizeRunEffectExecutor {
             })?;
         Ok(Some(entry.config.into()))
     }
-
 }
 
 fn budget_from_dto(b: OptimizationBudget) -> SearchBudget {
@@ -948,11 +947,7 @@ fn budget_from_dto(b: OptimizationBudget) -> SearchBudget {
     }
 }
 
-async fn log_optimization_start(
-    effect: &OptimizeRunEffect,
-    job: &Arc<Job>,
-    split: &ThreeWaySplit,
-) {
+async fn log_optimization_start(effect: &OptimizeRunEffect, job: &Arc<Job>, split: &ThreeWaySplit) {
     job.emit(
         InternalLogEvent::info(format!(
             "Starting optimization: budget={:?} scope={:?} judges={} · tuning {} / validation {} / holdout {}",
@@ -978,7 +973,11 @@ fn top_survivors(
 ) -> Vec<(u32, f32)> {
     let mut scored: Vec<(u32, f32)> = active_trial_ids
         .iter()
-        .filter_map(|tid| outcomes.get(tid).map(|o| (*tid, evaluation_score(&o.metrics))))
+        .filter_map(|tid| {
+            outcomes
+                .get(tid)
+                .map(|o| (*tid, evaluation_score(&o.metrics)))
+        })
         .collect();
     scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
     scored.truncate(top_n);

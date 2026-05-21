@@ -172,10 +172,7 @@ impl ChunkSetRepository for PostgresChunkSetRepository {
         rows.into_iter().map(ChunkSetReadModel::try_from).collect()
     }
 
-    async fn delete_unused(
-        &self,
-        older_than_seconds: u64,
-    ) -> Result<u64, ChunkSetRepositoryError> {
+    async fn delete_unused(&self, older_than_seconds: u64) -> Result<u64, ChunkSetRepositoryError> {
         let result = sqlx::query(
             "
             DELETE FROM chunk_sets cs
