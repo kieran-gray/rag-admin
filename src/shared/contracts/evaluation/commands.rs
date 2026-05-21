@@ -1,9 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::shared::{
-    ChunkingVariant, EvaluationAutotuneRequest, EvaluationRunOptions, OptimizationConfig,
-};
+use crate::shared::{ChunkingVariant, EvaluationRunOptions, OptimizationConfig};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunEvaluationRequestDto {
@@ -13,8 +11,6 @@ pub struct RunEvaluationRequestDto {
     pub retrieval_profile_id: Option<Uuid>,
     pub variants: Vec<ChunkingVariant>,
     pub options: Vec<EvaluationRunOptions>,
-    #[serde(default)]
-    pub autotune: Option<EvaluationAutotuneRequest>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

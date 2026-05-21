@@ -11,7 +11,7 @@ use crate::server::application::evaluation::dataset::EvaluationDatasetEffectExec
 use crate::server::application::evaluation::ports::{EvaluationGenerator, LlmJudge, Retriever};
 use crate::server::application::evaluation::query_service::EvaluationQueryService;
 use crate::server::application::evaluation::run::{
-    EvaluationRunEffectDispatcher, ExecuteVariantEffectExecutor, FinalizeRunEffectExecutor,
+    CompleteRunEffectExecutor, EvaluationRunEffectDispatcher, ExecuteVariantEffectExecutor,
     OptimizeRunEffectExecutor, TrialScorer,
 };
 use crate::server::application::evaluation::{
@@ -104,6 +104,7 @@ impl EvaluationServices {
             Arc::clone(&evaluation_query_service),
             Arc::clone(&repos.source_document),
             Arc::clone(&index_profile_resolver),
+            Arc::clone(&repos.chunking_configuration),
             Arc::clone(&clock),
             Arc::clone(&id_generator),
         );
@@ -151,8 +152,7 @@ impl EvaluationServices {
             Arc::clone(&clock),
         );
 
-        let finalize_run_executor = FinalizeRunEffectExecutor::new(
-            Arc::clone(&trial_scorer),
+        let complete_run_executor = CompleteRunEffectExecutor::new(
             Arc::clone(&wirings.run.command_processor),
             Arc::clone(&repos.evaluation_run),
             Arc::clone(&job_registry),
@@ -166,6 +166,7 @@ impl EvaluationServices {
             Arc::clone(&trial_scorer),
             Arc::clone(&wirings.run.command_processor),
             Arc::clone(&wirings.run.event_store),
+            Arc::clone(&repos.chunking_configuration),
             job_registry,
             activity_registry,
             clock,
@@ -174,7 +175,7 @@ impl EvaluationServices {
 
         let run_effect_dispatcher = EvaluationRunEffectDispatcher::new(
             execute_variant_executor,
-            finalize_run_executor,
+            complete_run_executor,
             optimize_effect_executor,
         );
 

@@ -10,15 +10,12 @@ use crate::shared::contracts::{
     ChunkingConfigurationDto, IndexProfileDto, RunEvaluationRequestDto, SweepTemplateDto,
 };
 use crate::shared::reference_data::ChunkStrategy;
-use crate::shared::{ChunkingVariant, EvaluationAutotuneRequest, EvaluationRunOptions};
+use crate::shared::{ChunkingVariant, EvaluationRunOptions};
 use crate::ui::components::primitives::Surface;
 
 use super::eval_parser::parse_u32_values;
 
-use self::options::{
-    options_summary, variants_summary, CostSummary, OptionsMode, OptionsPicker, RunMode,
-    RunModePicker,
-};
+use self::options::{options_summary, variants_summary, CostSummary, OptionsMode, OptionsPicker};
 use self::sweeps::{
     build_bert_sweep, build_darn_sweep, build_llm_sweep, build_section_sweep, build_single_variant,
     default_sweep_variants, load_sweep_template_pref, store_sweep_template_pref, template_variants,
@@ -43,6 +40,8 @@ impl Preset {
         }
     }
 }
+
+
 
 #[derive(Clone, Copy)]
 pub struct LauncherCallbacks {
@@ -110,28 +109,22 @@ pub fn EvaluationLauncher(
     let (sweep_top_k_input, set_sweep_top_k_input) = signal("5,6,7,8".to_string());
     let (sweep_min_score_input, set_sweep_min_score_input) = signal("500,600,700,800".to_string());
 
-    let (run_mode, set_run_mode) = signal(RunMode::ScoreAll);
-
     let apply_preset = move |p: Preset| match p {
         Preset::FindBestChunking => {
             set_variants_mode.set(VariantsMode::SweepTemplate);
             set_options_mode.set(OptionsMode::Single);
-            set_run_mode.set(RunMode::ScoreAll);
         }
         Preset::TuneRetrieval => {
             set_variants_mode.set(VariantsMode::Single);
             set_options_mode.set(OptionsMode::Sweep);
-            set_run_mode.set(RunMode::ScoreAll);
         }
         Preset::FullSweep => {
             set_variants_mode.set(VariantsMode::SweepTemplate);
             set_options_mode.set(OptionsMode::Sweep);
-            set_run_mode.set(RunMode::ScoreAll);
         }
         Preset::TestOne => {
             set_variants_mode.set(VariantsMode::Single);
             set_options_mode.set(OptionsMode::Single);
-            set_run_mode.set(RunMode::ScoreAll);
         }
     };
 
@@ -266,18 +259,12 @@ pub fn EvaluationLauncher(
             _ => return,
         };
 
-        let autotune = match run_mode.get() {
-            RunMode::ScoreAll => None,
-            RunMode::Autotune => Some(EvaluationAutotuneRequest::default()),
-        };
-
         callbacks.on_start.run(RunEvaluationRequestDto {
             dataset_id,
             index_profile_id,
             retrieval_profile_id: None,
             variants,
             options,
-            autotune,
         });
     };
 
@@ -376,8 +363,6 @@ pub fn EvaluationLauncher(
                         options_computed=options_computed
                     />
                 </Section>
-
-                <RunModePicker run_mode=run_mode set_run_mode=set_run_mode />
 
                 <div class="flex items-center justify-between gap-4 pt-3 border-t border-[var(--color-border)]">
                     <CostSummary cost=cost_summary />

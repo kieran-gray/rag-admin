@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::shared::chunking::ChunkingConfig;
 
@@ -84,43 +85,8 @@ pub struct OptimizationConfig {
     pub scope: OptimizationScope,
     pub judges_enabled: bool,
     pub seed: Option<u64>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct EvaluationAutotuneRequest {
-    #[serde(
-        default = "default_tuning_fraction_milli",
-        deserialize_with = "crate::shared::serde_compat::u32_from_string"
-    )]
-    pub tuning_fraction_milli: u32,
-    #[serde(
-        default = "default_holdout_top_n",
-        deserialize_with = "crate::shared::serde_compat::u32_from_string"
-    )]
-    pub holdout_top_n: u32,
-}
-
-impl Default for EvaluationAutotuneRequest {
-    fn default() -> Self {
-        Self {
-            tuning_fraction_milli: default_tuning_fraction_milli(),
-            holdout_top_n: default_holdout_top_n(),
-        }
-    }
-}
-
-impl EvaluationAutotuneRequest {
-    pub fn tuning_fraction(&self) -> f32 {
-        milli_to_f32(self.tuning_fraction_milli)
-    }
-}
-
-fn default_tuning_fraction_milli() -> u32 {
-    700
-}
-
-fn default_holdout_top_n() -> u32 {
-    3
+    #[serde(default)]
+    pub fixed_chunking_configuration_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -176,25 +142,13 @@ impl EvaluationResultSplit {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EvaluationAutotuneSummary {
-    pub tuning_question_count: u32,
-    pub holdout_question_count: u32,
-    pub candidate_count: u32,
-    pub selected_label: String,
-    pub selected_options: EvaluationRunOptions,
-    pub selected_config: ChunkingConfig,
-    pub tuning_score: f32,
-    pub holdout_score: f32,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ChunkingVariant {
     pub label: String,
     pub config: ChunkingConfig,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct EvaluationMetrics {
     pub recall_mean: f32,
     pub recall_std: f32,
@@ -321,8 +275,6 @@ pub struct EvaluationRunResult {
     #[serde(default)]
     pub created_at: String,
     pub options: EvaluationRunOptions,
-    #[serde(default)]
-    pub autotune: Option<EvaluationAutotuneSummary>,
     pub variants: Vec<EvaluationVariantResult>,
 }
 
@@ -332,7 +284,6 @@ impl EvaluationRunResult {
         post_version: String,
         created_at: String,
         options: EvaluationRunOptions,
-        autotune: Option<EvaluationAutotuneSummary>,
         variants: Vec<EvaluationVariantResult>,
     ) -> Self {
         Self {
@@ -341,7 +292,6 @@ impl EvaluationRunResult {
             post_version,
             created_at,
             options,
-            autotune,
             variants,
         }
     }

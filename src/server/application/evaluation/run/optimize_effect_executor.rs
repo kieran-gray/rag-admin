@@ -1,11 +1,12 @@
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde_json::json;
 use uuid::Uuid;
 
 use crate::server::application::evaluation::ports::LlmJudge;
+use crate::server::domain::configuration::chunking_configuration::ChunkingConfigurationRepository;
 use crate::server::domain::evaluation::value_objects::OptimizationBudget;
 use crate::shared::{
     evaluation_score, ChunkingConfig, EvaluationMetrics, EvaluationResultSplit,
@@ -30,7 +31,9 @@ use crate::server::domain::evaluation::run::commands::{
     ScoreVariant, SelectChampion,
 };
 use crate::server::domain::evaluation::run::events::EvaluationRunEvent;
-use crate::server::domain::evaluation::split::{seed_from_uuid, three_way, ThreeWayRatios};
+use crate::server::domain::evaluation::split::{
+    seed_from_uuid, shuffled_tuning_order, three_way, ThreeWayRatios, ThreeWaySplit,
+};
 
 use crate::server::domain::evaluation::run::effects::OptimizeRunEffect;
 
@@ -38,6 +41,7 @@ pub struct OptimizeRunEffectExecutor {
     trial_scorer: Arc<TrialScorer>,
     command_processor: Arc<CommandProcessor<EvaluationRun>>,
     event_store: Arc<dyn EventStore<EvaluationRunEvent>>,
+    chunking_configurations: Arc<dyn ChunkingConfigurationRepository>,
     session: JobSession<EvaluationRun>,
     clock: Arc<dyn Clock>,
     judge: Option<Arc<dyn LlmJudge>>,
@@ -47,23 +51,79 @@ const JUDGE_QUESTION_SAMPLE_SIZE: usize = 5;
 
 const JUDGE_PASSAGE_CHAR_CAP: usize = 8000;
 
+struct TrialOutcome {
+    metrics: EvaluationMetrics,
+    options: EvaluationRunOptions,
+    config: ChunkingConfig,
+    chunk_set_id: Uuid,
+    embedding_set_id: Uuid,
+}
+
+struct PreparedVariantCache {
+    entries: Vec<(ChunkingConfig, Arc<PreparedVariant>)>,
+    emitted: Vec<ChunkingConfig>,
+}
+
+impl PreparedVariantCache {
+    fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+            emitted: Vec::new(),
+        }
+    }
+
+    fn find(&self, config: ChunkingConfig) -> Option<Arc<PreparedVariant>> {
+        self.entries
+            .iter()
+            .find(|(c, _)| *c == config)
+            .map(|(_, p)| Arc::clone(p))
+    }
+
+    fn insert(&mut self, config: ChunkingConfig, prepared: Arc<PreparedVariant>) {
+        self.entries.push((config, prepared));
+    }
+
+    async fn get_or_prepare(
+        &mut self,
+        scorer: &TrialScorer,
+        ctx: &RunContext,
+        config: ChunkingConfig,
+        label: String,
+    ) -> Result<Arc<PreparedVariant>, AppError> {
+        if let Some(existing) = self.find(config) {
+            return Ok(existing);
+        }
+        let prepared = Arc::new(scorer.prepare_variant(ctx, label, config).await?);
+        self.insert(config, Arc::clone(&prepared));
+        Ok(prepared)
+    }
+
+    fn mark_emitted(&mut self, config: ChunkingConfig) -> bool {
+        if self.emitted.contains(&config) {
+            false
+        } else {
+            self.emitted.push(config);
+            true
+        }
+    }
+}
+
 struct ResumeState {
     trials: HashMap<u32, (HashMap<String, Value>, u32)>,
-    scored_tuning: HashSet<(u32, u32)>,
-    scored_validation: HashSet<u32>,
-    scored_holdout: HashSet<u32>,
-    holdout_metrics: HashMap<u32, EvaluationMetrics>,
     scored_metrics: HashMap<(u32, u32), EvaluationMetrics>,
-    final_rung_obs: HashMap<u32, Observation>,
     validation_metrics: HashMap<u32, EvaluationMetrics>,
+    holdout_metrics: HashMap<u32, EvaluationMetrics>,
+    final_rung_obs: HashMap<u32, Observation>,
     rung_survivors: HashMap<u32, Vec<u32>>,
 }
 
 impl OptimizeRunEffectExecutor {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         trial_scorer: Arc<TrialScorer>,
         command_processor: Arc<CommandProcessor<EvaluationRun>>,
         event_store: Arc<dyn EventStore<EvaluationRunEvent>>,
+        chunking_configurations: Arc<dyn ChunkingConfigurationRepository>,
         job_registry: Arc<JobRegistry>,
         activity_registry: Arc<ActivityRegistry>,
         clock: Arc<dyn Clock>,
@@ -79,6 +139,7 @@ impl OptimizeRunEffectExecutor {
             trial_scorer,
             command_processor,
             event_store,
+            chunking_configurations,
             session,
             clock,
             judge,
@@ -106,49 +167,22 @@ impl OptimizeRunEffectExecutor {
     }
 
     async fn run_inner(&self, effect: &OptimizeRunEffect, job: &Arc<Job>) -> Result<(), AppError> {
-        let budget: SearchBudget = match effect.optimization.budget {
-            OptimizationBudget::Quick => SearchBudget::Quick,
-            OptimizationBudget::Thorough => SearchBudget::Thorough,
-            OptimizationBudget::Exhaustive => SearchBudget::Exhaustive,
-        };
+        let budget = budget_from_dto(effect.optimization.budget);
         let scope_shared: OptimizationScope = effect.optimization.scope.into();
-        let space = build_default_search_space(scope_shared);
         let seed = effect
             .optimization
             .seed
             .unwrap_or_else(|| seed_from_uuid(effect.run_id));
-        let mut tpe = Tpe::new(space, seed);
+        let mut tpe = Tpe::new(build_default_search_space(scope_shared), seed);
 
         let resume = self.load_resume_state(effect.run_id).await?;
-        if !resume.trials.is_empty() {
-            job.emit(
-                InternalLogEvent::info(format!(
-                    "Resuming run: {} trials proposed, {} tuning scores + {} holdout scores already persisted",
-                    resume.trials.len(),
-                    resume.scored_tuning.len(),
-                    resume.scored_holdout.len(),
-                ))
-                .with_meta("resumed_trials", json!(resume.trials.len())),
-            )
-            .await;
-            tpe.skip_trial_ids(
-                resume
-                    .trials
-                    .keys()
-                    .copied()
-                    .max()
-                    .map(|m| m + 1)
-                    .unwrap_or(0),
-            );
-            let seeded: Vec<Observation> = resume.final_rung_obs.values().cloned().collect();
-            tpe.observe(&seeded);
-        }
+        self.apply_resume_to_tpe(&resume, &mut tpe, job).await;
 
         let ctx = self
             .trial_scorer
             .load_run_context(effect.dataset_id, effect.index_profile_id)
             .await?;
-
+        let pinned = self.resolve_pinned_chunking(effect).await?;
         let split = three_way(seed, ctx.questions.len(), ThreeWayRatios::default());
         if !split.is_usable() {
             return Err(AppError::Validation(format!(
@@ -156,35 +190,129 @@ impl OptimizeRunEffectExecutor {
                 ctx.questions.len(),
             )));
         }
+        log_optimization_start(effect, job, &split).await;
 
+        let mut prepared_cache = PreparedVariantCache::new();
+        self.prepare_pinned_variant(effect, job, &ctx, pinned, &mut prepared_cache)
+            .await?;
+
+        let (outcomes, active_trial_ids) = self
+            .run_tuning_rungs(
+                effect,
+                job,
+                &ctx,
+                &mut tpe,
+                budget,
+                pinned,
+                &mut prepared_cache,
+                &resume,
+                &split.tuning,
+            )
+            .await?;
+
+        let final_scored = top_survivors(&active_trial_ids, &outcomes, budget.holdout_top_n());
+
+        let validation_subset = QuestionSubset::from_indices(
+            &ctx.questions,
+            &ctx.question_embeddings,
+            &split.validation,
+        );
+        let holdout_subset =
+            QuestionSubset::from_indices(&ctx.questions, &ctx.question_embeddings, &split.holdout);
+
+        let judge_scores = self
+            .run_judge_pass(
+                effect,
+                job,
+                &ctx,
+                &prepared_cache,
+                &final_scored,
+                &outcomes,
+                &split.validation,
+            )
+            .await;
+
+        let validation_scores = self
+            .run_validation_pass(
+                effect,
+                job,
+                &final_scored,
+                &outcomes,
+                &prepared_cache,
+                &validation_subset,
+                &resume,
+                &judge_scores,
+                split.validation.len(),
+            )
+            .await?;
+
+        let champion = self
+            .select_and_score_champion(
+                effect,
+                job,
+                &validation_scores,
+                &outcomes,
+                &prepared_cache,
+                &holdout_subset,
+                &resume,
+                split.holdout.len(),
+            )
+            .await?;
+
+        self.complete_optimization(
+            effect,
+            job,
+            champion,
+            outcomes.len(),
+            budget.schedule().len(),
+        )
+        .await
+    }
+
+    async fn apply_resume_to_tpe(&self, resume: &ResumeState, tpe: &mut Tpe, job: &Arc<Job>) {
+        if resume.trials.is_empty() {
+            return;
+        }
         job.emit(
             InternalLogEvent::info(format!(
-                "Starting optimization: budget={:?} scope={:?} judges={} · tuning {} / validation {} / holdout {}",
-                effect.optimization.budget,
-                effect.optimization.scope,
-                effect.optimization.judges_enabled,
-                split.tuning.len(),
-                split.validation.len(),
-                split.holdout.len(),
+                "Resuming run: {} trials proposed, {} tuning scores + {} holdout scores already persisted",
+                resume.trials.len(),
+                resume.scored_metrics.len(),
+                resume.holdout_metrics.len(),
             ))
-            .with_meta("run_id", json!(effect.run_id.to_string()))
-            .with_meta("tuning_question_count", json!(split.tuning.len()))
-            .with_meta("validation_question_count", json!(split.validation.len()))
-            .with_meta("holdout_question_count", json!(split.holdout.len())),
+            .with_meta("resumed_trials", json!(resume.trials.len())),
         )
         .await;
+        tpe.skip_trial_ids(
+            resume
+                .trials
+                .keys()
+                .copied()
+                .max()
+                .map(|m| m + 1)
+                .unwrap_or(0),
+        );
+        let seeded: Vec<Observation> = resume.final_rung_obs.values().cloned().collect();
+        tpe.observe(&seeded);
+    }
 
+    #[allow(clippy::too_many_arguments)]
+    async fn run_tuning_rungs(
+        &self,
+        effect: &OptimizeRunEffect,
+        job: &Arc<Job>,
+        ctx: &RunContext,
+        tpe: &mut Tpe,
+        budget: SearchBudget,
+        pinned: Option<ChunkingConfig>,
+        cache: &mut PreparedVariantCache,
+        resume: &ResumeState,
+        tuning_indices: &[usize],
+    ) -> Result<(HashMap<u32, TrialOutcome>, Vec<u32>), AppError> {
         let schedule = budget.schedule();
-        let mut prepared_cache: Vec<(ChunkingConfig, Arc<PreparedVariant>)> = Vec::new();
-        let mut prepared_emitted: Vec<ChunkingConfig> = Vec::new();
-        let mut last_metrics: HashMap<u32, EvaluationMetrics> = HashMap::new();
-        let mut last_options: HashMap<u32, EvaluationRunOptions> = HashMap::new();
-        let mut last_config: HashMap<u32, ChunkingConfig> = HashMap::new();
-        let mut last_chunk_set: HashMap<u32, Uuid> = HashMap::new();
-        let mut last_embedding_set: HashMap<u32, Uuid> = HashMap::new();
+        let mut outcomes: HashMap<u32, TrialOutcome> = HashMap::new();
         let mut active_trial_ids: Vec<u32> = Vec::new();
-        let tuning_order = shuffled_tuning_order(&split.tuning, effect.run_id);
-
+        let tuning_order = shuffled_tuning_order(tuning_indices, effect.run_id);
         let mut proposed_params: HashMap<u32, HashMap<String, Value>> = resume
             .trials
             .iter()
@@ -193,7 +321,7 @@ impl OptimizeRunEffectExecutor {
 
         for (rung_idx, rung) in schedule.iter().enumerate() {
             let rung_num = (rung_idx + 1) as u32;
-            let subset = build_rung_subset(&ctx, &tuning_order, *rung);
+            let subset = build_rung_subset(ctx, &tuning_order, *rung);
 
             let batches = plan_rung_batches(
                 rung_idx,
@@ -245,16 +373,26 @@ impl OptimizeRunEffectExecutor {
 
                 let mut batch_obs: Vec<Observation> = Vec::with_capacity(proposals.len());
                 for trial in &proposals {
-                    let (config, options) = encoding::params_to_run_config(
-                        &trial.params,
-                        ctx.generation_model.generation_model_id,
-                    );
-                    let prepared = self
-                        .ensure_prepared(&ctx, &mut prepared_cache, config, trial.trial_id)
+                    let (config, options) = match pinned {
+                        Some(pinned_config) => (
+                            pinned_config,
+                            encoding::retrieval_params_to_options(&trial.params),
+                        ),
+                        None => encoding::params_to_run_config(
+                            &trial.params,
+                            ctx.generation_model.generation_model_id,
+                        ),
+                    };
+                    let prepared = cache
+                        .get_or_prepare(
+                            &self.trial_scorer,
+                            ctx,
+                            config,
+                            encoding::trial_label(trial.trial_id),
+                        )
                         .await?;
 
-                    if !prepared_emitted.contains(&config) {
-                        prepared_emitted.push(config);
+                    if cache.mark_emitted(config) {
                         self.command_processor
                             .handle(
                                 effect.run_id,
@@ -269,15 +407,11 @@ impl OptimizeRunEffectExecutor {
                             .await?;
                     }
 
-                    let (metrics, composite, traces) =
-                        if resume.scored_tuning.contains(&(trial.trial_id, rung_num)) {
-                            let m = resume
-                                .scored_metrics
-                                .get(&(trial.trial_id, rung_num))
-                                .cloned()
-                                .unwrap_or_else(empty_metrics);
+                    let (metrics, composite) =
+                        if let Some(m) = resume.scored_metrics.get(&(trial.trial_id, rung_num)) {
+                            let m = m.clone();
                             let c = evaluation_score(&m);
-                            (m, c, Vec::new())
+                            (m, c)
                         } else {
                             let (m, t) = self
                                 .trial_scorer
@@ -299,15 +433,14 @@ impl OptimizeRunEffectExecutor {
                                         chunk_set_id: prepared.chunk_set_id,
                                         embedding_set_id: prepared.embedding_set_id,
                                         metrics: m.clone().into(),
-                                        retrieval_traces: t.clone(),
+                                        retrieval_traces: t,
                                         selected: false,
                                         occurred_at: self.clock.now(),
                                     }),
                                 )
                                 .await?;
-                            (m, c, t)
+                            (m, c)
                         };
-                    let _ = traces;
 
                     let fitness = Fitness {
                         composite,
@@ -325,11 +458,16 @@ impl OptimizeRunEffectExecutor {
                         fitness,
                     });
 
-                    last_metrics.insert(trial.trial_id, metrics);
-                    last_options.insert(trial.trial_id, options.clone());
-                    last_config.insert(trial.trial_id, prepared.config);
-                    last_chunk_set.insert(trial.trial_id, prepared.chunk_set_id);
-                    last_embedding_set.insert(trial.trial_id, prepared.embedding_set_id);
+                    outcomes.insert(
+                        trial.trial_id,
+                        TrialOutcome {
+                            metrics,
+                            options: options.clone(),
+                            config: prepared.config,
+                            chunk_set_id: prepared.chunk_set_id,
+                            embedding_set_id: prepared.embedding_set_id,
+                        },
+                    );
                 }
                 tpe.observe(&batch_obs);
                 rung_obs.extend(batch_obs);
@@ -374,40 +512,26 @@ impl OptimizeRunEffectExecutor {
             .await;
         }
 
-        let holdout_top_n = budget.holdout_top_n();
-        let mut final_scored: Vec<(u32, f32)> = active_trial_ids
-            .iter()
-            .filter_map(|tid| last_metrics.get(tid).map(|m| (*tid, evaluation_score(m))))
-            .collect();
-        final_scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
-        final_scored.truncate(holdout_top_n);
+        Ok((outcomes, active_trial_ids))
+    }
 
-        let validation_subset = QuestionSubset::from_indices(
-            &ctx.questions,
-            &ctx.question_embeddings,
-            &split.validation,
-        );
-        let holdout_subset =
-            QuestionSubset::from_indices(&ctx.questions, &ctx.question_embeddings, &split.holdout);
-
-        let judge_scores = self
-            .run_judge_pass(
-                effect,
-                job,
-                &ctx,
-                &prepared_cache,
-                &final_scored,
-                &last_config,
-                &last_options,
-                &split.validation,
-            )
-            .await;
-
+    #[allow(clippy::too_many_arguments)]
+    async fn run_validation_pass(
+        &self,
+        effect: &OptimizeRunEffect,
+        job: &Arc<Job>,
+        final_scored: &[(u32, f32)],
+        outcomes: &HashMap<u32, TrialOutcome>,
+        cache: &PreparedVariantCache,
+        validation_subset: &QuestionSubset<'_>,
+        resume: &ResumeState,
+        judge_scores: &HashMap<u32, f32>,
+        validation_count: usize,
+    ) -> Result<HashMap<u32, EvaluationMetrics>, AppError> {
         job.emit(
             InternalLogEvent::info(format!(
-                "Validation pass: scoring top {} survivors on {} validation questions",
+                "Validation pass: scoring top {} survivors on {validation_count} validation questions",
                 final_scored.len(),
-                split.validation.len(),
             ))
             .with_meta("top_n", json!(final_scored.len())),
         )
@@ -415,31 +539,23 @@ impl OptimizeRunEffectExecutor {
 
         let mut validation_scores: HashMap<u32, EvaluationMetrics> =
             resume.validation_metrics.clone();
-        for (trial_id, _) in &final_scored {
-            let (Some(config), Some(options), Some(chunk_set_id), Some(embedding_set_id)) = (
-                last_config.get(trial_id).copied(),
-                last_options.get(trial_id).cloned(),
-                last_chunk_set.get(trial_id).copied(),
-                last_embedding_set.get(trial_id).copied(),
-            ) else {
+        for (trial_id, _) in final_scored {
+            let Some(outcome) = outcomes.get(trial_id) else {
                 continue;
             };
+            let config = outcome.config;
+            let options = outcome.options.clone();
+            let chunk_set_id = outcome.chunk_set_id;
+            let embedding_set_id = outcome.embedding_set_id;
 
-            let (mut metrics, traces) = if resume.scored_validation.contains(trial_id) {
-                let m = resume
-                    .validation_metrics
-                    .get(trial_id)
-                    .cloned()
-                    .unwrap_or_else(empty_metrics);
-                (m, Vec::new())
+            let (mut metrics, traces) = if let Some(m) = resume.validation_metrics.get(trial_id) {
+                (m.clone(), Vec::new())
             } else {
-                let prepared = prepared_cache
-                    .iter()
-                    .find(|(c, _)| *c == config)
-                    .map(|(_, p)| Arc::clone(p));
-                let Some(prepared) = prepared else { continue };
+                let Some(prepared) = cache.find(config) else {
+                    continue;
+                };
                 self.trial_scorer
-                    .score_variant(effect.run_id, &prepared, &validation_subset, &options)
+                    .score_variant(effect.run_id, &prepared, validation_subset, &options)
                     .await?
             };
             metrics.judge_score = judge_scores.get(trial_id).copied();
@@ -465,90 +581,93 @@ impl OptimizeRunEffectExecutor {
                 )
                 .await?;
         }
+        Ok(validation_scores)
+    }
 
-        let champion_tid = validation_scores
+    #[allow(clippy::too_many_arguments)]
+    async fn select_and_score_champion(
+        &self,
+        effect: &OptimizeRunEffect,
+        job: &Arc<Job>,
+        validation_scores: &HashMap<u32, EvaluationMetrics>,
+        outcomes: &HashMap<u32, TrialOutcome>,
+        cache: &PreparedVariantCache,
+        holdout_subset: &QuestionSubset<'_>,
+        resume: &ResumeState,
+        holdout_count: usize,
+    ) -> Result<Option<(u32, EvaluationMetrics)>, AppError> {
+        let Some(trial_id) = validation_scores
             .iter()
             .max_by(|a, b| {
                 evaluation_score(a.1)
                     .partial_cmp(&evaluation_score(b.1))
                     .unwrap_or(Ordering::Equal)
             })
-            .map(|(tid, _)| *tid);
+            .map(|(tid, _)| *tid)
+        else {
+            return Ok(None);
+        };
+        let Some(outcome) = outcomes.get(&trial_id) else {
+            return Ok(None);
+        };
+        let Some(prepared) = cache.find(outcome.config) else {
+            return Ok(None);
+        };
+        let config = outcome.config;
+        let options = outcome.options.clone();
+        let chunk_set_id = outcome.chunk_set_id;
+        let embedding_set_id = outcome.embedding_set_id;
 
-        let champion: Option<(u32, EvaluationMetrics)> = match champion_tid {
-            Some(trial_id) => {
-                let config = last_config.get(&trial_id).copied();
-                let options = last_options.get(&trial_id).cloned();
-                let chunk_set_id = last_chunk_set.get(&trial_id).copied();
-                let embedding_set_id = last_embedding_set.get(&trial_id).copied();
-                let prepared = config.and_then(|c| {
-                    prepared_cache
-                        .iter()
-                        .find(|(cc, _)| *cc == c)
-                        .map(|(_, p)| Arc::clone(p))
-                });
+        job.emit(
+            InternalLogEvent::info(format!(
+                "Holdout integrity pass: scoring champion (trial {trial_id}) on {holdout_count} holdout questions",
+            ))
+            .with_meta("trial_id", json!(trial_id))
+            .with_meta("holdout_question_count", json!(holdout_count)),
+        )
+        .await;
 
-                match (config, options, chunk_set_id, embedding_set_id, prepared) {
-                    (
-                        Some(config),
-                        Some(options),
-                        Some(chunk_set_id),
-                        Some(embedding_set_id),
-                        Some(prepared),
-                    ) => {
-                        job.emit(
-                            InternalLogEvent::info(format!(
-                                "Holdout integrity pass: scoring champion (trial {trial_id}) on {} holdout questions",
-                                split.holdout.len(),
-                            ))
-                            .with_meta("trial_id", json!(trial_id))
-                            .with_meta("holdout_question_count", json!(split.holdout.len())),
-                        )
-                        .await;
-
-                        let already_scored = resume.scored_holdout.contains(&trial_id);
-                        let (metrics, traces) = if already_scored {
-                            let m = resume
-                                .holdout_metrics
-                                .get(&trial_id)
-                                .cloned()
-                                .unwrap_or_else(empty_metrics);
-                            (m, Vec::new())
-                        } else {
-                            self.trial_scorer
-                                .score_variant(effect.run_id, &prepared, &holdout_subset, &options)
-                                .await?
-                        };
-
-                        if !already_scored {
-                            self.command_processor
-                                .handle(
-                                    effect.run_id,
-                                    EvaluationRunCommand::ScoreVariant(ScoreVariant {
-                                        run_id: effect.run_id,
-                                        variant_label: encoding::trial_holdout_label(trial_id),
-                                        variant_config: config.into(),
-                                        options: options.into(),
-                                        split: EvaluationResultSplit::Holdout.into(),
-                                        chunk_set_id,
-                                        embedding_set_id,
-                                        metrics: metrics.clone().into(),
-                                        retrieval_traces: traces,
-                                        selected: true,
-                                        occurred_at: self.clock.now(),
-                                    }),
-                                )
-                                .await?;
-                        }
-
-                        Some((trial_id, metrics))
-                    }
-                    _ => None,
-                }
-            }
-            None => None,
+        let prior_holdout = resume.holdout_metrics.get(&trial_id).cloned();
+        let already_scored = prior_holdout.is_some();
+        let (metrics, traces) = if let Some(m) = prior_holdout {
+            (m, Vec::new())
+        } else {
+            self.trial_scorer
+                .score_variant(effect.run_id, &prepared, holdout_subset, &options)
+                .await?
         };
 
+        if !already_scored {
+            self.command_processor
+                .handle(
+                    effect.run_id,
+                    EvaluationRunCommand::ScoreVariant(ScoreVariant {
+                        run_id: effect.run_id,
+                        variant_label: encoding::trial_holdout_label(trial_id),
+                        variant_config: config.into(),
+                        options: options.into(),
+                        split: EvaluationResultSplit::Holdout.into(),
+                        chunk_set_id,
+                        embedding_set_id,
+                        metrics: metrics.clone().into(),
+                        retrieval_traces: traces,
+                        selected: true,
+                        occurred_at: self.clock.now(),
+                    }),
+                )
+                .await?;
+        }
+        Ok(Some((trial_id, metrics)))
+    }
+
+    async fn complete_optimization(
+        &self,
+        effect: &OptimizeRunEffect,
+        job: &Arc<Job>,
+        champion: Option<(u32, EvaluationMetrics)>,
+        trial_count: usize,
+        rung_count: usize,
+    ) -> Result<(), AppError> {
         if let Some((trial_id, metrics)) = champion {
             self.command_processor
                 .handle(
@@ -575,29 +694,23 @@ impl OptimizeRunEffectExecutor {
 
         job.emit(
             InternalLogEvent::success(format!(
-                "Optimization complete · {} trials across {} rungs",
-                last_metrics.len(),
-                schedule.len(),
+                "Optimization complete · {trial_count} trials across {rung_count} rungs",
             ))
             .with_meta("run_id", json!(effect.run_id.to_string()))
-            .with_meta("trial_count", json!(last_metrics.len())),
+            .with_meta("trial_count", json!(trial_count)),
         )
         .await;
-
         Ok(())
     }
 
     async fn load_resume_state(&self, run_id: Uuid) -> Result<ResumeState, AppError> {
         let envelopes = self.event_store.load(run_id).await?;
         let mut trials: HashMap<u32, (HashMap<String, Value>, u32)> = HashMap::new();
-        let mut scored_tuning: HashSet<(u32, u32)> = HashSet::new();
-        let mut scored_validation: HashSet<u32> = HashSet::new();
-        let mut scored_holdout: HashSet<u32> = HashSet::new();
         let mut scored_metrics: HashMap<(u32, u32), EvaluationMetrics> = HashMap::new();
-        let mut final_rung_obs: HashMap<u32, Observation> = HashMap::new();
-        let mut highest_seen_rung: HashMap<u32, u32> = HashMap::new();
         let mut validation_metrics: HashMap<u32, EvaluationMetrics> = HashMap::new();
         let mut holdout_metrics: HashMap<u32, EvaluationMetrics> = HashMap::new();
+        let mut final_rung_obs: HashMap<u32, Observation> = HashMap::new();
+        let mut highest_seen_rung: HashMap<u32, u32> = HashMap::new();
         let mut rung_survivors: HashMap<u32, Vec<u32>> = HashMap::new();
 
         for env in &envelopes {
@@ -611,8 +724,6 @@ impl OptimizeRunEffectExecutor {
                     if let Some((trial_id, rung)) =
                         encoding::parse_trial_rung_label(&s.variant_label)
                     {
-                        scored_tuning.insert((trial_id, rung));
-
                         scored_metrics.insert((trial_id, rung), metrics.clone());
                         let params = trials
                             .get(&trial_id)
@@ -647,12 +758,10 @@ impl OptimizeRunEffectExecutor {
                     } else if let Some(trial_id) =
                         encoding::parse_trial_validation_label(&s.variant_label)
                     {
-                        scored_validation.insert(trial_id);
                         validation_metrics.insert(trial_id, metrics);
                     } else if let Some(trial_id) =
                         encoding::parse_trial_holdout_label(&s.variant_label)
                     {
-                        scored_holdout.insert(trial_id);
                         holdout_metrics.insert(trial_id, metrics);
                     }
                 }
@@ -665,13 +774,10 @@ impl OptimizeRunEffectExecutor {
 
         Ok(ResumeState {
             trials,
-            scored_tuning,
-            scored_validation,
-            scored_holdout,
-            holdout_metrics,
             scored_metrics,
-            final_rung_obs,
             validation_metrics,
+            holdout_metrics,
+            final_rung_obs,
             rung_survivors,
         })
     }
@@ -682,10 +788,9 @@ impl OptimizeRunEffectExecutor {
         effect: &OptimizeRunEffect,
         job: &Arc<Job>,
         ctx: &RunContext,
-        prepared_cache: &[(ChunkingConfig, Arc<PreparedVariant>)],
+        prepared_cache: &PreparedVariantCache,
         final_scored: &[(u32, f32)],
-        last_config: &HashMap<u32, ChunkingConfig>,
-        last_options: &HashMap<u32, EvaluationRunOptions>,
+        outcomes: &HashMap<u32, TrialOutcome>,
         holdout: &[usize],
     ) -> HashMap<u32, f32> {
         let mut judge_scores: HashMap<u32, f32> = HashMap::new();
@@ -710,17 +815,13 @@ impl OptimizeRunEffectExecutor {
         .await;
 
         for (trial_id, _) in final_scored {
-            let Some(config) = last_config.get(trial_id).copied() else {
+            let Some(outcome) = outcomes.get(trial_id) else {
                 continue;
             };
-            let Some(options) = last_options.get(trial_id).cloned() else {
+            let options = outcome.options.clone();
+            let Some(prepared) = prepared_cache.find(outcome.config) else {
                 continue;
             };
-            let prepared = prepared_cache
-                .iter()
-                .find(|(c, _)| *c == config)
-                .map(|(_, p)| Arc::clone(p));
-            let Some(prepared) = prepared else { continue };
 
             let mut accum = 0.0f32;
             let mut counted = 0usize;
@@ -776,25 +877,112 @@ impl OptimizeRunEffectExecutor {
         judge_scores
     }
 
-    async fn ensure_prepared(
+    async fn prepare_pinned_variant(
         &self,
+        effect: &OptimizeRunEffect,
+        job: &Arc<Job>,
         ctx: &RunContext,
-        cache: &mut Vec<(ChunkingConfig, Arc<PreparedVariant>)>,
-        config: ChunkingConfig,
-        trial_id: u32,
-    ) -> Result<Arc<PreparedVariant>, AppError> {
-        if let Some((_, existing)) = cache.iter().find(|(c, _)| *c == config) {
-            return Ok(Arc::clone(existing));
-        }
-        let label = encoding::trial_label(trial_id);
-        let prepared = self
-            .trial_scorer
-            .prepare_variant(ctx, label, config)
+        pinned: Option<ChunkingConfig>,
+        cache: &mut PreparedVariantCache,
+    ) -> Result<(), AppError> {
+        let Some(pinned_config) = pinned else {
+            return Ok(());
+        };
+        let prepared = Arc::new(
+            self.trial_scorer
+                .prepare_variant(ctx, encoding::pinned_label(), pinned_config)
+                .await?,
+        );
+        self.command_processor
+            .handle(
+                effect.run_id,
+                EvaluationRunCommand::MarkVariantPrepared(MarkVariantPrepared {
+                    run_id: effect.run_id,
+                    variant_label: prepared.label.clone(),
+                    chunk_set_id: prepared.chunk_set_id,
+                    embedding_set_id: prepared.embedding_set_id,
+                    occurred_at: self.clock.now(),
+                }),
+            )
             .await?;
-        let arc = Arc::new(prepared);
-        cache.push((config, Arc::clone(&arc)));
-        Ok(arc)
+        job.emit(
+            InternalLogEvent::info(format!(
+                "Pinned chunking '{}' prepared: {} chunks · reusing for every trial",
+                prepared.label,
+                prepared.chunks.len(),
+            ))
+            .with_meta("variant_label", json!(prepared.label))
+            .with_meta("chunk_count", json!(prepared.chunks.len()))
+            .with_meta("chunk_set_id", json!(prepared.chunk_set_id.to_string())),
+        )
+        .await;
+        cache.mark_emitted(pinned_config);
+        cache.insert(pinned_config, prepared);
+        Ok(())
     }
+
+    async fn resolve_pinned_chunking(
+        &self,
+        effect: &OptimizeRunEffect,
+    ) -> Result<Option<ChunkingConfig>, AppError> {
+        let Some(id) = effect.optimization.fixed_chunking_configuration_id else {
+            return Ok(None);
+        };
+        let entry = self
+            .chunking_configurations
+            .find_by_id(id)
+            .await?
+            .ok_or_else(|| {
+                AppError::Validation(format!("chunking configuration {id} not found"))
+            })?;
+        Ok(Some(entry.config.into()))
+    }
+
+}
+
+fn budget_from_dto(b: OptimizationBudget) -> SearchBudget {
+    match b {
+        OptimizationBudget::Quick => SearchBudget::Quick,
+        OptimizationBudget::Thorough => SearchBudget::Thorough,
+        OptimizationBudget::Exhaustive => SearchBudget::Exhaustive,
+    }
+}
+
+async fn log_optimization_start(
+    effect: &OptimizeRunEffect,
+    job: &Arc<Job>,
+    split: &ThreeWaySplit,
+) {
+    job.emit(
+        InternalLogEvent::info(format!(
+            "Starting optimization: budget={:?} scope={:?} judges={} · tuning {} / validation {} / holdout {}",
+            effect.optimization.budget,
+            effect.optimization.scope,
+            effect.optimization.judges_enabled,
+            split.tuning.len(),
+            split.validation.len(),
+            split.holdout.len(),
+        ))
+        .with_meta("run_id", json!(effect.run_id.to_string()))
+        .with_meta("tuning_question_count", json!(split.tuning.len()))
+        .with_meta("validation_question_count", json!(split.validation.len()))
+        .with_meta("holdout_question_count", json!(split.holdout.len())),
+    )
+    .await;
+}
+
+fn top_survivors(
+    active_trial_ids: &[u32],
+    outcomes: &HashMap<u32, TrialOutcome>,
+    top_n: usize,
+) -> Vec<(u32, f32)> {
+    let mut scored: Vec<(u32, f32)> = active_trial_ids
+        .iter()
+        .filter_map(|tid| outcomes.get(tid).map(|o| (*tid, evaluation_score(&o.metrics))))
+        .collect();
+    scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+    scored.truncate(top_n);
+    scored
 }
 
 fn pick_judge_sample(pool: &[usize], n: usize) -> Vec<usize> {
@@ -815,49 +1003,6 @@ fn chunks_to_passage(retrieved: &[(Uuid, f32, String)]) -> String {
         }
     }
     joined
-}
-
-fn empty_metrics() -> EvaluationMetrics {
-    EvaluationMetrics {
-        recall_mean: 0.0,
-        recall_std: 0.0,
-        precision_mean: 0.0,
-        precision_std: 0.0,
-        iou_mean: 0.0,
-        iou_std: 0.0,
-        precision_omega_mean: 0.0,
-        precision_omega_std: 0.0,
-        chunk_count: 0,
-        average_chunk_tokens: 0,
-        average_retrieved_tokens: 0,
-        recall_ci_low: 0.0,
-        recall_ci_high: 0.0,
-        precision_ci_low: 0.0,
-        precision_ci_high: 0.0,
-        iou_ci_low: 0.0,
-        iou_ci_high: 0.0,
-        precision_omega_ci_low: 0.0,
-        precision_omega_ci_high: 0.0,
-        composite_ci_low: 0.0,
-        composite_ci_high: 0.0,
-        judge_score: None,
-    }
-}
-
-fn shuffled_tuning_order(tuning: &[usize], run_id: Uuid) -> Vec<usize> {
-    let mut indices: Vec<usize> = tuning.to_vec();
-    let mut state = run_id.as_u128() as u64;
-    if state == 0 {
-        state = 0xCBF2_9CE4_8422_2325;
-    }
-    for i in (1..indices.len()).rev() {
-        state ^= state << 13;
-        state ^= state >> 7;
-        state ^= state << 17;
-        let j = (state % (i as u64 + 1)) as usize;
-        indices.swap(i, j);
-    }
-    indices
 }
 
 enum RungBatch {

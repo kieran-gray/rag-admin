@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 use uuid::Uuid;
 
-use crate::shared::contracts::RunOptimizationRequestDto;
+use crate::shared::contracts::{ChunkingConfigurationDto, RunOptimizationRequestDto};
 use crate::shared::{OptimizationBudget, OptimizationConfig, OptimizationScope};
 use crate::ui::components::primitives::{Status, StatusPill, Surface};
 
@@ -13,6 +13,7 @@ fn describe_budget(b: OptimizationBudget) -> String {
 pub fn OptimizeLauncher(
     dataset_id: Option<Uuid>,
     index_profile_id: Option<Uuid>,
+    chunking_configurations: StoredValue<Vec<ChunkingConfigurationDto>>,
     on_launch: Callback<RunOptimizationRequestDto>,
     busy: ReadSignal<bool>,
     #[prop(optional)] error: Option<ReadSignal<Option<String>>>,
@@ -21,6 +22,15 @@ pub fn OptimizeLauncher(
     let (scope, set_scope) = signal(OptimizationScope::Both);
     let (judges, set_judges) = signal(false);
     let (local_error, set_local_error) = signal::<Option<String>>(None);
+
+    let default_pinned_id = chunking_configurations.with_value(|cs| {
+        cs.iter()
+            .find(|c| c.is_default)
+            .map(|c| c.chunking_configuration_id)
+            .or_else(|| cs.first().map(|c| c.chunking_configuration_id))
+    });
+    let (pinned_chunking_id, set_pinned_chunking_id) =
+        signal::<Option<Uuid>>(default_pinned_id);
 
     let on_click = move |_| {
         let Some(ds) = dataset_id else {
@@ -36,15 +46,29 @@ pub fn OptimizeLauncher(
             return;
         };
         set_local_error.set(None);
+        let scope_now = scope.get_untracked();
+        let fixed_chunking_configuration_id = if scope_now == OptimizationScope::Retrieval {
+            pinned_chunking_id.get_untracked()
+        } else {
+            None
+        };
+        if scope_now == OptimizationScope::Retrieval && fixed_chunking_configuration_id.is_none() {
+            set_local_error.set(Some(
+                "Pin a chunking configuration before launching a retrieval-scope optimization."
+                    .into(),
+            ));
+            return;
+        }
         on_launch.run(RunOptimizationRequestDto {
             dataset_id: ds,
             index_profile_id: profile,
             retrieval_profile_id: None,
             optimization: OptimizationConfig {
                 budget: budget.get_untracked(),
-                scope: scope.get_untracked(),
+                scope: scope_now,
                 judges_enabled: judges.get_untracked(),
                 seed: None,
+                fixed_chunking_configuration_id,
             },
         });
     };
@@ -96,6 +120,42 @@ pub fn OptimizeLauncher(
                     on_click=move |_| set_scope.set(OptimizationScope::Both)
                 />
             </div>
+
+            {move || (scope.get() == OptimizationScope::Retrieval).then(|| view! {
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="eyebrow shrink-0">"Pin chunking config"</div>
+                    <select
+                        class="input max-w-md"
+                        on:change=move |ev| {
+                            let v = event_target_value(&ev);
+                            if v.is_empty() {
+                                set_pinned_chunking_id.set(None);
+                            } else if let Ok(id) = v.parse::<Uuid>() {
+                                set_pinned_chunking_id.set(Some(id));
+                            }
+                        }
+                    >
+                        {move || {
+                            let configs = chunking_configurations.get_value();
+                            let selected_id = pinned_chunking_id.get();
+                            configs.into_iter().map(|c| {
+                                let id = c.chunking_configuration_id;
+                                let selected = Some(id) == selected_id;
+                                let label = if c.is_default {
+                                    format!("{} (default)", c.name)
+                                } else {
+                                    c.name
+                                };
+                                view! {
+                                    <option value=id.to_string() selected=selected>
+                                        {label}
+                                    </option>
+                                }
+                            }).collect_view()
+                        }}
+                    </select>
+                </div>
+            })}
 
             <div class="flex items-center justify-between items-end gap-4 mt-4 mb-2 pt-4 border-t border-[var(--color-border)]">
                 <label class="flex items-center gap-2 text-sm muted">

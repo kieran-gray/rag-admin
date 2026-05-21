@@ -6,6 +6,6 @@ pub mod scoring;
 
 pub use command_handler::EvaluationRunCommandHandler;
 pub use effect_dispatcher::EvaluationRunEffectDispatcher;
-pub use effect_executor::{ExecuteVariantEffectExecutor, FinalizeRunEffectExecutor};
+pub use effect_executor::{CompleteRunEffectExecutor, ExecuteVariantEffectExecutor};
 pub use optimize_effect_executor::OptimizeRunEffectExecutor;
 pub use scoring::{PreparedVariant, QuestionSubset, RunContext, TrialScorer};

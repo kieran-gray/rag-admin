@@ -1,4 +1,5 @@
 pub mod chat;
+pub mod chunk_set;
 pub mod configuration;
 pub mod connector;
 pub mod connector_sync;

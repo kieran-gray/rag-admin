@@ -47,6 +47,23 @@ pub fn params_from_json(value: &serde_json::Value) -> HashMap<String, Value> {
     out
 }
 
+pub fn retrieval_params_to_options(params: &HashMap<String, Value>) -> EvaluationRunOptions {
+    let top_k = params
+        .get("top_k")
+        .and_then(Value::as_int)
+        .map(|n| n.clamp(1, 1_000) as u32)
+        .unwrap_or_else(|| EvaluationRunOptions::default().top_k);
+    let min_score_milli = params
+        .get("min_score")
+        .and_then(Value::as_float)
+        .map(|f| (f.clamp(0.0, 1.0) * 1000.0).round() as u32)
+        .unwrap_or(0);
+    EvaluationRunOptions {
+        top_k,
+        min_score_milli,
+    }
+}
+
 pub fn params_to_run_config(
     params: &HashMap<String, Value>,
     generation_model_id: Uuid,
@@ -111,26 +128,15 @@ pub fn params_to_run_config(
         }
     };
 
-    let top_k = params
-        .get("top_k")
-        .and_then(super::search_space::Value::as_int)
-        .map(|n| n.clamp(1, 1_000) as u32)
-        .unwrap_or_else(|| EvaluationRunOptions::default().top_k);
-    let min_score_milli = params
-        .get("min_score")
-        .and_then(super::search_space::Value::as_float)
-        .map(|f| (f.clamp(0.0, 1.0) * 1000.0).round() as u32)
-        .unwrap_or(0);
-    let options = EvaluationRunOptions {
-        top_k,
-        min_score_milli,
-    };
-
-    (chunking, options)
+    (chunking, retrieval_params_to_options(params))
 }
 
 pub fn trial_label(trial_id: u32) -> String {
     format!("trial-{trial_id:04}")
+}
+
+pub fn pinned_label() -> String {
+    "pinned-chunking".to_string()
 }
 
 pub fn trial_rung_label(trial_id: u32, rung: u32) -> String {
@@ -352,6 +358,25 @@ mod tests {
         assert_eq!(parse_trial_rung_label("not-a-trial"), None);
         assert_eq!(parse_trial_rung_label("trial-foo-r3"), None);
         assert_eq!(parse_trial_rung_label("trial-1-rbeta"), None);
+    }
+
+    #[test]
+    fn retrieval_params_to_options_decodes_top_k_and_min_score() {
+        let mut params: HashMap<String, Value> = HashMap::new();
+        params.insert("top_k".into(), Value::Int(8));
+        params.insert("min_score".into(), Value::Float(0.42));
+        params.insert("strategy".into(), Value::String("ignored".into()));
+        let options = retrieval_params_to_options(&params);
+        assert_eq!(options.top_k, 8);
+        assert_eq!(options.min_score_milli, 420);
+    }
+
+    #[test]
+    fn retrieval_params_to_options_uses_defaults_when_missing() {
+        let params: HashMap<String, Value> = HashMap::new();
+        let options = retrieval_params_to_options(&params);
+        assert_eq!(options.top_k, EvaluationRunOptions::default().top_k);
+        assert_eq!(options.min_score_milli, 0);
     }
 
     #[test]

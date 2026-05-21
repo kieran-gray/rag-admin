@@ -1,5 +1,6 @@
 pub mod activity;
 pub mod chat;
+pub mod chunk_set;
 pub mod chunking;
 pub mod configuration;
 pub mod connector;

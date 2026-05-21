@@ -4,13 +4,13 @@ use event_sourcing::policy::{HasPolicies, PolicyContext, PolicyFn};
 
 use super::aggregate::EvaluationRun;
 use super::effects::{
-    EvaluationRunEffect, ExecuteVariantEffect, FinalizeRunEffect, OptimizeRunEffect,
+    CompleteRunEffect, EvaluationRunEffect, ExecuteVariantEffect, OptimizeRunEffect,
 };
 use super::events::EvaluationRunEvent;
 
 impl HasPolicies<EvaluationRun, EvaluationRunEffect> for EvaluationRunEvent {
     fn policies() -> &'static [PolicyFn<Self, EvaluationRun, EvaluationRunEffect>] {
-        &[fanout_on_run_requested, finalize_when_primary_scoring_done]
+        &[fanout_on_run_requested, complete_when_all_variants_scored]
     }
 }
 
@@ -40,8 +40,6 @@ fn fanout_on_run_requested(
         }];
     }
 
-    let autotune = event.autotune_request.clone();
-
     event
         .variants
         .iter()
@@ -61,7 +59,6 @@ fn fanout_on_run_requested(
                     variant_label: variant.label,
                     variant_config: variant.config,
                     options: event.options.clone(),
-                    autotune_request: autotune.clone(),
                     scoring_policy: event.scoring_policy,
                 }),
             }
@@ -69,7 +66,7 @@ fn fanout_on_run_requested(
         .collect()
 }
 
-fn finalize_when_primary_scoring_done(
+fn complete_when_all_variants_scored(
     event: &EvaluationRunEvent,
     ctx: &PolicyContext<'_, EvaluationRun, EvaluationRunEvent>,
 ) -> Vec<NewJob<EvaluationRunEffect>> {
@@ -84,32 +81,22 @@ fn finalize_when_primary_scoring_done(
         return Vec::new();
     }
 
-    let primary_split = if run.autotune_request.is_some() {
-        EvaluationResultSplit::Tuning
-    } else {
-        EvaluationResultSplit::Full
-    };
-
-    let primary_count = run
+    let scored_full = run
         .scored_keys
         .iter()
-        .filter(|k| k.split == primary_split)
+        .filter(|k| k.split == EvaluationResultSplit::Full)
         .count();
     let expected = run.variants.len() * run.options.len();
-    if primary_count != expected {
+    if scored_full != expected {
         return Vec::new();
     }
 
     vec![NewJob {
         partition_key: run.run_id,
-        job_type: "finalize_run",
-        idempotency_key: IdempotencyKey::new(run.run_id, log_position, "finalize_run"),
-        payload: EvaluationRunEffect::FinalizeRun(FinalizeRunEffect {
+        job_type: "complete_run",
+        idempotency_key: IdempotencyKey::new(run.run_id, log_position, "complete_run"),
+        payload: EvaluationRunEffect::CompleteRun(CompleteRunEffect {
             run_id: run.run_id,
-            dataset_id: run.dataset_id,
-            index_profile_id: run.index_profile_id,
-            autotune_request: run.autotune_request.clone(),
-            scoring_policy: run.scoring_policy,
         }),
     }]
 }

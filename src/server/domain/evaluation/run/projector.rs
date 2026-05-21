@@ -47,7 +47,6 @@ impl Projector<EvaluationRunEvent> for EvaluationRunProjector {
                             document_version: e.document_version,
                             variants: e.variants.to_vec(),
                             options: e.options.to_vec(),
-                            autotune_request: e.autotune_request.clone(),
                             optimization: e.optimization.clone(),
                             variants_count,
                             scoring_policy: e.scoring_policy,

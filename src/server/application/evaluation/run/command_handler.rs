@@ -7,6 +7,7 @@ use crate::server::application::configuration::IndexProfileResolver;
 use crate::server::application::evaluation::query_service::EvaluationQueryService;
 use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::AppError;
+use crate::server::domain::configuration::chunking_configuration::ChunkingConfigurationRepository;
 use crate::server::domain::evaluation::run::aggregate::EvaluationRun;
 use crate::server::domain::evaluation::run::commands::{EvaluationRunCommand, RequestRun};
 use crate::server::domain::evaluation::run::scoring_policy::ScoringPolicy;
@@ -15,7 +16,7 @@ use crate::server::domain::source_document::repository::SourceDocumentRepository
 use crate::shared::contracts::{
     EvaluationJobInfo, RunEvaluationRequestDto, RunOptimizationRequestDto,
 };
-use crate::shared::OptimizationConfig;
+use crate::shared::{OptimizationConfig, OptimizationScope};
 use event_sourcing::CommandProcessor;
 
 pub struct EvaluationRunCommandHandler {
@@ -23,6 +24,7 @@ pub struct EvaluationRunCommandHandler {
     queries: Arc<EvaluationQueryService>,
     source_documents: Arc<dyn SourceDocumentRepository>,
     index_profile_resolver: Arc<IndexProfileResolver>,
+    chunking_configurations: Arc<dyn ChunkingConfigurationRepository>,
     clock: Arc<dyn Clock>,
     id_generator: Arc<dyn IdGenerator>,
 }
@@ -33,6 +35,7 @@ impl EvaluationRunCommandHandler {
         queries: Arc<EvaluationQueryService>,
         source_documents: Arc<dyn SourceDocumentRepository>,
         index_profile_resolver: Arc<IndexProfileResolver>,
+        chunking_configurations: Arc<dyn ChunkingConfigurationRepository>,
         clock: Arc<dyn Clock>,
         id_generator: Arc<dyn IdGenerator>,
     ) -> Arc<Self> {
@@ -41,9 +44,28 @@ impl EvaluationRunCommandHandler {
             queries,
             source_documents,
             index_profile_resolver,
+            chunking_configurations,
             clock,
             id_generator,
         })
+    }
+
+    async fn validate_optimization(&self, config: &OptimizationConfig) -> Result<(), AppError> {
+        let Some(id) = config.fixed_chunking_configuration_id else {
+            return Ok(());
+        };
+        if config.scope != OptimizationScope::Retrieval {
+            return Err(AppError::Validation(
+                "fixed_chunking_configuration_id is only valid when scope = retrieval".into(),
+            ));
+        }
+        self.chunking_configurations
+            .find_by_id(id)
+            .await?
+            .ok_or_else(|| {
+                AppError::Validation(format!("chunking configuration {id} not found"))
+            })?;
+        Ok(())
     }
 
     async fn build_fingerprint(
@@ -97,6 +119,8 @@ impl EvaluationRunCommandHandler {
         &self,
         request: RunOptimizationRequestDto,
     ) -> Result<EvaluationJobInfo, AppError> {
+        self.validate_optimization(&request.optimization).await?;
+
         let dataset = self
             .queries
             .get_dataset(request.dataset_id)
@@ -130,7 +154,6 @@ impl EvaluationRunCommandHandler {
                     document_version: dataset.document_version,
                     variants: Vec::new(),
                     options: Vec::new(),
-                    autotune_request: None,
                     optimization: Some(request.optimization.into()),
                     scoring_policy: ScoringPolicy::default(),
                     fingerprint,
@@ -182,7 +205,6 @@ impl EvaluationRunCommandHandler {
                     document_version: dataset.document_version,
                     variants: request.variants.into_iter().map(Into::into).collect(),
                     options: request.options.into_iter().map(Into::into).collect(),
-                    autotune_request: request.autotune.map(Into::into),
                     optimization: None,
                     scoring_policy: ScoringPolicy::default(),
                     fingerprint,
@@ -213,7 +235,9 @@ impl EvaluationRunCommandHandler {
             scope: original.scope.into(),
             judges_enabled: original.judges_enabled,
             seed: None,
+            fixed_chunking_configuration_id: original.fixed_chunking_configuration_id,
         };
+        self.validate_optimization(&optimization).await?;
 
         let dataset = self
             .queries
@@ -245,7 +269,6 @@ impl EvaluationRunCommandHandler {
                     document_version: run.document_version,
                     variants: Vec::new(),
                     options: Vec::new(),
-                    autotune_request: None,
                     optimization: Some(optimization.into()),
                     scoring_policy: ScoringPolicy::default(),
                     fingerprint,

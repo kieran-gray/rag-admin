@@ -12,8 +12,8 @@ pub use chunking::{
 };
 pub use embedding::{EmbedResult, EmbedderBackend, EmbeddingModel};
 pub use evaluation::{
-    evaluation_score, ordered_f32_vec, plain_f32_vec, ChunkingVariant, EvaluationAutotuneRequest,
-    EvaluationMetrics, EvaluationQuestionResult, EvaluationReferenceResult, EvaluationResultSplit,
+    evaluation_score, ordered_f32_vec, plain_f32_vec, ChunkingVariant, EvaluationMetrics,
+    EvaluationQuestionResult, EvaluationReferenceResult, EvaluationResultSplit,
     EvaluationRunOptions, EvaluationRunResult, EvaluationRunSummary, EvaluationScorePolicy,
     EvaluationScoreWeights, EvaluationVariantResult, OptimizationBudget, OptimizationConfig,
     OptimizationScope, OrderedF32, ReliabilityFlag,

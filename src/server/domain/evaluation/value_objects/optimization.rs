@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::shared::{
     OptimizationBudget as OptimizationBudgetDto, OptimizationConfig as OptimizationConfigDto,
@@ -29,6 +30,7 @@ pub struct OptimizationConfig {
     pub scope: OptimizationScope,
     pub judges_enabled: bool,
     pub seed: Option<u64>,
+    pub fixed_chunking_configuration_id: Option<Uuid>,
 }
 
 impl From<OptimizationBudgetDto> for OptimizationBudget {
@@ -78,6 +80,7 @@ impl From<OptimizationConfigDto> for OptimizationConfig {
             scope: c.scope.into(),
             judges_enabled: c.judges_enabled,
             seed: c.seed,
+            fixed_chunking_configuration_id: c.fixed_chunking_configuration_id,
         }
     }
 }
@@ -89,6 +92,7 @@ impl From<OptimizationConfig> for OptimizationConfigDto {
             scope: c.scope.into(),
             judges_enabled: c.judges_enabled,
             seed: c.seed,
+            fixed_chunking_configuration_id: c.fixed_chunking_configuration_id,
         }
     }
 }
@@ -101,9 +105,10 @@ mod tests {
     fn optimization_config_round_trips() {
         let original = OptimizationConfigDto {
             budget: OptimizationBudgetDto::Thorough,
-            scope: OptimizationScopeDto::Both,
+            scope: OptimizationScopeDto::Retrieval,
             judges_enabled: true,
             seed: Some(42),
+            fixed_chunking_configuration_id: Some(Uuid::nil()),
         };
         let domain: OptimizationConfig = original.clone().into();
         let wire = serde_json::to_string(&domain).unwrap();
@@ -113,5 +118,9 @@ mod tests {
         assert_eq!(restored.scope, original.scope);
         assert_eq!(restored.judges_enabled, original.judges_enabled);
         assert_eq!(restored.seed, original.seed);
+        assert_eq!(
+            restored.fixed_chunking_configuration_id,
+            original.fixed_chunking_configuration_id
+        );
     }
 }

@@ -14,8 +14,7 @@ use crate::server::domain::evaluation::run::repository::{
 };
 use crate::server::domain::evaluation::run::scoring_policy::{ScoringPolicy, ScoringWeights};
 use crate::server::domain::evaluation::value_objects::{
-    ChunkingVariant, EvaluationAutotuneRequest, EvaluationResultSplit, EvaluationRunOptions,
-    OptimizationConfig,
+    ChunkingVariant, EvaluationResultSplit, EvaluationRunOptions, OptimizationConfig,
 };
 use crate::server::domain::shared::Timestamp;
 use crate::server::infrastructure::shared::sql::timestamps::to_offset_datetime;
@@ -40,7 +39,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             "
             SELECT
                 run_id, dataset_id, index_profile_id, retrieval_profile_id, document_id, document_version,
-                variants, options, autotune_request, optimization,
+                variants, options, optimization,
                 status, variants_count, variants_prepared, variants_scored, failure_reason,
                 scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
                 scoring_precision_omega_weight, fingerprint, created_at
@@ -71,7 +70,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             "
             SELECT
                 run_id, dataset_id, index_profile_id, retrieval_profile_id, document_id, document_version,
-                variants, options, autotune_request, optimization,
+                variants, options, optimization,
                 status, variants_count, variants_prepared, variants_scored, failure_reason,
                 scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
                 scoring_precision_omega_weight, fingerprint, created_at
@@ -98,7 +97,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             "
             SELECT
                 run_id, dataset_id, index_profile_id, retrieval_profile_id, document_id, document_version,
-                variants, options, autotune_request, optimization,
+                variants, options, optimization,
                 status, variants_count, variants_prepared, variants_scored, failure_reason,
                 scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
                 scoring_precision_omega_weight, fingerprint, created_at
@@ -125,7 +124,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             "
             SELECT
                 run_id, dataset_id, index_profile_id, retrieval_profile_id, document_id, document_version,
-                variants, options, autotune_request, optimization,
+                variants, options, optimization,
                 status, variants_count, variants_prepared, variants_scored, failure_reason,
                 scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
                 scoring_precision_omega_weight, fingerprint, created_at
@@ -191,7 +190,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
             "SELECT
                 run_id, dataset_id, index_profile_id, retrieval_profile_id, document_id, document_version,
-                variants, options, autotune_request, optimization,
+                variants, options, optimization,
                 status, variants_count, variants_prepared, variants_scored, failure_reason,
                 scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
                 scoring_precision_omega_weight, fingerprint, created_at
@@ -365,9 +364,6 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         let options = serde_json::to_value(&summary.options).map_err(|e| {
             EvaluationRunRepositoryError::Internal(format!("serialize options: {e}"))
         })?;
-        let autotune_request = serde_json::to_value(&summary.autotune_request).map_err(|e| {
-            EvaluationRunRepositoryError::Internal(format!("serialize autotune_request: {e}"))
-        })?;
         let optimization = serde_json::to_value(&summary.optimization).map_err(|e| {
             EvaluationRunRepositoryError::Internal(format!("serialize optimization: {e}"))
         })?;
@@ -380,12 +376,12 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             INSERT INTO evaluation_runs (
                 run_id, dataset_id, index_profile_id, retrieval_profile_id,
                 document_id, document_version,
-                variants, options, autotune_request, optimization,
+                variants, options, optimization,
                 status, variants_count, variants_prepared, variants_scored, failure_reason,
                 scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
                 scoring_precision_omega_weight, fingerprint, created_at, updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11, 0, 0, NULL, $12, $13, $14, $15, $16, $17, NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, 0, 0, NULL, $11, $12, $13, $14, $15, $16, NOW())
             ON CONFLICT (run_id) DO NOTHING
             ",
         )
@@ -397,7 +393,6 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         .bind(summary.document_version as i32)
         .bind(&variants)
         .bind(&options)
-        .bind(&autotune_request)
         .bind(&optimization)
         .bind(summary.variants_count as i32)
         .bind(summary.scoring_policy.weights.recall)
@@ -668,7 +663,6 @@ struct RunRow {
     document_version: i32,
     variants: serde_json::Value,
     options: serde_json::Value,
-    autotune_request: Option<serde_json::Value>,
     optimization: Option<serde_json::Value>,
     status: String,
     variants_count: i32,
@@ -694,9 +688,6 @@ impl TryFrom<RunRow> for EvaluationRunReadModel {
             serde_json::from_value(row.options).map_err(|e| {
                 EvaluationRunRepositoryError::Internal(format!("deserialize options: {e}"))
             })?;
-        let autotune_request: Option<EvaluationAutotuneRequest> = row
-            .autotune_request
-            .and_then(|v| serde_json::from_value(v).ok());
         let optimization: Option<OptimizationConfig> = row
             .optimization
             .and_then(|v| serde_json::from_value(v).ok());
@@ -713,7 +704,6 @@ impl TryFrom<RunRow> for EvaluationRunReadModel {
             document_version: row.document_version as u32,
             variants,
             options,
-            autotune_request,
             optimization,
             status: EvaluationRunStatus::from_parts(
                 &row.status,

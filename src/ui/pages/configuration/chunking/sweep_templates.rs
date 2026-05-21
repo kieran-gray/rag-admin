@@ -28,7 +28,7 @@ pub(super) fn SweepTemplateList(
             <Surface>
                 <EmptyState
                     title="No sweep templates yet"
-                    body="A sweep template names a bundle of chunking configurations. Pick it when launching an autotune to test those configurations side-by-side.".to_string()
+                    body="A sweep template names a bundle of chunking configurations. Pick it when launching an evaluation to test those configurations side-by-side.".to_string()
                 />
             </Surface>
         }

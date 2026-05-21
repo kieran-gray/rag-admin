@@ -5,8 +5,8 @@ use uuid::Uuid;
 
 use crate::server::domain::evaluation::optimizer::SearchBudget;
 use crate::server::domain::evaluation::value_objects::{
-    ChunkingVariant, EvaluationAutotuneRequest, EvaluationResultSplit, EvaluationRunOptions,
-    OptimizationBudget, OptimizationConfig,
+    ChunkingVariant, EvaluationResultSplit, EvaluationRunOptions, OptimizationBudget,
+    OptimizationConfig,
 };
 use event_sourcing::Aggregate;
 
@@ -76,7 +76,6 @@ pub struct EvaluationRun {
     pub document_version: u32,
     pub variants: Vec<ChunkingVariant>,
     pub options: Vec<EvaluationRunOptions>,
-    pub autotune_request: Option<EvaluationAutotuneRequest>,
     pub optimization: Option<OptimizationConfig>,
     pub scoring_policy: ScoringPolicy,
     pub prepared_labels: BTreeSet<String>,
@@ -97,7 +96,6 @@ impl EvaluationRun {
             document_version: e.document_version,
             variants: e.variants.to_vec(),
             options: e.options.to_vec(),
-            autotune_request: e.autotune_request.clone(),
             optimization: e.optimization.clone(),
             scoring_policy: e.scoring_policy,
             prepared_labels: BTreeSet::new(),
@@ -118,14 +116,7 @@ impl EvaluationRun {
             let total_rung_scores: usize = budget.schedule().iter().map(|r| r.trials).sum();
             return (total_rung_scores + budget.holdout_top_n() + 1) as u32;
         }
-        let combos = self.variants.len() * self.options.len();
-        match &self.autotune_request {
-            Some(req) => {
-                let holdout = (req.holdout_top_n as usize).min(combos);
-                (combos + holdout) as u32
-            }
-            None => combos as u32,
-        }
+        (self.variants.len() * self.options.len()) as u32
     }
 
     pub fn expected_optimization_counts(&self) -> Option<(u32, u32, u32)> {
@@ -201,7 +192,6 @@ impl Aggregate for EvaluationRun {
                     document_version: cmd.document_version,
                     variants: cmd.variants.into_iter().collect(),
                     options: cmd.options.into_iter().collect(),
-                    autotune_request: cmd.autotune_request,
                     optimization: cmd.optimization,
                     scoring_policy: cmd.scoring_policy,
                     fingerprint: cmd.fingerprint,
@@ -398,7 +388,6 @@ mod tests {
                 config: section_config(),
             }],
             options: vec![EvaluationRunOptions::default()],
-            autotune_request: None,
             optimization: None,
             scoring_policy: ScoringPolicy::default(),
             fingerprint: test_fingerprint(),
@@ -420,7 +409,6 @@ mod tests {
             }
             .into()],
             options: vec![EvaluationRunOptions::default().into()],
-            autotune_request: None,
             optimization: None,
             scoring_policy: ScoringPolicy::default(),
             fingerprint: test_fingerprint().into(),
@@ -730,7 +718,7 @@ mod tests {
     }
 
     #[test]
-    fn expected_score_count_no_autotune_equals_variant_option_combos() {
+    fn expected_score_count_equals_variant_option_combos() {
         let run_id = Uuid::new_v4();
         let dataset_id = Uuid::new_v4();
         let events = vec![make_run_requested_event(run_id, dataset_id)];
@@ -762,7 +750,6 @@ mod tests {
                 document_version: 1,
                 variants: vec![],
                 options: vec![],
-                autotune_request: None,
                 optimization: Some(OptimizationConfig {
                     budget,
                     ..OptimizationConfig::default()
@@ -788,90 +775,6 @@ mod tests {
             assert_eq!(validation, budget.holdout_top_n() as u32);
             assert_eq!(holdout, 1);
         }
-    }
-
-    #[test]
-    fn expected_score_count_with_autotune_request_adds_holdout() {
-        use super::super::commands::RequestRun;
-        use crate::server::domain::evaluation::value_objects::{
-            ChunkingVariant, EvaluationAutotuneRequest,
-        };
-
-        let run_id = Uuid::new_v4();
-        let dataset_id = Uuid::new_v4();
-        let variants = vec![
-            ChunkingVariant {
-                label: "a".into(),
-                config: section_config(),
-            },
-            ChunkingVariant {
-                label: "b".into(),
-                config: section_config(),
-            },
-        ];
-        let options = vec![EvaluationRunOptions::default()];
-
-        let cmd = EvaluationRunCommand::RequestRun(RequestRun {
-            run_id,
-            dataset_id,
-            index_profile_id: Uuid::new_v4(),
-            retrieval_profile_id: None,
-            document_id: Uuid::new_v4(),
-            document_version: 1,
-            variants,
-            options,
-            autotune_request: Some(EvaluationAutotuneRequest {
-                tuning_fraction_milli: 700,
-                holdout_top_n: 3,
-            }),
-            optimization: None,
-            scoring_policy: ScoringPolicy::default(),
-            fingerprint: test_fingerprint(),
-            occurred_at: "2024-01-01T00:00:00Z".into(),
-        });
-        let events = EvaluationRun::handle_command(None, cmd).unwrap();
-        let run = EvaluationRun::from_events(&events).unwrap();
-
-        assert_eq!(run.expected_score_count(), 2 + 2);
-    }
-
-    #[test]
-    fn expected_score_count_autotune_holdout_capped_by_combo_count() {
-        use super::super::commands::RequestRun;
-        use crate::server::domain::evaluation::value_objects::{
-            ChunkingVariant, EvaluationAutotuneRequest,
-        };
-
-        let run_id = Uuid::new_v4();
-        let dataset_id = Uuid::new_v4();
-        let variants = vec![ChunkingVariant {
-            label: "a".into(),
-            config: section_config(),
-        }];
-        let options = vec![EvaluationRunOptions::default()];
-
-        let cmd = EvaluationRunCommand::RequestRun(RequestRun {
-            run_id,
-            dataset_id,
-            index_profile_id: Uuid::new_v4(),
-            retrieval_profile_id: None,
-            document_id: Uuid::new_v4(),
-            document_version: 1,
-            variants,
-            options,
-            autotune_request: Some(EvaluationAutotuneRequest {
-                tuning_fraction_milli: 700,
-                holdout_top_n: 99,
-            }),
-            optimization: None,
-            scoring_policy: ScoringPolicy::default(),
-            fingerprint: test_fingerprint(),
-            occurred_at: "2024-01-01T00:00:00Z".into(),
-        });
-        let events = EvaluationRun::handle_command(None, cmd).unwrap();
-        let run = EvaluationRun::from_events(&events).unwrap();
-
-        assert_eq!(run.expected_score_count(), 1 + 1);
     }
 
     #[test]

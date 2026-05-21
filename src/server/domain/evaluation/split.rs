@@ -161,6 +161,16 @@ pub fn split_questions(seed: u64, total: usize, tuning_fraction_milli: u32) -> D
     DatasetSplit { tuning, holdout }
 }
 
+pub fn shuffled_tuning_order(tuning: &[usize], run_id: Uuid) -> Vec<usize> {
+    let mut indices: Vec<usize> = tuning.to_vec();
+    let mut state = run_id.as_u128() as u64;
+    if state == 0 {
+        state = 0xCBF2_9CE4_8422_2325;
+    }
+    shuffle_in_place(&mut indices, state);
+    indices
+}
+
 pub fn seed_from_uuid(id: Uuid) -> u64 {
     let bytes = id.as_bytes();
     let (hi_bytes, lo_bytes) = bytes.split_at(8);

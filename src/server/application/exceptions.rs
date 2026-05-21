@@ -235,7 +235,10 @@ impl From<IndexingRepositoryError> for AppError {
 
 impl From<ChunkSetRepositoryError> for AppError {
     fn from(value: ChunkSetRepositoryError) -> Self {
-        AppError::Internal(value.to_string())
+        match value {
+            ChunkSetRepositoryError::InUse(_) => AppError::Validation(value.to_string()),
+            ChunkSetRepositoryError::Internal(_) => AppError::Internal(value.to_string()),
+        }
     }
 }
 

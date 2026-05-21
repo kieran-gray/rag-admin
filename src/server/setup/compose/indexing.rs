@@ -4,6 +4,7 @@ use std::sync::Arc;
 use sqlx::PgPool;
 use tokio::sync::Notify;
 
+use crate::server::application::chunk_set::{ChunkSetCommandHandler, ChunkSetQueryService};
 use crate::server::application::chunking::ChunkerRegistry;
 use crate::server::application::configuration::IndexProfileResolver;
 use crate::server::application::embedding::EmbeddingService;
@@ -25,6 +26,8 @@ use event_sourcing::process_manager::ProcessManager;
 
 pub struct IndexingServices {
     pub indexing_command_handler: Arc<IndexingCommandHandler>,
+    pub chunk_set_command_handler: Arc<ChunkSetCommandHandler>,
+    pub chunk_set_query_service: Arc<ChunkSetQueryService>,
 }
 
 pub struct IndexingDeps<'a> {
@@ -69,6 +72,9 @@ impl IndexingServices {
             Arc::clone(&clock),
         );
 
+        let chunk_set_command_handler = ChunkSetCommandHandler::new(Arc::clone(&repos.chunk_set));
+        let chunk_set_query_service = ChunkSetQueryService::new(Arc::clone(&repos.chunk_set));
+
         let indexing_job_queue: Arc<dyn JobQueue<IndexingEffect>> =
             Arc::new(PostgresJobQueue::<IndexingEffect>::new(pool));
 
@@ -109,6 +115,8 @@ impl IndexingServices {
 
         Ok(Self {
             indexing_command_handler,
+            chunk_set_command_handler,
+            chunk_set_query_service,
         })
     }
 }

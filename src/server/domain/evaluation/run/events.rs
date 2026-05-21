@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::server::domain::evaluation::value_objects::{
-    ChunkingVariant, EvaluationAutotuneRequest, EvaluationMetrics, EvaluationResultSplit,
-    EvaluationRunOptions, OptimizationConfig, RunFingerprint,
+    ChunkingVariant, EvaluationMetrics, EvaluationResultSplit, EvaluationRunOptions,
+    OptimizationConfig, RunFingerprint,
 };
 use crate::server::domain::shared::value_objects::ChunkingConfig;
 use crate::server::domain::shared::Timestamp;
@@ -31,7 +31,6 @@ pub struct RunRequested {
     pub document_version: u32,
     pub variants: Vec<ChunkingVariant>,
     pub options: Vec<EvaluationRunOptions>,
-    pub autotune_request: Option<EvaluationAutotuneRequest>,
     pub optimization: Option<OptimizationConfig>,
     pub scoring_policy: ScoringPolicy,
     pub fingerprint: RunFingerprint,

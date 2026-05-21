@@ -1,6 +1,7 @@
 pub mod activity;
 pub mod aggregate_types;
 pub mod chat;
+pub mod chunk_set;
 pub mod configuration;
 pub mod connector;
 pub mod error;
@@ -16,6 +17,10 @@ pub use activity::{
 };
 pub use aggregate_types as aggregate_type;
 pub use chat::{ChatRequest, ChatResponse};
+pub use chunk_set::{
+    ChunkSetSummaryDto, DeleteChunkSetRequestDto, GcChunkSetsRequestDto, GcChunkSetsResponseDto,
+    SetChunkSetPinnedRequestDto,
+};
 pub use configuration::{
     AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto,
     ChunkingConfigurationCommandDto, ChunkingConfigurationDto, ConfigurationDto,

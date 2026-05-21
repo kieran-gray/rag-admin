@@ -1,3 +1,4 @@
+pub mod artifacts;
 pub mod configuration;
 pub mod document_detail;
 pub mod documents;

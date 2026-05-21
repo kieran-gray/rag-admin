@@ -10,12 +10,6 @@ pub(super) enum OptionsMode {
     Sweep,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum RunMode {
-    ScoreAll,
-    Autotune,
-}
-
 #[allow(clippy::too_many_arguments)]
 #[component]
 pub(super) fn OptionsPicker(
@@ -72,69 +66,6 @@ pub(super) fn OptionsPicker(
                 Ok(_) => ().into_any(),
             }}
         </div>
-    }
-}
-
-#[component]
-pub(super) fn RunModePicker(
-    run_mode: ReadSignal<RunMode>,
-    set_run_mode: WriteSignal<RunMode>,
-) -> impl IntoView {
-    view! {
-        <div class="space-y-2">
-            <div class="eyebrow">"Run mode"</div>
-            <div class="space-y-1.5">
-                <RunModeOption
-                    label="Score every combination"
-                    body="Runs every variant × options pair. Best for finding the absolute winner across a small grid."
-                    value=run_mode
-                    set_value=set_run_mode
-                    target=RunMode::ScoreAll
-                />
-                <RunModeOption
-                    label="Autotune (tuning + holdout)"
-                    body="Splits the dataset 70/30, picks a winner on the tuning split, scores it on the holdout. Best for large grids."
-                    value=run_mode
-                    set_value=set_run_mode
-                    target=RunMode::Autotune
-                />
-            </div>
-        </div>
-    }
-}
-
-#[component]
-fn RunModeOption(
-    label: &'static str,
-    body: &'static str,
-    value: ReadSignal<RunMode>,
-    set_value: WriteSignal<RunMode>,
-    target: RunMode,
-) -> impl IntoView {
-    let active = move || value.get() == target;
-    view! {
-        <button
-            type="button"
-            class=move || format!(
-                "w-full text-left rounded border p-3 transition-colors {}",
-                if active() {
-                    "border-[var(--color-accent)] bg-[var(--color-accent-soft)]"
-                } else {
-                    "border-[var(--color-border)] hover:border-[var(--color-border-strong)]"
-                }
-            )
-            on:click=move |_| set_value.set(target)
-        >
-            <div class="flex items-center gap-2">
-                <span class=move || if active() {
-                    "inline-block w-2 h-2 rounded-full bg-[var(--color-accent)]"
-                } else {
-                    "inline-block w-2 h-2 rounded-full border border-[var(--color-text-faint)]"
-                }></span>
-                <span class="text-text font-medium">{label}</span>
-            </div>
-            <p class="text-sm muted mt-1 ml-4">{body}</p>
-        </button>
     }
 }
 

@@ -142,7 +142,7 @@ pub fn ChunkingPage() -> impl IntoView {
                 <div>
                     <h2 class="section-title">"Sweep templates"</h2>
                     <p class="text-sm muted">
-                        "Named bundles of chunking configurations. Pick one as the variants axis when launching an autotune."
+                        "Named bundles of chunking configurations. Pick one as the variants axis when launching an evaluation."
                     </p>
                 </div>
                 <button

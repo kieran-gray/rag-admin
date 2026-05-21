@@ -161,6 +161,7 @@ pub fn RunStep<'a>(
                 <OptimizeLauncher
                     dataset_id=selection.dataset_id.get()
                     index_profile_id=selection.index_profile_id.get()
+                    chunking_configurations=chunking_stored
                     on_launch=launch_optimization
                     busy=busy
                     error=error
@@ -169,7 +170,7 @@ pub fn RunStep<'a>(
 
             <details class="surface-raised rounded p-4">
                 <summary class="cursor-pointer text-sm muted hover:text-text">
-                    "Expert: manual variants / autotune"
+                    "Expert: manual variants"
                 </summary>
                 <div class="pt-4">
                     <EvaluationLauncher

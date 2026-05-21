@@ -31,6 +31,12 @@ const CONFIGURATION_ITEMS: &[NavMenuItem] = &[
     },
 ];
 
+const ARTIFACTS_ITEMS: &[NavMenuItem] = &[NavMenuItem {
+    href: "/artifacts/chunk-sets",
+    label: "Chunk sets",
+    hint: "cached chunks · GC",
+}];
+
 const PLAYGROUND_ITEMS: &[NavMenuItem] = &[
     NavMenuItem {
         href: "/playground/embed",
@@ -108,7 +114,8 @@ pub fn AppNav() -> impl IntoView {
                         }
                     }).collect_view()}
                     <NavMenu label="Playground" prefix="/playground" items=PLAYGROUND_ITEMS />
-                    <NavMenu label="Configuration" prefix="/configuration" items=CONFIGURATION_ITEMS />
+                    <NavMenu label="Artifacts" prefix="/artifacts" items=ARTIFACTS_ITEMS />
+                    <NavMenu label="Config" prefix="/configuration" items=CONFIGURATION_ITEMS />
                 </nav>
 
                 <RunningCount running=running />

@@ -274,6 +274,7 @@ impl IndexingEffectExecutor {
             document_version: indexing.document_version,
             chunking_config: indexing.chunking_config,
             created_at: occurred_at.to_string(),
+            pinned: false,
         };
         self.chunk_set_repository.save(chunk_set, chunks).await?;
 

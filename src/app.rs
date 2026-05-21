@@ -9,6 +9,7 @@ use leptos_router::{
 use crate::ui::components::app::event_bus::provide_event_bus;
 use crate::ui::components::shell::AppShell;
 use crate::ui::pages::{
+    artifacts::chunk_sets::ChunkSetsPage,
     configuration::{
         catalog::CatalogPage, chunking::ChunkingPage, connectors::ConnectorsPage,
         profiles::ProfilesPage,
@@ -149,6 +150,14 @@ pub fn App() -> impl IntoView {
                     <Route
                         path=(StaticSegment("configuration"), StaticSegment("connectors"))
                         view=ConnectorsPage
+                    />
+                    <Route
+                        path=(StaticSegment("artifacts"), StaticSegment("chunk-sets"))
+                        view=ChunkSetsPage
+                    />
+                    <Route
+                        path=StaticSegment("artifacts")
+                        view=|| view! { <RedirectTo to="/artifacts/chunk-sets" /> }
                     />
                     <Route
                         path=StaticSegment("configuration")
