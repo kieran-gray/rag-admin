@@ -186,6 +186,26 @@ mod tests {
         ) -> Result<Option<SourceDocumentReadModel>, SourceDocumentRepositoryError> {
             Ok(None)
         }
+
+        async fn connectors_by_documents(
+            &self,
+            _document_ids: &[Uuid],
+        ) -> Result<Vec<(Uuid, Uuid)>, SourceDocumentRepositoryError> {
+            Ok(Vec::new())
+        }
+
+        async fn document_ids_for_connectors(
+            &self,
+            _connector_ids: &[Uuid],
+        ) -> Result<Vec<Uuid>, SourceDocumentRepositoryError> {
+            Ok(Vec::new())
+        }
+
+        async fn connector_facets(
+            &self,
+        ) -> Result<Vec<(Uuid, u64)>, SourceDocumentRepositoryError> {
+            Ok(Vec::new())
+        }
     }
 
     fn plain_metadata(title: &str) -> DocumentMetadata {

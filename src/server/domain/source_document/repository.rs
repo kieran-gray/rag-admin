@@ -82,6 +82,20 @@ pub trait SourceDocumentRepository: Send + Sync {
         &self,
         source_ref: &SourceRef,
     ) -> Result<Option<SourceDocumentReadModel>, SourceDocumentRepositoryError>;
+
+    async fn connectors_by_documents(
+        &self,
+        document_ids: &[Uuid],
+    ) -> Result<Vec<(Uuid, Uuid)>, SourceDocumentRepositoryError>;
+
+    async fn document_ids_for_connectors(
+        &self,
+        connector_ids: &[Uuid],
+    ) -> Result<Vec<Uuid>, SourceDocumentRepositoryError>;
+
+    async fn connector_facets(
+        &self,
+    ) -> Result<Vec<(Uuid, u64)>, SourceDocumentRepositoryError>;
 }
 
 impl From<SourceDocumentRepositoryError> for ProjectionError {

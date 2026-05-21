@@ -4,7 +4,6 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::server::application::connector::ConnectorQueryService;
-use crate::server::application::connector_import::ConnectorImportQueryService;
 use crate::server::application::markdown::{Block, BlockKind};
 use crate::server::application::ports::MarkdownParser;
 use crate::server::application::source_document::ports::BlobStore;
@@ -32,7 +31,6 @@ pub struct SourceDocumentQueryService {
     blob_store: Arc<dyn BlobStore>,
     markdown_parser: Arc<dyn MarkdownParser>,
     connector_query_service: Arc<ConnectorQueryService>,
-    connector_import_query_service: Arc<ConnectorImportQueryService>,
 }
 
 impl SourceDocumentQueryService {
@@ -43,7 +41,6 @@ impl SourceDocumentQueryService {
         blob_store: Arc<dyn BlobStore>,
         markdown_parser: Arc<dyn MarkdownParser>,
         connector_query_service: Arc<ConnectorQueryService>,
-        connector_import_query_service: Arc<ConnectorImportQueryService>,
     ) -> Arc<Self> {
         Arc::new(Self {
             source_document_repository,
@@ -52,7 +49,6 @@ impl SourceDocumentQueryService {
             blob_store,
             markdown_parser,
             connector_query_service,
-            connector_import_query_service,
         })
     }
 
@@ -111,11 +107,11 @@ impl SourceDocumentQueryService {
         &self,
         document_ids: &[Uuid],
     ) -> Result<HashMap<Uuid, Vec<DocumentConnectorDto>>, AppError> {
-        let imports = self
-            .connector_import_query_service
-            .list_for_documents(document_ids)
+        let pairs = self
+            .source_document_repository
+            .connectors_by_documents(document_ids)
             .await?;
-        if imports.is_empty() {
+        if pairs.is_empty() {
             return Ok(HashMap::new());
         }
         let connectors = self.connector_query_service.list().await?;
@@ -124,18 +120,15 @@ impl SourceDocumentQueryService {
             .map(|c| (c.connector_id, c.name.clone()))
             .collect();
         let mut by_doc: HashMap<Uuid, Vec<DocumentConnectorDto>> = HashMap::new();
-        for record in imports {
+        for (document_id, connector_id) in pairs {
             let name = name_by_id
-                .get(&record.connector_id)
+                .get(&connector_id)
                 .cloned()
                 .unwrap_or_else(|| "(removed)".to_string());
             by_doc
-                .entry(record.document_id)
+                .entry(document_id)
                 .or_default()
-                .push(DocumentConnectorDto {
-                    connector_id: record.connector_id,
-                    name,
-                });
+                .push(DocumentConnectorDto { connector_id, name });
         }
         Ok(by_doc)
     }
@@ -148,7 +141,7 @@ impl SourceDocumentQueryService {
             None
         } else {
             Some(
-                self.connector_import_query_service
+                self.source_document_repository
                     .document_ids_for_connectors(&query.connectors)
                     .await?,
             )
@@ -220,7 +213,7 @@ impl SourceDocumentQueryService {
             })
             .collect();
 
-        let connector_facet_pairs = self.connector_import_query_service.facets().await?;
+        let connector_facet_pairs = self.source_document_repository.connector_facets().await?;
         let connector_dtos = self.connector_query_service.list().await?;
         let name_by_id: HashMap<Uuid, String> = connector_dtos
             .into_iter()

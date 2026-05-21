@@ -7,9 +7,6 @@ use crate::server::application::configuration::{
     ChunkingConfigurationQueryService, PipelineResolver,
 };
 use crate::server::application::connector::{ConnectorQueryService, ConnectorRegistry};
-use crate::server::application::connector_import::{
-    ConnectorImportCommandHandler, ConnectorImportQueryService,
-};
 use crate::server::application::connector_sync::BulkImportService;
 use crate::server::application::indexing::IndexingCommandHandler;
 use crate::server::application::ports::{Clock, HttpClient, IdGenerator, MarkdownParser};
@@ -50,8 +47,7 @@ pub struct IngestionDeps<'a> {
     pub chunking_configuration_query_service: Arc<ChunkingConfigurationQueryService>,
     pub connector_registry: Arc<ConnectorRegistry>,
     pub connector_query_service: Arc<ConnectorQueryService>,
-    pub connector_import_command_handler: Arc<ConnectorImportCommandHandler>,
-    pub connector_import_query_service: Arc<ConnectorImportQueryService>,
+    pub source_document_command_handler: Arc<SourceDocumentCommandHandler>,
     pub indexing_command_handler: Arc<IndexingCommandHandler>,
     pub wakeups: &'a mut HashMap<String, Arc<Notify>>,
 }
@@ -70,17 +66,10 @@ impl IngestionServices {
             chunking_configuration_query_service,
             connector_registry,
             connector_query_service,
-            connector_import_command_handler,
-            connector_import_query_service,
+            source_document_command_handler,
             indexing_command_handler,
             wakeups,
         } = deps;
-
-        let source_document_command_handler = SourceDocumentCommandHandler::new(
-            Arc::clone(&wirings.source_document.command_processor),
-            Arc::clone(&id_generator),
-            Arc::clone(&clock),
-        );
 
         let source_document_query_service = SourceDocumentQueryService::new(
             Arc::clone(&repos.source_document),
@@ -89,7 +78,6 @@ impl IngestionServices {
             Arc::clone(&repos.blob_store),
             markdown_parser,
             Arc::clone(&connector_query_service),
-            connector_import_query_service,
         );
 
         let html_to_markdown: Arc<dyn HtmlToMarkdown> = HtmdConverter::new();
@@ -111,7 +99,6 @@ impl IngestionServices {
                 blob_store: Arc::clone(&repos.blob_store),
                 connector_registry,
                 connector_query_service,
-                connector_import_command_handler,
                 pipeline_resolver: Arc::clone(&pipeline_resolver),
                 http_client: http_port,
                 normalizer_registry,

@@ -15,7 +15,6 @@ use crate::server::domain::configuration::pipeline_configuration::PipelineConfig
 use crate::server::domain::configuration::sweep_template::SweepTemplate;
 use crate::server::domain::configuration::vector_index::VectorIndexCatalog;
 use crate::server::domain::connector::Connector;
-use crate::server::domain::connector_import::ConnectorImport;
 use crate::server::domain::connector_sync::ConnectorSync;
 use crate::server::domain::evaluation::dataset::aggregate::EvaluationDataset;
 use crate::server::domain::evaluation::run::aggregate::EvaluationRun;
@@ -51,7 +50,6 @@ pub struct AggregateWirings {
     pub sweep_template: AggregateWiring<SweepTemplate>,
     pub defaults: AggregateWiring<ConfigurationDefaults>,
     pub connector: AggregateWiring<Connector>,
-    pub connector_import: AggregateWiring<ConnectorImport>,
     pub connector_sync: AggregateWiring<ConnectorSync>,
     pub source_document: AggregateWiring<SourceDocument>,
     pub indexing: AggregateWiring<Indexing>,
@@ -69,7 +67,6 @@ pub fn build_aggregate_wirings(pool: &PgPool) -> AggregateWirings {
         sweep_template: build_aggregate_wiring::<SweepTemplate>(pool),
         defaults: build_aggregate_wiring::<ConfigurationDefaults>(pool),
         connector: build_aggregate_wiring::<Connector>(pool),
-        connector_import: build_aggregate_wiring::<ConnectorImport>(pool),
         connector_sync: build_aggregate_wiring::<ConnectorSync>(pool),
         source_document: build_aggregate_wiring::<SourceDocument>(pool),
         indexing: build_aggregate_wiring::<Indexing>(pool),

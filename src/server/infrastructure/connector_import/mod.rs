@@ -1,3 +1,0 @@
-pub mod postgres_connector_import_repository;
-
-pub use postgres_connector_import_repository::PostgresConnectorImportRepository;

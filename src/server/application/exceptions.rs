@@ -18,9 +18,6 @@ use crate::server::domain::configuration::{
     vector_index::VectorIndexRepositoryError,
 };
 use crate::server::domain::connector::{ConnectorError, ConnectorRepositoryError};
-use crate::server::domain::connector_import::{
-    ConnectorImportError, ConnectorImportRepositoryError,
-};
 use crate::server::domain::connector_sync::{
     ConnectorDiscoveredItemRepositoryError, ConnectorSyncError, ConnectorSyncRepositoryError,
 };
@@ -165,18 +162,6 @@ impl From<ConnectorError> for AppError {
 
 impl From<ConnectorRepositoryError> for AppError {
     fn from(value: ConnectorRepositoryError) -> Self {
-        AppError::Internal(value.to_string())
-    }
-}
-
-impl From<ConnectorImportError> for AppError {
-    fn from(value: ConnectorImportError) -> Self {
-        AppError::Internal(value.to_string())
-    }
-}
-
-impl From<ConnectorImportRepositoryError> for AppError {
-    fn from(value: ConnectorImportRepositoryError) -> Self {
         AppError::Internal(value.to_string())
     }
 }

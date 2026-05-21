@@ -6,15 +6,11 @@ use tokio::sync::Notify;
 use crate::server::application::connector::{
     ConnectorCommandHandler, ConnectorImpl, ConnectorQueryService, ConnectorRegistry,
 };
-use crate::server::application::connector_import::{
-    ConnectorImportCommandHandler, ConnectorImportQueryService,
-};
 use crate::server::application::connector_sync::{
     ConnectorSyncCommandHandler, ConnectorSyncQueryService, ConnectorSyncService,
 };
 use crate::server::application::ports::{Clock, HttpClient, IdGenerator};
 use crate::server::domain::connector::{Connector, ConnectorProjector};
-use crate::server::domain::connector_import::{ConnectorImport, ConnectorImportProjector};
 use crate::server::domain::connector_sync::{ConnectorSync, ConnectorSyncProjector};
 use crate::server::infrastructure::connector::SitemapConnector;
 use crate::server::infrastructure::shared::http::ReqwestHttpClient;
@@ -26,8 +22,6 @@ use event_sourcing::event_bus::EventBus;
 pub struct ConnectorServices {
     pub connector_command_handler: Arc<ConnectorCommandHandler>,
     pub connector_query_service: Arc<ConnectorQueryService>,
-    pub connector_import_command_handler: Arc<ConnectorImportCommandHandler>,
-    pub connector_import_query_service: Arc<ConnectorImportQueryService>,
     pub connector_sync_command_handler: Arc<ConnectorSyncCommandHandler>,
     pub connector_sync_query_service: Arc<ConnectorSyncQueryService>,
     pub connector_sync_service: Arc<ConnectorSyncService>,
@@ -63,12 +57,6 @@ impl ConnectorServices {
             Arc::clone(&clock),
             Arc::clone(&id_generator),
         );
-        let connector_import_command_handler = ConnectorImportCommandHandler::new(
-            Arc::clone(&wirings.connector_import.command_processor),
-            Arc::clone(&clock),
-        );
-        let connector_import_query_service =
-            ConnectorImportQueryService::new(Arc::clone(&repos.connector_import));
         let connector_sync_command_handler = ConnectorSyncCommandHandler::new(
             Arc::clone(&wirings.connector_sync.command_processor),
             Arc::clone(&clock),
@@ -76,7 +64,6 @@ impl ConnectorServices {
         let connector_sync_query_service = ConnectorSyncQueryService::new(
             Arc::clone(&repos.connector_sync),
             Arc::clone(&repos.connector_discovered_item),
-            Arc::clone(&repos.connector_import),
             Arc::clone(&repos.source_document),
             Arc::clone(&repos.indexing),
         );
@@ -89,10 +76,8 @@ impl ConnectorServices {
 
         let connector_sync_service = ConnectorSyncService::new(
             Arc::clone(&connector_sync_command_handler),
-            Arc::clone(&connector_sync_query_service),
             Arc::clone(&connector_registry),
             Arc::clone(&connector_query_service),
-            Arc::clone(&connector_import_command_handler),
             id_generator,
         );
 
@@ -101,8 +86,6 @@ impl ConnectorServices {
         Ok(Self {
             connector_command_handler,
             connector_query_service,
-            connector_import_command_handler,
-            connector_import_query_service,
             connector_sync_command_handler,
             connector_sync_query_service,
             connector_sync_service,
@@ -121,16 +104,6 @@ fn spawn_drivers(
         Arc::clone(&wirings.connector.event_store),
         vec![Arc::new(ConnectorProjector::new(Arc::clone(
             &repos.connector,
-        )))],
-        None,
-        Arc::clone(&repos.checkpoint),
-        Arc::clone(event_bus),
-        wakeups,
-    );
-    spawn_driver::<ConnectorImport, ()>(
-        Arc::clone(&wirings.connector_import.event_store),
-        vec![Arc::new(ConnectorImportProjector::new(Arc::clone(
-            &repos.connector_import,
         )))],
         None,
         Arc::clone(&repos.checkpoint),

@@ -102,7 +102,7 @@ pub async fn bulk_import_from_connector(
 ) -> Result<BulkImportResultDto, ServerFnError> {
     let result = ctx::<Arc<IngestionServices>>()?
         .bulk_import_service
-        .bulk_import(connector_id, source_ref_keys, None, index_after_import)
+        .bulk_import(connector_id, source_ref_keys, index_after_import)
         .await
         .map_err(|e| map_app_error(&e))?;
     Ok(BulkImportResultDto {

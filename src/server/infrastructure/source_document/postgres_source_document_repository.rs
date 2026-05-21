@@ -58,6 +58,7 @@ impl SourceDocumentRepository for PostgresSourceDocumentRepository {
             .ok()
             .and_then(|v| v.as_str().map(str::to_owned))
             .unwrap_or_else(|| format!("{:?}", read_model.document_type));
+        let source_ref_key = read_model.source_ref.natural_key();
         let source_ref = serde_json::to_value(&read_model.source_ref).map_err(|e| {
             SourceDocumentRepositoryError::Internal(format!("serialize source_ref: {e}"))
         })?;
@@ -68,14 +69,15 @@ impl SourceDocumentRepository for PostgresSourceDocumentRepository {
         sqlx::query(
             "
             INSERT INTO source_documents (
-                document_id, document_type, source_ref, latest_version_number,
-                latest_content_hash, latest_metadata, latest_version_occurred_at,
-                deleted, updated_at
+                document_id, document_type, source_ref, source_ref_key,
+                latest_version_number, latest_content_hash, latest_metadata,
+                latest_version_occurred_at, deleted, updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
             ON CONFLICT (document_id) DO UPDATE SET
                 document_type = EXCLUDED.document_type,
                 source_ref = EXCLUDED.source_ref,
+                source_ref_key = EXCLUDED.source_ref_key,
                 latest_version_number = EXCLUDED.latest_version_number,
                 latest_content_hash = EXCLUDED.latest_content_hash,
                 latest_metadata = EXCLUDED.latest_metadata,
@@ -87,6 +89,7 @@ impl SourceDocumentRepository for PostgresSourceDocumentRepository {
         .bind(read_model.document_id)
         .bind(&document_type)
         .bind(&source_ref)
+        .bind(&source_ref_key)
         .bind(read_model.latest_version_number.cast_signed())
         .bind(read_model.latest_content_hash.as_hex())
         .bind(&latest_metadata)
@@ -294,6 +297,76 @@ impl SourceDocumentRepository for PostgresSourceDocumentRepository {
         .map_err(|e| SourceDocumentRepositoryError::Internal(format!("find_by_source_ref: {e}")))?;
 
         row.map(SourceDocumentReadModel::try_from).transpose()
+    }
+
+    async fn connectors_by_documents(
+        &self,
+        document_ids: &[Uuid],
+    ) -> Result<Vec<(Uuid, Uuid)>, SourceDocumentRepositoryError> {
+        if document_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let rows: Vec<(Uuid, Uuid)> = sqlx::query_as(
+            "
+            SELECT sd.document_id, d.connector_id
+            FROM source_documents sd
+            JOIN connector_discovered_items d ON d.source_ref_key = sd.source_ref_key
+            WHERE sd.document_id = ANY($1)
+            ",
+        )
+        .bind(document_ids)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| {
+            SourceDocumentRepositoryError::Internal(format!("connectors_by_documents: {e}"))
+        })?;
+        Ok(rows)
+    }
+
+    async fn document_ids_for_connectors(
+        &self,
+        connector_ids: &[Uuid],
+    ) -> Result<Vec<Uuid>, SourceDocumentRepositoryError> {
+        if connector_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let rows: Vec<(Uuid,)> = sqlx::query_as(
+            "
+            SELECT DISTINCT sd.document_id
+            FROM source_documents sd
+            JOIN connector_discovered_items d ON d.source_ref_key = sd.source_ref_key
+            WHERE d.connector_id = ANY($1)
+            ",
+        )
+        .bind(connector_ids)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| {
+            SourceDocumentRepositoryError::Internal(format!("document_ids_for_connectors: {e}"))
+        })?;
+        Ok(rows.into_iter().map(|r| r.0).collect())
+    }
+
+    async fn connector_facets(
+        &self,
+    ) -> Result<Vec<(Uuid, u64)>, SourceDocumentRepositoryError> {
+        let rows: Vec<(Uuid, i64)> = sqlx::query_as(
+            "
+            SELECT d.connector_id, COUNT(DISTINCT sd.document_id)
+            FROM connector_discovered_items d
+            JOIN source_documents sd
+                ON sd.source_ref_key = d.source_ref_key AND NOT sd.deleted
+            GROUP BY d.connector_id
+            ORDER BY COUNT(DISTINCT sd.document_id) DESC
+            ",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| SourceDocumentRepositoryError::Internal(format!("connector_facets: {e}")))?;
+        Ok(rows
+            .into_iter()
+            .map(|(id, count)| (id, count.max(0) as u64))
+            .collect())
     }
 }
 

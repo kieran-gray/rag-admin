@@ -15,7 +15,8 @@ use crate::shared::contracts::{
 };
 use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{
-    Help, InlineStatus, InlineStatusMessage, Status, StatusPill, Surface, TitleCell,
+    ActionItem, ActionsMenu, Help, InlineStatus, InlineStatusMessage, Status, StatusPill, Surface,
+    TitleCell,
 };
 use crate::ui::pages::shared::format_when;
 
@@ -197,24 +198,37 @@ fn ConnectorBrowseBody(
     let pipeline_id = connector.default_pipeline_configuration_id;
     let chunking_id = connector.default_chunking_configuration_id;
 
+    let nothing_selected = Signal::derive(move || selected.with(|s| s.is_empty()));
+    let busy_or_no_selection =
+        Signal::derive(move || busy.get() || selected.with(|s| s.is_empty()));
+    let busy_signal = Signal::derive(move || busy.get());
+
+    let discovered_actions = vec![
+        ActionItem::new(
+            "Import + index selected",
+            Callback::new(move |_| on_import_selected.run(true)),
+        )
+        .primary()
+        .disabled(busy_or_no_selection),
+        ActionItem::new(
+            "Import selected (no index)",
+            Callback::new(move |_| on_import_selected.run(false)),
+        )
+        .disabled(busy_or_no_selection),
+        ActionItem::new(
+            "Import all new (+ index)",
+            Callback::new(move |_| on_import_all_new.run(())),
+        )
+        .disabled(busy_signal),
+    ];
+
     view! {
         <div class="flex flex-col gap-3">
-            <div class="flex items-center justify-between gap-3">
-                <div class="text-sm muted">
-                    "Bulk import items discovered from this connector. Defaults to the connector's pipeline and chunking when indexing."
-                </div>
-                <button
-                    type="button"
-                    class="btn btn-primary"
-                    disabled=busy
-                    on:click=move |_| on_sync_now.run(())
-                >
-                    {move || if busy.get() { "Syncing…" } else { "Sync now" }}
-                </button>
+            <div class="text-sm muted">
+                "Bulk import items discovered from this connector. Defaults to the connector's pipeline and chunking when indexing."
             </div>
 
             <InlineStatus status=status />
-
 
             <Surface>
                 <div class="p-4 flex flex-col gap-2">
@@ -235,8 +249,18 @@ fn ConnectorBrowseBody(
             </Surface>
 
             <Surface>
-                <div class="p-4">
-                    <h3 class="section-title">"Recent syncs"</h3>
+                <div class="p-4 flex flex-col gap-3">
+                    <div class="flex items-center justify-between flex-wrap gap-2">
+                        <h3 class="section-title">"Recent syncs"</h3>
+                        <button
+                            type="button"
+                            class="btn btn-primary"
+                            disabled=busy
+                            on:click=move |_| on_sync_now.run(())
+                        >
+                            {move || if busy.get() { "Syncing…" } else { "Sync now" }}
+                        </button>
+                    </div>
                     <Suspense fallback=|| view! { <div class="muted text-sm p-2">"Loading…"</div> }>
                         {move || syncs.get().map(|res| match res {
                             Err(e) => view! { <div class="log-line-error text-sm">{format!("Failed: {e}")}</div> }.into_any(),
@@ -286,33 +310,11 @@ fn ConnectorBrowseBody(
                                 <StatusLegend />
                             </Help>
                         </div>
-                        <div class="flex gap-2">
-                            <button
-                                type="button"
-                                class="btn"
-                                disabled=move || busy.get() || selected.get().is_empty()
-                                on:click=move |_| on_import_selected.run(false)
-                                title="Store the markdown locally without adding it to a vector index"
-                            >
-                                "Import selected"
-                            </button>
-                            <button
-                                type="button"
-                                class="btn btn-primary"
-                                disabled=move || busy.get() || selected.get().is_empty()
-                                on:click=move |_| on_import_selected.run(true)
-                                title="Import and then chunk + embed into this connector's pipeline"
-                            >
-                                "Import + index selected"
-                            </button>
-                            <button
-                                type="button"
-                                class="btn"
-                                disabled=busy
-                                on:click=move |_| on_import_all_new.run(())
-                            >
-                                "Import all new (+ index)"
-                            </button>
+                        <div class="flex items-center gap-2">
+                            {move || nothing_selected.get().then(|| view! {
+                                <span class="text-xs muted">"Select items to import"</span>
+                            })}
+                            <ActionsMenu label="Import actions".to_string() items=discovered_actions.clone() />
                         </div>
                     </div>
 

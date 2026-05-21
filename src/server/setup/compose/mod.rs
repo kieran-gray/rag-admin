@@ -20,6 +20,7 @@ use sqlx::PgPool;
 use tokio::sync::Notify;
 
 use crate::server::application::ports::{Clock, IdGenerator};
+use crate::server::application::source_document::SourceDocumentCommandHandler;
 use crate::server::infrastructure::shared::clients::{CloudflareApi, OllamaApi};
 use crate::server::infrastructure::shared::event_sourcing::spawn_postgres_event_listener;
 use crate::server::infrastructure::shared::http::ReqwestHttpClient;
@@ -71,6 +72,12 @@ pub async fn bootstrap() -> Result<App, SetupError> {
 
     let repos = build_repositories(&pool, &config, &cf_api)?;
     let wirings = build_aggregate_wirings(&pool);
+
+    let source_document_command_handler = SourceDocumentCommandHandler::new(
+        Arc::clone(&wirings.source_document.command_processor),
+        Arc::clone(&id_generator),
+        Arc::clone(&clock),
+    );
 
     let platform = PlatformServices::build(PlatformDeps {
         config: &config,
@@ -135,8 +142,7 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         ),
         connector_registry: Arc::clone(&connector.connector_registry),
         connector_query_service: Arc::clone(&connector.connector_query_service),
-        connector_import_command_handler: Arc::clone(&connector.connector_import_command_handler),
-        connector_import_query_service: Arc::clone(&connector.connector_import_query_service),
+        source_document_command_handler: Arc::clone(&source_document_command_handler),
         indexing_command_handler: Arc::clone(&indexing.indexing_command_handler),
         wakeups: &mut wakeups,
     })?;

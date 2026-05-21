@@ -13,7 +13,6 @@ use crate::server::domain::configuration::pipeline_configuration::PipelineConfig
 use crate::server::domain::configuration::sweep_template::SweepTemplateRepository;
 use crate::server::domain::configuration::vector_index::VectorIndexRepository;
 use crate::server::domain::connector::ConnectorRepository;
-use crate::server::domain::connector_import::ConnectorImportRepository;
 use crate::server::domain::connector_sync::{
     ConnectorDiscoveredItemRepository, ConnectorSyncRepository,
 };
@@ -30,7 +29,6 @@ use crate::server::infrastructure::configuration::{
     PostgresVectorIndexRepository,
 };
 use crate::server::infrastructure::connector::PostgresConnectorRepository;
-use crate::server::infrastructure::connector_import::PostgresConnectorImportRepository;
 use crate::server::infrastructure::connector_sync::{
     PostgresConnectorDiscoveredItemRepository, PostgresConnectorSyncRepository,
 };
@@ -58,7 +56,6 @@ pub struct Repositories {
     pub configuration_defaults: Arc<dyn ConfigurationDefaultsRepository>,
     pub sweep_template: Arc<dyn SweepTemplateRepository>,
     pub connector: Arc<dyn ConnectorRepository>,
-    pub connector_import: Arc<dyn ConnectorImportRepository>,
     pub connector_sync: Arc<dyn ConnectorSyncRepository>,
     pub connector_discovered_item: Arc<dyn ConnectorDiscoveredItemRepository>,
     pub source_document: Arc<dyn SourceDocumentRepository>,
@@ -104,7 +101,6 @@ pub fn build_repositories(
         )),
         sweep_template: Arc::new(PostgresSweepTemplateRepository::new(pool.clone())),
         connector: Arc::new(PostgresConnectorRepository::new(pool.clone())),
-        connector_import: Arc::new(PostgresConnectorImportRepository::new(pool.clone())),
         connector_sync: Arc::new(PostgresConnectorSyncRepository::new(pool.clone())),
         connector_discovered_item: Arc::new(PostgresConnectorDiscoveredItemRepository::new(
             pool.clone(),

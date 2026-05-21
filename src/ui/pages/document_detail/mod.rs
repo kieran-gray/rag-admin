@@ -246,11 +246,11 @@ fn DocumentWorkspace(
         });
     });
 
-    let actions = vec![ActionItem {
-        label: "Delete document".to_string(),
-        danger: true,
-        on_select: Callback::new(move |_| open_confirm_delete.run(())),
-    }];
+    let actions = vec![ActionItem::new(
+        "Delete document",
+        Callback::new(move |_| open_confirm_delete.run(())),
+    )
+    .danger()];
 
     view! {
         <div>

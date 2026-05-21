@@ -46,7 +46,6 @@ impl BulkImportService {
         &self,
         connector_id: Uuid,
         source_ref_keys: Vec<String>,
-        sync_id: Option<Uuid>,
         index_after_import: bool,
     ) -> Result<BulkImportResult, AppError> {
         let resolved_pipeline = if index_after_import {
@@ -83,7 +82,7 @@ impl BulkImportService {
 
             let dto = match self
                 .ingest_service
-                .import_from_connector_with_sync(connector_id, source_ref.clone(), sync_id)
+                .import_from_connector(connector_id, source_ref.clone())
                 .await
             {
                 Ok(d) => d,

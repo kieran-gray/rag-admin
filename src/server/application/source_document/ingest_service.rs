@@ -4,7 +4,6 @@ use uuid::Uuid;
 
 use crate::server::application::configuration::PipelineResolver;
 use crate::server::application::connector::{ConnectorQueryService, ConnectorRegistry};
-use crate::server::application::connector_import::ConnectorImportCommandHandler;
 use crate::server::application::indexing::{
     command_handler::IndexingCommandHandler, RequestIngestInput,
 };
@@ -28,7 +27,6 @@ pub struct SourceDocumentIngestServiceDeps {
     pub blob_store: Arc<dyn BlobStore>,
     pub connector_registry: Arc<ConnectorRegistry>,
     pub connector_query_service: Arc<ConnectorQueryService>,
-    pub connector_import_command_handler: Arc<ConnectorImportCommandHandler>,
     pub pipeline_resolver: Arc<PipelineResolver>,
     pub http_client: Arc<dyn HttpClient>,
     pub normalizer_registry: Arc<DocumentNormalizerRegistry>,
@@ -43,7 +41,6 @@ pub struct SourceDocumentIngestService {
     blob_store: Arc<dyn BlobStore>,
     connector_registry: Arc<ConnectorRegistry>,
     connector_query_service: Arc<ConnectorQueryService>,
-    connector_import_command_handler: Arc<ConnectorImportCommandHandler>,
     pipeline_resolver: Arc<PipelineResolver>,
     http_client: Arc<dyn HttpClient>,
     normalizer_registry: Arc<DocumentNormalizerRegistry>,
@@ -60,7 +57,6 @@ impl SourceDocumentIngestService {
             blob_store: deps.blob_store,
             connector_registry: deps.connector_registry,
             connector_query_service: deps.connector_query_service,
-            connector_import_command_handler: deps.connector_import_command_handler,
             pipeline_resolver: deps.pipeline_resolver,
             http_client: deps.http_client,
             normalizer_registry: deps.normalizer_registry,
@@ -69,24 +65,16 @@ impl SourceDocumentIngestService {
         })
     }
 
-    pub async fn import_from_connector_with_sync(
+    pub async fn import_from_connector(
         &self,
         connector_id: Uuid,
         source_ref: SourceRef,
-        sync_id: Option<Uuid>,
     ) -> Result<SourceDocumentDto, AppError> {
         let connector = self.load_connector_config(connector_id).await?;
         let implementation = self.connector_registry.get(connector.kind())?;
         let raw = implementation.fetch(&connector, &source_ref).await?;
         let normalized = self.normalizer_registry.normalize(raw).await?;
-        let source_ref_key = normalized.source_ref.natural_key();
-        let dto = self.persist_document(normalized).await?;
-
-        self.connector_import_command_handler
-            .record(connector_id, dto.document_id, source_ref_key, sync_id)
-            .await?;
-
-        Ok(dto)
+        self.persist_document(normalized).await
     }
 
     pub async fn import_upload(

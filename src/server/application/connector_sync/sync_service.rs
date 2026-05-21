@@ -3,37 +3,29 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::server::application::connector::{ConnectorQueryService, ConnectorRegistry};
-use crate::server::application::connector_import::ConnectorImportCommandHandler;
 use crate::server::application::connector_sync::command_handler::ConnectorSyncCommandHandler;
-use crate::server::application::connector_sync::query_service::ConnectorSyncQueryService;
 use crate::server::application::ports::IdGenerator;
 use crate::server::application::AppError;
 use crate::server::domain::connector_sync::DiscoveredItemRecord;
 
 pub struct ConnectorSyncService {
     command_handler: Arc<ConnectorSyncCommandHandler>,
-    query_service: Arc<ConnectorSyncQueryService>,
     connector_registry: Arc<ConnectorRegistry>,
     connector_query_service: Arc<ConnectorQueryService>,
-    connector_import_command_handler: Arc<ConnectorImportCommandHandler>,
     id_generator: Arc<dyn IdGenerator>,
 }
 
 impl ConnectorSyncService {
     pub fn new(
         command_handler: Arc<ConnectorSyncCommandHandler>,
-        query_service: Arc<ConnectorSyncQueryService>,
         connector_registry: Arc<ConnectorRegistry>,
         connector_query_service: Arc<ConnectorQueryService>,
-        connector_import_command_handler: Arc<ConnectorImportCommandHandler>,
         id_generator: Arc<dyn IdGenerator>,
     ) -> Arc<Self> {
         Arc::new(Self {
             command_handler,
-            query_service,
             connector_registry,
             connector_query_service,
-            connector_import_command_handler,
             id_generator,
         })
     }
@@ -62,7 +54,6 @@ impl ConnectorSyncService {
                     self.command_handler.record_items(sync_id, records).await?;
                 }
                 self.command_handler.complete(sync_id).await?;
-                self.backfill_provenance(connector_id, sync_id).await?;
                 Ok(sync_id)
             }
             Err(e) => {
@@ -70,18 +61,5 @@ impl ConnectorSyncService {
                 Err(e)
             }
         }
-    }
-
-    async fn backfill_provenance(&self, connector_id: Uuid, sync_id: Uuid) -> Result<(), AppError> {
-        let pairs = self
-            .query_service
-            .discovered_items_missing_import(connector_id)
-            .await?;
-        for (source_ref_key, document_id) in pairs {
-            self.connector_import_command_handler
-                .record(connector_id, document_id, source_ref_key, Some(sync_id))
-                .await?;
-        }
-        Ok(())
     }
 }

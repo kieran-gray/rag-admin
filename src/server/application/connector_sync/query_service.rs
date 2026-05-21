@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::server::application::AppError;
-use crate::server::domain::connector_import::ConnectorImportRepository;
 use crate::server::domain::connector_sync::{
     ConnectorDiscoveredItemRepository, ConnectorSyncRepository, ConnectorSyncSummary,
 };
@@ -36,7 +35,6 @@ pub struct ConnectorDiscoveredItemView {
 pub struct ConnectorSyncQueryService {
     sync_repository: Arc<dyn ConnectorSyncRepository>,
     discovered_repository: Arc<dyn ConnectorDiscoveredItemRepository>,
-    import_repository: Arc<dyn ConnectorImportRepository>,
     source_document_repository: Arc<dyn SourceDocumentRepository>,
     indexing_repository: Arc<dyn IndexingRepository>,
 }
@@ -45,14 +43,12 @@ impl ConnectorSyncQueryService {
     pub fn new(
         sync_repository: Arc<dyn ConnectorSyncRepository>,
         discovered_repository: Arc<dyn ConnectorDiscoveredItemRepository>,
-        import_repository: Arc<dyn ConnectorImportRepository>,
         source_document_repository: Arc<dyn SourceDocumentRepository>,
         indexing_repository: Arc<dyn IndexingRepository>,
     ) -> Arc<Self> {
         Arc::new(Self {
             sync_repository,
             discovered_repository,
-            import_repository,
             source_document_repository,
             indexing_repository,
         })
@@ -139,38 +135,5 @@ impl ConnectorSyncQueryService {
                 }
             })
             .collect())
-    }
-
-    pub(crate) async fn discovered_items_missing_import(
-        &self,
-        connector_id: Uuid,
-    ) -> Result<Vec<(String, Uuid)>, AppError> {
-        let items = self
-            .discovered_repository
-            .list_for_connector(connector_id)
-            .await?;
-        let imports = self
-            .import_repository
-            .list_for_connector(connector_id)
-            .await?;
-        let already: HashSet<String> = imports.into_iter().map(|r| r.source_ref_key).collect();
-
-        let mut out = Vec::new();
-        for item in items {
-            if already.contains(&item.source_ref_key) {
-                continue;
-            }
-            let Some(source_ref) = SourceRef::parse_route_key(&item.source_ref_key) else {
-                continue;
-            };
-            if let Some(doc) = self
-                .source_document_repository
-                .find_by_source_ref(&source_ref)
-                .await?
-            {
-                out.push((item.source_ref_key, doc.document_id));
-            }
-        }
-        Ok(out)
     }
 }

@@ -1,10 +1,48 @@
 use leptos::prelude::*;
 
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub enum ActionKind {
+    #[default]
+    Default,
+    Primary,
+    Danger,
+}
+
 #[derive(Clone)]
 pub struct ActionItem {
     pub label: String,
-    pub danger: bool,
+    pub kind: ActionKind,
+    pub disabled: Signal<bool>,
     pub on_select: Callback<()>,
+}
+
+impl ActionItem {
+    pub fn new(label: impl Into<String>, on_select: Callback<()>) -> Self {
+        Self {
+            label: label.into(),
+            kind: ActionKind::Default,
+            disabled: Signal::derive(|| false),
+            on_select,
+        }
+    }
+
+    pub fn kind(mut self, kind: ActionKind) -> Self {
+        self.kind = kind;
+        self
+    }
+
+    pub fn primary(self) -> Self {
+        self.kind(ActionKind::Primary)
+    }
+
+    pub fn danger(self) -> Self {
+        self.kind(ActionKind::Danger)
+    }
+
+    pub fn disabled(mut self, disabled: Signal<bool>) -> Self {
+        self.disabled = disabled;
+        self
+    }
 }
 
 #[component]
@@ -59,17 +97,22 @@ pub fn ActionsMenu(
                     <div class="actions-menu-popover" role="menu">
                         {rendered.into_iter().map(|item| {
                             let on_select = item.on_select;
-                            let row_class = if item.danger {
-                                "actions-menu-item is-danger"
-                            } else {
-                                "actions-menu-item"
+                            let disabled = item.disabled;
+                            let kind_class = match item.kind {
+                                ActionKind::Default => "actions-menu-item",
+                                ActionKind::Primary => "actions-menu-item is-primary",
+                                ActionKind::Danger => "actions-menu-item is-danger",
                             };
                             view! {
                                 <button
                                     type="button"
-                                    class=row_class
+                                    class=kind_class
                                     role="menuitem"
+                                    disabled=move || disabled.get()
                                     on:click=move |_| {
+                                        if disabled.get_untracked() {
+                                            return;
+                                        }
                                         close();
                                         on_select.run(());
                                     }
