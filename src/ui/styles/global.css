@@ -1776,11 +1776,26 @@ header::before {
     font-family: inherit;
     font-size: 0.8125rem;
     padding: 0.35rem 0.5rem;
-    width: 5rem;
+    width: 6rem;
 }
 
 .playground-control-spacer {
     flex: 1;
+}
+
+.playground-filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+}
+
+.playground-filters .playground-control {
+    min-width: 0;
+}
+
+.playground-filters .playground-control input {
+    width: 100%;
 }
 
 .embed-sources {

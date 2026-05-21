@@ -1,20 +1,18 @@
 use leptos::prelude::*;
 use uuid::Uuid;
 
-use crate::shared::contracts::{IndexProfileDto, RetrievalProfileDto};
+use crate::shared::contracts::IndexProfileDto;
 
 #[derive(Clone, Copy)]
 pub struct EvaluateSelection {
     pub dataset_id: RwSignal<Option<Uuid>>,
     pub run_id: RwSignal<Option<Uuid>>,
     pub index_profile_id: RwSignal<Option<Uuid>>,
-    pub retrieval_profile_id: RwSignal<Option<Uuid>>,
 }
 
 impl EvaluateSelection {
     pub fn new(
         index_profiles: &[IndexProfileDto],
-        retrieval_profiles: &[RetrievalProfileDto],
         initial_dataset: Option<Uuid>,
         initial_run: Option<Uuid>,
     ) -> Self {
@@ -23,17 +21,11 @@ impl EvaluateSelection {
             .find(|p| p.is_default)
             .or_else(|| index_profiles.first())
             .map(|p| p.index_profile_id);
-        let initial_retrieval = retrieval_profiles
-            .iter()
-            .find(|p| p.is_default)
-            .or_else(|| retrieval_profiles.first())
-            .map(|p| p.retrieval_profile_id);
 
         Self {
             dataset_id: RwSignal::new(initial_dataset),
             run_id: RwSignal::new(initial_run),
             index_profile_id: RwSignal::new(initial_index_profile),
-            retrieval_profile_id: RwSignal::new(initial_retrieval),
         }
     }
 }

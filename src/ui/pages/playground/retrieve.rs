@@ -4,7 +4,9 @@ use uuid::Uuid;
 
 use crate::server_functions::configuration::get_retrieval_profiles;
 use crate::server_functions::query::query_documents;
-use crate::shared::contracts::{QueryHit, QueryRequest, QueryResult, RetrievalProfileDto};
+use crate::shared::contracts::{
+    MetadataFilterDto, QueryHit, QueryRequest, QueryResult, RetrievalProfileDto,
+};
 use crate::ui::components::primitives::{EmptyState, PageHeader, Surface};
 
 #[derive(Clone)]
@@ -13,6 +15,8 @@ struct HistoryEntry {
     retrieval_profile_id: Uuid,
     top_k: u32,
     min_score: f32,
+    source_slug: String,
+    source_version: String,
     result: Option<QueryResult>,
     error: Option<String>,
 }
@@ -68,18 +72,23 @@ fn PlaygroundBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView
     let (retrieval_profile_id, set_retrieval_profile_id) = signal(initial_retrieval_profile);
     let (top_k, set_top_k) = signal::<u32>(8);
     let (min_score, set_min_score) = signal::<f32>(0.4);
+    let (source_slug, set_source_slug) = signal(String::new());
+    let (source_version, set_source_version) = signal(String::new());
     let (busy, set_busy) = signal(false);
     let (error, set_error) = signal::<Option<String>>(None);
     let (result, set_result) = signal::<Option<QueryResult>>(None);
     let (history, set_history) = signal::<Vec<HistoryEntry>>(Vec::new());
     let (marked, set_marked) = signal::<Vec<MarkedRelevant>>(Vec::new());
 
-    let run_query = move |q: String, pid: Uuid, k: u32, m: f32| {
+    let run_query = move |q: String, pid: Uuid, k: u32, m: f32, slug: String, version: String| {
         if busy.get_untracked() || q.trim().is_empty() {
             return;
         }
         set_busy.set(true);
         set_error.set(None);
+        let filters = build_metadata_filters(&slug, &version);
+        let slug_for_history = slug.clone();
+        let version_for_history = version.clone();
         spawn_local(async move {
             let req = QueryRequest {
                 retrieval_profile_id: pid,
@@ -87,6 +96,7 @@ fn PlaygroundBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView
                 top_k: k,
                 min_score: m,
                 document_id: None,
+                metadata_filters: filters,
             };
             match query_documents(req).await {
                 Ok(res) => {
@@ -95,6 +105,8 @@ fn PlaygroundBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView
                         retrieval_profile_id: pid,
                         top_k: k,
                         min_score: m,
+                        source_slug: slug_for_history,
+                        source_version: version_for_history,
                         result: Some(res.clone()),
                         error: None,
                     };
@@ -117,6 +129,8 @@ fn PlaygroundBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView
                                 retrieval_profile_id: pid,
                                 top_k: k,
                                 min_score: m,
+                                source_slug: slug_for_history,
+                                source_version: version_for_history,
                                 result: None,
                                 error: Some(e.to_string()),
                             },
@@ -136,6 +150,8 @@ fn PlaygroundBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView
             retrieval_profile_id.get(),
             top_k.get(),
             min_score.get(),
+            source_slug.get(),
+            source_version.get(),
         );
     };
 
@@ -144,11 +160,15 @@ fn PlaygroundBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView
         set_retrieval_profile_id.set(entry.retrieval_profile_id);
         set_top_k.set(entry.top_k);
         set_min_score.set(entry.min_score);
+        set_source_slug.set(entry.source_slug.clone());
+        set_source_version.set(entry.source_version.clone());
         run_query(
             entry.query,
             entry.retrieval_profile_id,
             entry.top_k,
             entry.min_score,
+            entry.source_slug,
+            entry.source_version,
         );
     };
 
@@ -190,6 +210,26 @@ fn PlaygroundBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView
                         rows="8"
                     ></textarea>
 
+                    <div class="playground-filters">
+                        <label class="playground-control">
+                            <span>"source_slug"</span>
+                            <input
+                                type="text"
+                                placeholder="any"
+                                prop:value=move || source_slug.get()
+                                on:input=move |ev| set_source_slug.set(event_target_value(&ev))
+                            />
+                        </label>
+                        <label class="playground-control">
+                            <span>"source_version"</span>
+                            <input
+                                type="text"
+                                placeholder="any"
+                                prop:value=move || source_version.get()
+                                on:input=move |ev| set_source_version.set(event_target_value(&ev))
+                            />
+                        </label>
+                    </div>
                     <div class="playground-controls">
                         <label class="playground-control">
                             <span>"Top-K"</span>
@@ -311,6 +351,25 @@ fn PlaygroundBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView
             </aside>
         </div>
     }
+}
+
+fn build_metadata_filters(source_slug: &str, source_version: &str) -> Vec<MetadataFilterDto> {
+    let mut out = Vec::new();
+    let slug = source_slug.trim();
+    if !slug.is_empty() {
+        out.push(MetadataFilterDto {
+            field: "source_slug".to_string(),
+            value: slug.to_string(),
+        });
+    }
+    let version = source_version.trim();
+    if !version.is_empty() {
+        out.push(MetadataFilterDto {
+            field: "source_version".to_string(),
+            value: version.to_string(),
+        });
+    }
+    out
 }
 
 #[component]

@@ -9,6 +9,14 @@ pub struct ChatRequest {
     pub query: String,
     pub top_k: u32,
     pub min_score: f32,
+    #[serde(default)]
+    pub metadata_filters: Vec<MetadataFilterDto>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MetadataFilterDto {
+    pub field: String,
+    pub value: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

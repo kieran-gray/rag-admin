@@ -6,7 +6,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::server::application::indexing::ports::vector_index::{
-    VectorIndex, VectorIndexDescription, VectorMatch, VectorQuery,
+    MetadataFilterOperation, VectorIndex, VectorIndexDescription, VectorMatch, VectorQuery,
 };
 use crate::server::application::AppError;
 use crate::server::domain::VectorRecord;
@@ -114,11 +114,25 @@ impl VectorIndex for NamedVectorizeIndex {
 
     async fn query(&self, q: &VectorQuery) -> Result<Vec<VectorMatch>, AppError> {
         let url = self.url("query");
-        let body = serde_json::json!({
-            "vector": q.vector,
-            "topK": q.top_k,
-            "returnMetadata": "all",
-        });
+        let mut body_map = serde_json::Map::new();
+        body_map.insert("vector".to_string(), serde_json::json!(q.vector));
+        body_map.insert("topK".to_string(), serde_json::json!(q.top_k));
+        body_map.insert("returnMetadata".to_string(), serde_json::json!("all"));
+        if !q.filter.is_empty() {
+            let mut filter_map = serde_json::Map::new();
+            for f in &q.filter {
+                let op = match f.operation {
+                    MetadataFilterOperation::Equal => "$eq",
+                    MetadataFilterOperation::NotEqual => "$ne",
+                };
+                filter_map.insert(
+                    f.field.clone(),
+                    serde_json::json!({ op: f.value.clone() }),
+                );
+            }
+            body_map.insert("filter".to_string(), serde_json::Value::Object(filter_map));
+        }
+        let body = serde_json::Value::Object(body_map);
         let bytes = serde_json::to_vec(&body)
             .map_err(|e| AppError::Internal(format!("encode query body: {e}")))?;
         let response = self

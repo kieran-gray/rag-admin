@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::shared::contracts::MetadataFilterDto;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryRequest {
     pub retrieval_profile_id: Uuid,
@@ -9,6 +11,8 @@ pub struct QueryRequest {
     pub min_score: f32,
     #[serde(default)]
     pub document_id: Option<Uuid>,
+    #[serde(default)]
+    pub metadata_filters: Vec<MetadataFilterDto>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

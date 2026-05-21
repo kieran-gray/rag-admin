@@ -175,7 +175,6 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         embedding_service: Arc::clone(&platform.embedding_service),
         generation_service: Arc::clone(&platform.generation_service),
         index_profile_resolver: Arc::clone(&catalog.index_profile_resolver),
-        retrieval_profile_resolver: Arc::clone(&catalog.retrieval_profile_resolver),
         source_document_query_service: Arc::clone(&ingestion.source_document_query_service),
         wakeups: &mut wakeups,
     })?;

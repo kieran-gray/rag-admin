@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -5,7 +6,7 @@ use serde_json::Value;
 use sqlx::PgPool;
 
 use crate::server::application::indexing::ports::vector_index::{
-    VectorIndex, VectorIndexDescription, VectorMatch, VectorQuery,
+    MetadataFilterOperation, VectorIndex, VectorIndexDescription, VectorMatch, VectorQuery,
 };
 use crate::server::application::indexing::VectorIndexProviderRegistry;
 use crate::server::application::source_document::ports::VectorIndexProvider;
@@ -78,19 +79,40 @@ impl VectorIndex for PostgresVectorIndex {
 
     async fn query(&self, q: &VectorQuery) -> Result<Vec<VectorMatch>, AppError> {
         let literal = format_vector_literal(&q.vector);
-        let rows: Vec<(String, f32, Value)> = sqlx::query_as(
+        let mut sql = String::from(
             "SELECT id, (1 - (vec <=> $1::vector))::real AS score, metadata
              FROM vector_index_records
-             WHERE index_name = $2
-             ORDER BY vec <=> $1::vector
-             LIMIT $3",
-        )
-        .bind(literal)
-        .bind(&self.index_name)
-        .bind(i64::from(q.top_k))
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| AppError::Internal(format!("pg vector query: {e}")))?;
+             WHERE index_name = $2",
+        );
+        let mut bind_index = 3;
+        for f in &q.filter {
+            let op = match f.operation {
+                MetadataFilterOperation::Equal => "=",
+                MetadataFilterOperation::NotEqual => "<>",
+            };
+            _ = write!(
+                sql,
+                " AND metadata->>${} {} ${}",
+                bind_index,
+                op,
+                bind_index + 1
+            );
+            bind_index += 2;
+        }
+        _ = write!(sql, " ORDER BY vec <=> $1::vector LIMIT ${bind_index}");
+
+        let mut query = sqlx::query_as::<_, (String, f32, Value)>(&sql)
+            .bind(literal)
+            .bind(&self.index_name);
+        for f in &q.filter {
+            query = query.bind(&f.field).bind(&f.value);
+        }
+        query = query.bind(i64::from(q.top_k));
+
+        let rows = query
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| AppError::Internal(format!("pg vector query: {e}")))?;
 
         Ok(rows
             .into_iter()

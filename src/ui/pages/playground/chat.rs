@@ -4,7 +4,9 @@ use uuid::Uuid;
 
 use crate::server_functions::chat::chat_query;
 use crate::server_functions::configuration::get_retrieval_profiles;
-use crate::shared::contracts::{ChatRequest, ChatResponse, QueryHit, RetrievalProfileDto};
+use crate::shared::contracts::{
+    ChatRequest, ChatResponse, MetadataFilterDto, QueryHit, RetrievalProfileDto,
+};
 use crate::ui::components::primitives::{EmptyState, PageHeader, Surface};
 
 #[derive(Clone)]
@@ -59,6 +61,8 @@ fn ChatBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView {
     let (retrieval_profile_id, set_retrieval_profile_id) = signal(initial_retrieval_profile);
     let (top_k, set_top_k) = signal::<u32>(8);
     let (min_score, set_min_score) = signal::<f32>(0.4);
+    let (source_slug, set_source_slug) = signal(String::new());
+    let (source_version, set_source_version) = signal(String::new());
     let (busy, set_busy) = signal(false);
     let (error, set_error) = signal::<Option<String>>(None);
     let (turns, set_turns) = signal::<Vec<ChatTurn>>(Vec::new());
@@ -71,6 +75,7 @@ fn ChatBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView {
         let pid = retrieval_profile_id.get();
         let k = top_k.get();
         let m = min_score.get();
+        let filters = build_metadata_filters(&source_slug.get(), &source_version.get());
 
         set_busy.set(true);
         set_error.set(None);
@@ -82,6 +87,7 @@ fn ChatBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView {
                 query: q.clone(),
                 top_k: k,
                 min_score: m,
+                metadata_filters: filters,
             };
             match chat_query(req).await {
                 Ok(res) => {
@@ -134,6 +140,26 @@ fn ChatBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView {
                         rows="8"
                     ></textarea>
 
+                    <div class="playground-filters">
+                        <label class="playground-control">
+                            <span>"source_slug"</span>
+                            <input
+                                type="text"
+                                placeholder="any"
+                                prop:value=move || source_slug.get()
+                                on:input=move |ev| set_source_slug.set(event_target_value(&ev))
+                            />
+                        </label>
+                        <label class="playground-control">
+                            <span>"source_version"</span>
+                            <input
+                                type="text"
+                                placeholder="any"
+                                prop:value=move || source_version.get()
+                                on:input=move |ev| set_source_version.set(event_target_value(&ev))
+                            />
+                        </label>
+                    </div>
                     <div class="playground-controls">
                         <label class="playground-control">
                             <span>"Top-K"</span>
@@ -309,6 +335,25 @@ fn SourcesList(hits: Vec<QueryHit>) -> impl IntoView {
             }).collect_view()}
         </div>
     }
+}
+
+fn build_metadata_filters(source_slug: &str, source_version: &str) -> Vec<MetadataFilterDto> {
+    let mut out = Vec::new();
+    let slug = source_slug.trim();
+    if !slug.is_empty() {
+        out.push(MetadataFilterDto {
+            field: "source_slug".to_string(),
+            value: slug.to_string(),
+        });
+    }
+    let version = source_version.trim();
+    if !version.is_empty() {
+        out.push(MetadataFilterDto {
+            field: "source_version".to_string(),
+            value: version.to_string(),
+        });
+    }
+    out
 }
 
 #[component]

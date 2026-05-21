@@ -3,10 +3,13 @@ use leptos::task::spawn_local;
 use leptos_router::components::A;
 use uuid::Uuid;
 
+use crate::server_functions::configuration::get_configuration;
 use crate::server_functions::evaluation::{
     get_datasets_for_document, start_generate_synthetic_dataset,
 };
-use crate::shared::contracts::{aggregate_type, EvaluationDatasetSummaryDto, IndexProfileDto};
+use crate::shared::contracts::{
+    aggregate_type, EmbeddingModelDto, EvaluationDatasetSummaryDto, GenerationModelDto,
+};
 use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{EmptyState, Help, Status, StatusPill, Surface};
 use crate::ui::pages::evaluate::state::EvaluateSelection;
@@ -15,7 +18,6 @@ use crate::ui::pages::evaluate::state::EvaluateSelection;
 pub fn DatasetStep(
     document_id: Uuid,
     selection: EvaluateSelection,
-    index_profiles: StoredValue<Vec<IndexProfileDto>>,
     on_advance: Callback<()>,
 ) -> impl IntoView {
     let invalidator = use_invalidator(|e| e.from_any(&[aggregate_type::EVALUATION_DATASET]));
@@ -24,12 +26,25 @@ pub fn DatasetStep(
         move |(id, _)| async move { get_datasets_for_document(id).await.unwrap_or_default() },
     );
 
+    let catalog_invalidator = use_invalidator(|e| {
+        e.from_any(&[
+            aggregate_type::EMBEDDING_MODEL_CATALOG,
+            aggregate_type::GENERATION_MODEL_CATALOG,
+        ])
+    });
+    let catalog = Resource::new(
+        move || catalog_invalidator.get(),
+        |_| async move { get_configuration().await.ok() },
+    );
+
     let (busy, set_busy) = signal(false);
     let (error, set_error) = signal::<Option<String>>(None);
     let (dataset_label, set_dataset_label) = signal("synthetic-default".to_string());
     let (question_count, set_question_count) = signal(30u32);
     let (excerpt_threshold, set_excerpt_threshold) = signal(360u32);
     let (duplicate_threshold, set_duplicate_threshold) = signal(820u32);
+    let (generation_model_id, set_generation_model_id) = signal::<Option<Uuid>>(None);
+    let (embedding_model_id, set_embedding_model_id) = signal::<Option<Uuid>>(None);
 
     Effect::new(move |_| {
         if selection.dataset_id.get_untracked().is_none() {
@@ -41,10 +56,36 @@ pub fn DatasetStep(
         }
     });
 
+    Effect::new(move |_| {
+        let Some(Some(cfg)) = catalog.get() else { return };
+        if generation_model_id.get_untracked().is_none() {
+            if let Some(m) = cfg.generation_models.first() {
+                set_generation_model_id.set(Some(m.generation_model_id));
+            }
+        }
+        if embedding_model_id.get_untracked().is_none() {
+            let default = cfg
+                .index_profiles
+                .iter()
+                .find(|p| p.is_default)
+                .map(|p| p.embedding_model_id)
+                .or_else(|| cfg.embedding_models.first().map(|m| m.embedding_model_id));
+            if let Some(id) = default {
+                set_embedding_model_id.set(Some(id));
+            }
+        }
+    });
+
     let on_generate = move |_| {
-        let Some(retrieval_profile_id) = selection.retrieval_profile_id.get() else {
+        let Some(gen_id) = generation_model_id.get() else {
             set_error.set(Some(
-                "Pick a retrieval profile before generating a dataset.".to_string(),
+                "Pick a generation model before generating a dataset.".to_string(),
+            ));
+            return;
+        };
+        let Some(emb_id) = embedding_model_id.get() else {
+            set_error.set(Some(
+                "Pick an embedding model before generating a dataset.".to_string(),
             ));
             return;
         };
@@ -61,7 +102,8 @@ pub fn DatasetStep(
         spawn_local(async move {
             match start_generate_synthetic_dataset(
                 document_id,
-                retrieval_profile_id,
+                gen_id,
+                emb_id,
                 label,
                 target,
                 excerpt,
@@ -124,7 +166,27 @@ pub fn DatasetStep(
             </Surface>
 
             <Surface title="Generate a new dataset".to_string()>
-                <IndexProfileSelect selection=selection index_profiles=index_profiles />
+                <Transition fallback=|| view! { <p class="muted text-sm">"Loading models…"</p> }>
+                    {move || {
+                        catalog.get().map(|cfg| match cfg {
+                            None => view! { <p class="muted text-sm">"Failed to load models."</p> }.into_any(),
+                            Some(cfg) => view! {
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <GenerationModelSelect
+                                        models=cfg.generation_models
+                                        value=generation_model_id
+                                        set_value=set_generation_model_id
+                                    />
+                                    <EmbeddingModelSelect
+                                        models=cfg.embedding_models
+                                        value=embedding_model_id
+                                        set_value=set_embedding_model_id
+                                    />
+                                </div>
+                            }.into_any(),
+                        })
+                    }}
+                </Transition>
                 <div class="mt-4 space-y-4">
                     <label class="block space-y-1">
                         <span class="eyebrow">"Label"</span>
@@ -249,30 +311,52 @@ where
 }
 
 #[component]
-fn IndexProfileSelect(
-    selection: EvaluateSelection,
-    index_profiles: StoredValue<Vec<IndexProfileDto>>,
+fn GenerationModelSelect(
+    models: Vec<GenerationModelDto>,
+    value: ReadSignal<Option<Uuid>>,
+    set_value: WriteSignal<Option<Uuid>>,
 ) -> impl IntoView {
     view! {
         <label class="flex flex-col gap-1 text-sm">
-            <span class="eyebrow">"Index profile"</span>
+            <span class="eyebrow">"Generation model"</span>
             <select
                 class="input"
                 on:change=move |ev| {
-                    selection.index_profile_id.set(Uuid::parse_str(&event_target_value(&ev)).ok());
+                    set_value.set(Uuid::parse_str(&event_target_value(&ev)).ok());
                 }
             >
-                {move || index_profiles.with_value(|ps| {
-                    ps.iter().map(|p| {
-                        let id = p.index_profile_id;
-                        let suffix = if p.is_default { " · default" } else { "" };
-                        let name = p.name.clone();
-                        let dims = p.dimensions;
-                        let label = format!("{name}{suffix} · {dims}d");
-                        let selected = selection.index_profile_id.get() == Some(id);
-                        view! { <option value=id.to_string() selected=selected>{label}</option> }
-                    }).collect_view()
-                })}
+                {models.into_iter().map(|m| {
+                    let id = m.generation_model_id;
+                    let label = format!("{} · {}", m.model, m.kind.as_str());
+                    let selected = move || value.get() == Some(id);
+                    view! { <option value=id.to_string() selected=selected>{label}</option> }
+                }).collect_view()}
+            </select>
+        </label>
+    }
+}
+
+#[component]
+fn EmbeddingModelSelect(
+    models: Vec<EmbeddingModelDto>,
+    value: ReadSignal<Option<Uuid>>,
+    set_value: WriteSignal<Option<Uuid>>,
+) -> impl IntoView {
+    view! {
+        <label class="flex flex-col gap-1 text-sm">
+            <span class="eyebrow">"Embedding model"</span>
+            <select
+                class="input"
+                on:change=move |ev| {
+                    set_value.set(Uuid::parse_str(&event_target_value(&ev)).ok());
+                }
+            >
+                {models.into_iter().map(|m| {
+                    let id = m.embedding_model_id;
+                    let label = format!("{} · {}d · {}", m.model, m.dimensions, m.kind.as_str());
+                    let selected = move || value.get() == Some(id);
+                    view! { <option value=id.to_string() selected=selected>{label}</option> }
+                }).collect_view()}
             </select>
         </label>
     }

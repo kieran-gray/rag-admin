@@ -16,7 +16,7 @@ pub use activity::{
     ActivityStatus,
 };
 pub use aggregate_types as aggregate_type;
-pub use chat::{ChatRequest, ChatResponse};
+pub use chat::{ChatRequest, ChatResponse, MetadataFilterDto};
 pub use chunk_set::{
     ChunkSetSummaryDto, DeleteChunkSetRequestDto, GcChunkSetsRequestDto, GcChunkSetsResponseDto,
     SetChunkSetPinnedRequestDto,

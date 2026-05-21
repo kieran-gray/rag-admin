@@ -102,8 +102,8 @@ pub(super) fn RegistryFormDialog(
     view! {
         <Dialog
             open=Signal::derive(move || form.get().is_some())
-            title=Signal::derive(move || form_title(form.get().as_ref())).get()
-            subtitle=Signal::derive(move || form_subtitle(form.get().as_ref())).get()
+            title=Signal::derive(move || form_title(form.get().as_ref()))
+            subtitle=Signal::derive(move || form_subtitle(form.get().as_ref()))
             on_close=close
         >
             <form on:submit=submit class="space-y-4">

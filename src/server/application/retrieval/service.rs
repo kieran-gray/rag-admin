@@ -5,7 +5,9 @@ use uuid::Uuid;
 
 use crate::server::application::configuration::RetrievalProfileResolver;
 use crate::server::application::embedding::EmbeddingService;
-use crate::server::application::indexing::ports::vector_index::VectorQuery;
+use crate::server::application::indexing::ports::vector_index::{
+    MetadataFilter, MetadataFilterOperation, VectorQuery,
+};
 use crate::server::application::indexing::VectorIndexResolver;
 use crate::server::application::AppError;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
@@ -67,11 +69,21 @@ impl RetrievalService {
         let vector_index = self
             .vector_index_resolver
             .build(&profile.index_profile.vector_index)?;
+        let filter: Vec<MetadataFilter> = req
+            .metadata_filters
+            .iter()
+            .filter(|f| !f.field.trim().is_empty() && !f.value.trim().is_empty())
+            .map(|f| MetadataFilter {
+                field: f.field.trim().to_string(),
+                operation: MetadataFilterOperation::Equal,
+                value: f.value.trim().to_string(),
+            })
+            .collect();
         let matches = vector_index
             .query(&VectorQuery {
                 vector: query_vector,
                 top_k: fetch_k,
-                filter: Vec::new(),
+                filter,
             })
             .await?;
 

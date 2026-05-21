@@ -105,7 +105,7 @@ pub fn ChunkSetsPage() -> impl IntoView {
 
             <InlineStatus status=status />
 
-            <Surface title="Clean up".to_string()>
+            <Surface title="Clean up".to_string() class="mb-2">
                 <div class="flex items-center gap-3">
                     <label class="text-sm muted">"Delete unused chunk sets older than"</label>
                     <input
@@ -122,7 +122,7 @@ pub fn ChunkSetsPage() -> impl IntoView {
                     <span class="text-sm muted">"days"</span>
                     <button
                         type="button"
-                        class="btn btn-primary"
+                        class="btn btn-primary text-nowrap"
                         prop:disabled=move || busy.get()
                         on:click=on_gc
                     >

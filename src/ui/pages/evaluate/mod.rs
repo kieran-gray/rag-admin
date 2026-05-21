@@ -12,12 +12,12 @@ use state::EvaluateSelection;
 use steps::{DatasetStep, ResultsStep, RunStep};
 
 use crate::server_functions::configuration::{
-    get_chunking_configurations, get_index_profiles, get_retrieval_profiles, get_sweep_templates,
+    get_chunking_configurations, get_index_profiles, get_sweep_templates,
 };
 use crate::server_functions::source_document::get_document_detail_by_source_ref;
 use crate::shared::contracts::{
-    aggregate_type, ChunkingConfigurationDto, IndexProfileDto, RetrievalProfileDto,
-    SourceDocumentDetailDto, SourceDocumentDto, SweepTemplateDto,
+    aggregate_type, ChunkingConfigurationDto, IndexProfileDto, SourceDocumentDetailDto,
+    SourceDocumentDto, SweepTemplateDto,
 };
 use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{EmptyState, PageHeader, Surface};
@@ -64,10 +64,6 @@ pub fn EvaluatePage() -> impl IntoView {
         move || index_profile_invalidator.get(),
         |_| async move { get_index_profiles().await.unwrap_or_default() },
     );
-    let retrieval_profiles = Resource::new(
-        move || index_profile_invalidator.get(),
-        |_| async move { get_retrieval_profiles().await.unwrap_or_default() },
-    );
     let chunking_configurations = Resource::new(
         move || index_profile_invalidator.get(),
         |_| async move { get_chunking_configurations().await.unwrap_or_default() },
@@ -82,7 +78,6 @@ pub fn EvaluatePage() -> impl IntoView {
             <Transition fallback=|| view! { <p class="muted">"Loading document…"</p> }>
                 {move || {
                     let index_profiles = index_profiles.get().unwrap_or_default();
-                    let retrieval_profiles = retrieval_profiles.get().unwrap_or_default();
                     let chunking_configurations = chunking_configurations.get().unwrap_or_default();
                     let sweep_templates = sweep_templates.get().unwrap_or_default();
                     detail.get().map(|res| match res {
@@ -98,7 +93,6 @@ pub fn EvaluatePage() -> impl IntoView {
                             <EvaluateWorkspace
                                 detail=existing
                                 index_profiles=index_profiles
-                                retrieval_profiles=retrieval_profiles
                                 chunking_configurations=chunking_configurations
                                 sweep_templates=sweep_templates
                                 source_ref=source_ref.get()
@@ -159,7 +153,6 @@ enum StepState {
 fn EvaluateWorkspace(
     detail: SourceDocumentDetailDto,
     index_profiles: Vec<IndexProfileDto>,
-    retrieval_profiles: Vec<RetrievalProfileDto>,
     chunking_configurations: Vec<ChunkingConfigurationDto>,
     sweep_templates: Vec<SweepTemplateDto>,
     source_ref: String,
@@ -170,12 +163,7 @@ fn EvaluateWorkspace(
     let document_id = detail.document.document_id;
     let (header_eyebrow, header_title, header_subtitle) = derive_header(&detail.document);
 
-    let selection = EvaluateSelection::new(
-        &index_profiles,
-        &retrieval_profiles,
-        initial_dataset,
-        initial_run,
-    );
+    let selection = EvaluateSelection::new(&index_profiles, initial_dataset, initial_run);
 
     let initial_step_value = initial_step.unwrap_or_else(|| {
         if initial_run.is_some() {
@@ -251,7 +239,6 @@ fn EvaluateWorkspace(
                             <DatasetStep
                                 document_id=document_id
                                 selection=selection
-                                index_profiles=index_profiles_stored
                                 on_advance=on_advance_to_run
                             />
                         }.into_any(),

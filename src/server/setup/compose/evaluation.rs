@@ -5,7 +5,7 @@ use sqlx::PgPool;
 use tokio::sync::Notify;
 
 use crate::server::application::chunking::ChunkerRegistry;
-use crate::server::application::configuration::{IndexProfileResolver, RetrievalProfileResolver};
+use crate::server::application::configuration::IndexProfileResolver;
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::evaluation::dataset::EvaluationDatasetEffectExecutor;
 use crate::server::application::evaluation::ports::{EvaluationGenerator, LlmJudge, Retriever};
@@ -57,7 +57,6 @@ pub struct EvaluationDeps<'a> {
     pub embedding_service: Arc<EmbeddingService>,
     pub generation_service: Arc<GenerationService>,
     pub index_profile_resolver: Arc<IndexProfileResolver>,
-    pub retrieval_profile_resolver: Arc<RetrievalProfileResolver>,
     pub source_document_query_service: Arc<SourceDocumentQueryService>,
     pub wakeups: &'a mut HashMap<String, Arc<Notify>>,
 }
@@ -77,7 +76,6 @@ impl EvaluationServices {
             embedding_service,
             generation_service,
             index_profile_resolver,
-            retrieval_profile_resolver,
             source_document_query_service,
             wakeups,
         } = deps;
@@ -94,7 +92,8 @@ impl EvaluationServices {
 
         let evaluation_dataset_command_handler = EvaluationDatasetCommandHandler::new(
             Arc::clone(&wirings.dataset.command_processor),
-            Arc::clone(&retrieval_profile_resolver),
+            Arc::clone(&embedding_service),
+            Arc::clone(&generation_service),
             source_document_query_service,
             Arc::clone(&clock),
             Arc::clone(&id_generator),
