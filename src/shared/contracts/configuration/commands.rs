@@ -43,6 +43,24 @@ pub struct RemoveGenerationModelDto {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AddRerankerModelDto {
+    pub kind: AiProviderKind,
+    pub model: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateRerankerModelDto {
+    pub model_id: Uuid,
+    pub kind: AiProviderKind,
+    pub model: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemoveRerankerModelDto {
+    pub model_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddVectorIndexDto {
     pub kind: VectorStoreKind,
     pub name: String,
@@ -169,6 +187,14 @@ pub enum GenerationModelCommandDto {
     AddGenerationModel(AddGenerationModelDto),
     UpdateGenerationModel(UpdateGenerationModelDto),
     RemoveGenerationModel(RemoveGenerationModelDto),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum RerankerModelCommandDto {
+    AddRerankerModel(AddRerankerModelDto),
+    UpdateRerankerModel(UpdateRerankerModelDto),
+    RemoveRerankerModel(RemoveRerankerModelDto),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

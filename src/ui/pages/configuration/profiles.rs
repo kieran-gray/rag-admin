@@ -587,6 +587,7 @@ fn RetrievalProfileFormDialog(
     let (name, set_name) = signal(String::new());
     let (index_profile_id, set_index_profile_id) = signal::<Option<Uuid>>(None);
     let (generation_id, set_generation_id) = signal::<Option<Uuid>>(None);
+    let (reranker_id, set_reranker_id) = signal::<Option<Uuid>>(None);
     let (top_k, set_top_k) = signal(5u32);
     let (min_score_milli, set_min_score_milli) = signal(300u32);
     let (is_default, set_is_default) = signal(false);
@@ -605,6 +606,7 @@ fn RetrievalProfileFormDialog(
                     .set(config.with_value(|c| {
                         c.generation_models.first().map(|m| m.generation_model_id)
                     }));
+                set_reranker_id.set(None);
                 set_top_k.set(5);
                 set_min_score_milli.set(300);
                 set_is_default.set(false);
@@ -613,6 +615,7 @@ fn RetrievalProfileFormDialog(
                 set_name.set(p.name);
                 set_index_profile_id.set(Some(p.index_profile_id));
                 set_generation_id.set(Some(p.generation_model_id));
+                set_reranker_id.set(p.reranker_model_id);
                 set_top_k.set(p.default_top_k);
                 set_min_score_milli.set(p.default_min_score_milli);
                 set_is_default.set(p.is_default);
@@ -653,7 +656,7 @@ fn RetrievalProfileFormDialog(
                     name: name_val,
                     index_profile_id: ip,
                     generation_model_id: gen,
-                    reranker_model_id: None,
+                    reranker_model_id: reranker_id.get(),
                     default_top_k: top_k_val,
                     default_min_score_milli: min_score_val,
                     is_default: default_flag,
@@ -665,7 +668,7 @@ fn RetrievalProfileFormDialog(
                     name: name_val,
                     index_profile_id: ip,
                     generation_model_id: gen,
-                    reranker_model_id: None,
+                    reranker_model_id: reranker_id.get(),
                     default_top_k: top_k_val,
                     default_min_score_milli: min_score_val,
                     is_default: default_flag,
@@ -735,6 +738,22 @@ fn RetrievalProfileFormDialog(
                             .iter()
                             .map(|m| (
                                 m.generation_model_id,
+                                format!("{} · {}", m.kind.display_label(), m.model),
+                            ))
+                            .collect::<Vec<_>>()
+                    }))
+                />
+
+                <LabelledSelect
+                    label="Reranker (optional)".to_string()
+                    placeholder="— none —".to_string()
+                    value=reranker_id
+                    set_value=set_reranker_id
+                    options=Memo::new(move |_| config.with_value(|c| {
+                        c.reranker_models
+                            .iter()
+                            .map(|m| (
+                                m.reranker_model_id,
                                 format!("{} · {}", m.kind.display_label(), m.model),
                             ))
                             .collect::<Vec<_>>()

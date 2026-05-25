@@ -7,11 +7,12 @@ use crate::server::application::chunking::{ChunkOutput, DocumentChunker, TokenBu
 use crate::server::application::llm::ports::{
     GenerationClient, GenerationRequest, GenerationResponseFormat,
 };
+use crate::server::application::llm::GenerationClientRegistry;
 use crate::server::application::markdown::{Document, TextUnit};
 use crate::server::application::ports::Tokenizer;
 use crate::server::application::AppError;
 use crate::server::domain::configuration::generation_model::GenerationModelRepository;
-use crate::shared::reference_data::ChunkStrategy;
+use crate::shared::reference_data::{AiProviderKind, ChunkStrategy};
 use crate::shared::ChunkingConfig;
 
 const SYSTEM_PROMPT: &str = "You split document text into compact, self-contained retrieval chunks. \
@@ -38,20 +39,25 @@ struct MicroChunk {
 }
 
 pub struct LlmChunker {
-    generation_client: Arc<dyn GenerationClient>,
+    generation_clients: Arc<GenerationClientRegistry>,
     generation_models: Arc<dyn GenerationModelRepository>,
 }
 
 impl LlmChunker {
     pub fn create(
-        generation_client: Arc<dyn GenerationClient>,
+        generation_clients: Arc<GenerationClientRegistry>,
         generation_models: Arc<dyn GenerationModelRepository>,
     ) -> Self {
         Self {
-            generation_client,
+            generation_clients,
             generation_models,
         }
     }
+}
+
+struct ResolvedModel {
+    kind: AiProviderKind,
+    model: String,
 }
 
 #[async_trait]
@@ -82,17 +88,18 @@ impl DocumentChunker for LlmChunker {
             return Ok(Vec::new());
         }
 
-        let model_name = self
+        let resolved = self
             .resolve_generation_model(config.generation_model_id)
             .await?;
+        let client = self.generation_clients.get(&resolved.kind).ok_or_else(|| {
+            AppError::Internal(format!(
+                "no generation client registered for provider kind {}",
+                resolved.kind.as_str()
+            ))
+        })?;
 
-        let split_points = find_split_points(
-            &micro_chunks,
-            self.generation_client.as_ref(),
-            &model_name,
-            &budget,
-        )
-        .await?;
+        let split_points =
+            find_split_points(&micro_chunks, client.as_ref(), &resolved.model, &budget).await?;
         let merged = merge_micro_chunks(&micro_chunks, &split_points, target_tokens, &budget)?;
 
         Ok(merged
@@ -104,11 +111,17 @@ impl DocumentChunker for LlmChunker {
 }
 
 impl LlmChunker {
-    async fn resolve_generation_model(&self, model_id: uuid::Uuid) -> Result<String, AppError> {
+    async fn resolve_generation_model(
+        &self,
+        model_id: uuid::Uuid,
+    ) -> Result<ResolvedModel, AppError> {
         self.generation_models
             .find_by_id(model_id)
             .await?
-            .map(|m| m.model)
+            .map(|m| ResolvedModel {
+                kind: m.kind,
+                model: m.model,
+            })
             .ok_or_else(|| {
                 AppError::Validation(format!(
                     "LLM chunking: generation model {model_id} not found in registry"

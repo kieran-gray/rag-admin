@@ -6,8 +6,9 @@ use crate::server::application::configuration::{
     ChunkingConfigurationCatalogCommandHandler, ChunkingConfigurationQueryService,
     ConfigurationQueryService, EmbeddingModelCatalogCommandHandler,
     GenerationModelCatalogCommandHandler, IndexProfileCatalogCommandHandler,
-    IndexProfileQueryService, RetrievalProfileCatalogCommandHandler, RetrievalProfileQueryService,
-    SweepTemplateCommandHandler, SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
+    IndexProfileQueryService, RerankerModelCatalogCommandHandler,
+    RetrievalProfileCatalogCommandHandler, RetrievalProfileQueryService, SweepTemplateCommandHandler,
+    SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
 };
 use crate::shared::contracts::{
     AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto,
@@ -27,8 +28,8 @@ const DEFAULT_INDEX_PROFILE_NAME: &str = "default";
 const DEFAULT_RETRIEVAL_PROFILE_NAME: &str = "default";
 const DEFAULT_CHUNKING_NAME: &str = "darn-500-50";
 const DEFAULT_VECTOR_INDEX_NAME: &str = "default-pgvector";
-const DEFAULT_EMBEDDING_MODEL: &str = "qwen3-embedding:0.6b";
-const DEFAULT_GENERATION_MODEL: &str = "gemma3:12b-it-qat";
+const DEFAULT_EMBEDDING_MODEL: &str = "qwen3-embedding-0.6b";
+const DEFAULT_GENERATION_MODEL: &str = "gemma3-12b";
 const DEFAULT_TOP_K: u32 = 8;
 const DEFAULT_MIN_SCORE_MILLI: u32 = 400;
 
@@ -66,8 +67,8 @@ const EMBEDDING_SEEDS: &[EmbeddingSeed] = &[
         dimensions: 1024,
     },
     EmbeddingSeed {
-        kind: AiProviderKind::Ollama,
-        model: "qwen3-embedding:0.6b",
+        kind: AiProviderKind::LlamaServer,
+        model: DEFAULT_EMBEDDING_MODEL,
         dimensions: 1024,
     },
 ];
@@ -82,8 +83,8 @@ const GENERATION_SEEDS: &[GenerationSeed] = &[
         model: "@cf/google/gemma-4-26b-a4b-it",
     },
     GenerationSeed {
-        kind: AiProviderKind::Ollama,
-        model: "gemma3:12b-it-qat",
+        kind: AiProviderKind::LlamaServer,
+        model: DEFAULT_GENERATION_MODEL,
     },
 ];
 
@@ -100,7 +101,7 @@ const VECTOR_INDEX_SEEDS: &[VectorIndexSeed] = &[
     },
 ];
 
-const LLM_CHUNKING_MODEL: &str = "gemma3:12b-it-qat";
+const LLM_CHUNKING_MODEL: &str = DEFAULT_GENERATION_MODEL;
 
 pub fn seed_definitions(llm_generation_model_id: Option<Uuid>) -> Vec<ChunkingSeed> {
     let mut seeds = Vec::new();
@@ -163,6 +164,7 @@ pub async fn seed_if_empty(
     retrieval_profile_query: &Arc<RetrievalProfileQueryService>,
     embedding_handler: &Arc<EmbeddingModelCatalogCommandHandler>,
     generation_handler: &Arc<GenerationModelCatalogCommandHandler>,
+    _reranker_handler: &Arc<RerankerModelCatalogCommandHandler>,
     vector_index_handler: &Arc<VectorIndexCatalogCommandHandler>,
     chunking_handler: &Arc<ChunkingConfigurationCatalogCommandHandler>,
     index_profile_handler: &Arc<IndexProfileCatalogCommandHandler>,
@@ -212,7 +214,7 @@ async fn seed_default_index_profile_if_empty(
     let Some(embedding) = catalog
         .embedding_models
         .iter()
-        .find(|m| m.model == DEFAULT_EMBEDDING_MODEL && m.kind == AiProviderKind::Ollama)
+        .find(|m| m.model == DEFAULT_EMBEDDING_MODEL && m.kind == AiProviderKind::LlamaServer)
     else {
         return Ok(());
     };
@@ -267,7 +269,7 @@ async fn seed_default_retrieval_profile_if_empty(
     let Some(generation) = catalog
         .generation_models
         .iter()
-        .find(|m| m.model == DEFAULT_GENERATION_MODEL && m.kind == AiProviderKind::Ollama)
+        .find(|m| m.model == DEFAULT_GENERATION_MODEL && m.kind == AiProviderKind::LlamaServer)
     else {
         return Ok(());
     };

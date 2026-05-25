@@ -10,6 +10,7 @@ use crate::server::domain::configuration::defaults::ConfigurationDefaultsReposit
 use crate::server::domain::configuration::embedding_model::EmbeddingModelRepository;
 use crate::server::domain::configuration::generation_model::GenerationModelRepository;
 use crate::server::domain::configuration::index_profile::IndexProfileRepository;
+use crate::server::domain::configuration::reranker_model::RerankerModelRepository;
 use crate::server::domain::configuration::retrieval_profile::RetrievalProfileRepository;
 use crate::server::domain::configuration::sweep_template::SweepTemplateRepository;
 use crate::server::domain::configuration::vector_index::VectorIndexRepository;
@@ -26,8 +27,9 @@ use crate::server::infrastructure::chunk_set::PostgresChunkSetRepository;
 use crate::server::infrastructure::configuration::{
     PostgresChunkingConfigurationRepository, PostgresConfigurationDefaultsRepository,
     PostgresEmbeddingModelRepository, PostgresGenerationModelRepository,
-    PostgresIndexProfileRepository, PostgresRetrievalProfileRepository,
-    PostgresSweepTemplateRepository, PostgresVectorIndexRepository,
+    PostgresIndexProfileRepository, PostgresRerankerModelRepository,
+    PostgresRetrievalProfileRepository, PostgresSweepTemplateRepository,
+    PostgresVectorIndexRepository,
 };
 use crate::server::infrastructure::connector::PostgresConnectorRepository;
 use crate::server::infrastructure::connector_sync::{
@@ -51,6 +53,7 @@ use event_sourcing::checkpoint::CheckpointRepository;
 pub struct Repositories {
     pub embedding_model: Arc<dyn EmbeddingModelRepository>,
     pub generation_model: Arc<dyn GenerationModelRepository>,
+    pub reranker_model: Arc<dyn RerankerModelRepository>,
     pub vector_index: Arc<dyn VectorIndexRepository>,
     pub index_profile: Arc<dyn IndexProfileRepository>,
     pub retrieval_profile: Arc<dyn RetrievalProfileRepository>,
@@ -91,6 +94,7 @@ pub fn build_repositories(
     Ok(Repositories {
         embedding_model: Arc::new(PostgresEmbeddingModelRepository::new(pool.clone())),
         generation_model: Arc::new(PostgresGenerationModelRepository::new(pool.clone())),
+        reranker_model: Arc::new(PostgresRerankerModelRepository::new(pool.clone())),
         vector_index: Arc::new(PostgresVectorIndexRepository::new(pool.clone())),
         index_profile: Arc::new(PostgresIndexProfileRepository::new(pool.clone())),
         retrieval_profile: Arc::new(PostgresRetrievalProfileRepository::new(pool.clone())),

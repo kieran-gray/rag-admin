@@ -3,8 +3,8 @@ use leptos::prelude::*;
 use crate::shared::contracts::{
     ChunkingConfigurationCommandDto, ChunkingConfigurationDto, ConfigurationDto,
     EmbeddingModelCommandDto, GenerationModelCommandDto, IndexProfileCommandDto, IndexProfileDto,
-    RetrievalProfileCommandDto, RetrievalProfileDto, SweepTemplateCommandDto, SweepTemplateDto,
-    VectorIndexCommandDto,
+    RerankerModelCommandDto, RetrievalProfileCommandDto, RetrievalProfileDto,
+    SweepTemplateCommandDto, SweepTemplateDto, VectorIndexCommandDto,
 };
 
 #[cfg(feature = "ssr")]
@@ -104,6 +104,21 @@ pub async fn apply_generation_model_command(
 ) -> Result<(), ServerFnError> {
     ctx::<Arc<CatalogServices>>()?
         .generation_model_command_handler
+        .handle_dto(command)
+        .await
+        .map_err(|e| map_app_error(&e))
+}
+
+#[server(
+    name = ApplyRerankerModelCommand,
+    prefix = "/api",
+    endpoint = "apply_reranker_model_command"
+)]
+pub async fn apply_reranker_model_command(
+    command: RerankerModelCommandDto,
+) -> Result<(), ServerFnError> {
+    ctx::<Arc<CatalogServices>>()?
+        .reranker_model_command_handler
         .handle_dto(command)
         .await
         .map_err(|e| map_app_error(&e))

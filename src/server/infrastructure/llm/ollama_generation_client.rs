@@ -35,10 +35,11 @@ pub fn register(
     http: Arc<ReqwestHttpClient>,
     base_url: String,
     num_ctx: u32,
-) -> Arc<dyn GenerationClient> {
-    let client: Arc<dyn GenerationClient> = OllamaGenerationClient::new(http, base_url, num_ctx);
-    registry.register(AiProviderKind::Ollama, Arc::clone(&client));
-    client
+) {
+    registry.register(
+        AiProviderKind::Ollama,
+        OllamaGenerationClient::new(http, base_url, num_ctx),
+    );
 }
 
 #[derive(Serialize)]

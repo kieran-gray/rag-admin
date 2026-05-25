@@ -11,13 +11,12 @@ services:
       db:
         condition: service_healthy
         restart: true
-      ollama-pull-generation:
-        condition: service_completed_successfully
     env_file:
       - ./.env
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
-      - OLLAMA_BASE_URL=http://ollama:11435
+      - LLAMA_SERVER_BASE_URL=${LLAMA_SERVER_BASE_URL:-http://llama-swap:8080}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11435}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -28,8 +27,37 @@ services:
       timeout: 5s
       retries: 5
 
+  llama-swap:
+    image: ${LLAMA_SWAP_IMAGE:-ghcr.io/mostlygeek/llama-swap:cuda}
+    restart: "no"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./deploy/llama-swap/config.yaml:/app/config.yaml:ro
+      - llama-models:/models
+    environment:
+      - LLAMA_CACHE=/models
+    command: ["-config", "/app/config.yaml", "-listen", ":8080"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: ${LLAMA_SERVER_MEMORY_LIMIT:-24g}
+        reservations:
+          memory: ${LLAMA_SERVER_MEMORY_RESERVATION:-16g}
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
   ollama:
     image: ollama/ollama:latest
+    profiles: ["ollama"]
     restart: "no"
     ports:
       - "11435:11435"
@@ -55,11 +83,12 @@ services:
           memory: ${OLLAMA_MEMORY_RESERVATION:-16g}
           devices:
             - driver: nvidia
-              count: all 
+              count: all
               capabilities: [gpu]
 
   ollama-pull-embedding:
     image: ollama/ollama:latest
+    profiles: ["ollama"]
     restart: "no"
     depends_on:
       ollama:
@@ -71,6 +100,7 @@ services:
 
   ollama-pull-generation:
     image: ollama/ollama:latest
+    profiles: ["ollama"]
     restart: "no"
     depends_on:
       ollama:
@@ -105,4 +135,5 @@ services:
 
 volumes:
   app-db-data:
+  llama-models:
   ollama-data:

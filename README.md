@@ -12,16 +12,17 @@ pipeline to production.
 ## Run
 
 The recommended way to run the app is via Docker Compose, which brings up
-Postgres (with pgvector), Ollama, and the app itself in one go.
+Postgres (with pgvector), [llama-swap](https://github.com/mostlygeek/llama-swap)
+(fronting `llama-server` from llama.cpp), and the app itself in one go.
 
 Prerequisites:
 
 - [Docker](https://docs.docker.com/get-docker/) (with Compose)
 - Optional: [just](https://github.com/casey/just) for convenience recipes
 - Optional: [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
-  if you have an NVIDIA GPU and want Ollama to use it. See
-  [mythrantic/ollama-docker](https://github.com/mythrantic/ollama-docker) for a
-  worked example.
+  if you have an NVIDIA GPU. Without a GPU, override `LLAMA_SWAP_IMAGE` in
+  `.env` to the CPU variant (`ghcr.io/mostlygeek/llama-swap:cpu`) and remove
+  the `nvidia` device reservation from `docker-compose.yml`.
 
 Copy `.env.example` to `.env`, then start the stack:
 
@@ -35,23 +36,36 @@ Then open `http://localhost:3000`.
 
 ### First run: model downloads
 
-The Compose stack starts Ollama, stores its model files in the `ollama-data`
-volume, and populates the local models seeded by the app:
+The Compose stack starts llama-swap with two seeded models loaded on demand:
 
-- `qwen3-embedding:0.6b` for embeddings
-- `gemma3:12b-it-qat` for generation
+- `qwen3-embedding-0.6b` for embeddings (`Qwen/Qwen3-Embedding-0.6B-GGUF`)
+- `gemma3-12b` for generation (`ggml-org/gemma-3-12b-it-GGUF`)
 
-The first run downloads these models and can take a while. **The defaults are
-not suitable for all hardware** — `gemma3:12b-it-qat` needs roughly 12–16 GB of
-RAM/VRAM to run comfortably. If your machine can't fit it, edit
-`docker-compose.yml` (the `ollama-pull-*` services) to pull smaller variants
-such as `gemma3:4b-it-qat` or `gemma3:1b-it-qat` and adjust the models in the
-UI accordingly.
+llama-server downloads each GGUF from Hugging Face the first time it's
+invoked and caches it in the `llama-models` volume. To pick different
+quantizations or models, edit `deploy/llama-swap/config.yaml` — each entry's
+`-hf user/repo:quant` argument resolves directly to a Hugging Face file.
 
-Adjust `OLLAMA_MEMORY_RESERVATION` and `OLLAMA_MEMORY_LIMIT` in `.env` if Docker
-does not have enough memory available for the generation model. Keep at least
-20 GB free in Docker's volume store for the Ollama model blobs, partial
-downloads, and future model updates.
+**The defaults are not suitable for all hardware** — the Q4_K_M quantization of
+`gemma3-12b` needs roughly 12–16 GB of RAM/VRAM to run comfortably. If your
+machine can't fit it, pick a smaller variant (e.g. `Q3_K_M`) or a smaller model
+in `deploy/llama-swap/config.yaml` and add a matching catalog entry through
+the UI.
+
+Adjust `LLAMA_SERVER_MEMORY_RESERVATION` and `LLAMA_SERVER_MEMORY_LIMIT` in
+`.env` if Docker does not have enough memory available. Keep at least 20 GB
+free in Docker's volume store for the model files.
+
+### Running Ollama instead
+
+The Ollama services are still defined in `docker-compose.yml` but live behind
+the `ollama` profile and are not started by default. To use Ollama instead of
+llama-server, bring it up with the profile flag and point the app at it:
+
+```sh
+docker compose --profile ollama up -d ollama ollama-pull-embedding ollama-pull-generation
+# then add an Ollama catalog entry through the UI (or set OLLAMA_BASE_URL).
+```
 
 ### Local development (without the app container)
 
@@ -75,8 +89,11 @@ Environment variables (see `.env.example`):
 | Variable | Purpose |
 | --- | --- |
 | `DATABASE_URL` | Postgres connection string (pgvector required) |
-| `OLLAMA_BASE_URL` | Optional. Defaults to `http://localhost:11434` |
-| `OLLAMA_MEMORY_RESERVATION`, `OLLAMA_MEMORY_LIMIT` | Docker Compose memory settings for the local Ollama service |
+| `LLAMA_SERVER_BASE_URL` | OpenAI-compatible endpoint (llama-swap or a bare llama-server). Defaults to `http://localhost:8080` |
+| `LLAMA_SWAP_IMAGE` | llama-swap container image variant. Defaults to `ghcr.io/mostlygeek/llama-swap:cuda` |
+| `LLAMA_SERVER_MEMORY_RESERVATION`, `LLAMA_SERVER_MEMORY_LIMIT` | Docker Compose memory settings for the llama-swap service |
+| `OLLAMA_BASE_URL` | Optional. Defaults to `http://localhost:11434`. Only used when an Ollama catalog entry is selected |
+| `OLLAMA_MEMORY_RESERVATION`, `OLLAMA_MEMORY_LIMIT` | Docker Compose memory settings for the local Ollama service (Ollama profile only) |
 | `OLLAMA_CONTEXT_LENGTH` | Ollama generation context size. Defaults to `16384` |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` | Required if using Cloudflare Workers AI / Vectorize |
 | `CLOUDFLARE_KV_NAMESPACE_ID` | Required when `KV_BACKEND=cloudflare` |
@@ -88,5 +105,6 @@ are managed at runtime through the UI and stored in Postgres.
 ## Stack
 
 Leptos (SSR + hydrate) on Axum. Postgres with pgvector for the read model and
-vector storage. Ollama and Cloudflare Workers AI for inference. Cloudflare
-Vectorize is supported as an alternative vector store.
+vector storage. llama-server (via llama-swap), Ollama, and Cloudflare Workers
+AI are all selectable inference backends. Cloudflare Vectorize is supported as
+an alternative vector store.

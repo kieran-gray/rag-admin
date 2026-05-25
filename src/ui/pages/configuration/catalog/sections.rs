@@ -115,6 +115,60 @@ pub(super) fn GenerationModelsSection(
 }
 
 #[component]
+pub(super) fn RerankerModelsSection(
+    config: StoredValue<ConfigurationDto>,
+    busy: ReadSignal<bool>,
+    open_form: Callback<RegistryForm>,
+    open_delete: Callback<DeleteTarget>,
+) -> impl IntoView {
+    view! {
+        <Surface
+            title="Reranker models".to_string()
+            actions=Box::new(move || view! {
+                <button
+                    type="button"
+                    class="btn btn-primary"
+                    disabled=busy
+                    on:click=move |_| open_form.run(RegistryForm::AddRerankerModel)
+                >
+                    "+ Add reranker model"
+                </button>
+            }.into_any())
+        >
+            {move || {
+                let cfg = config.get_value();
+                if cfg.reranker_models.is_empty() {
+                    view! {
+                        <EmptyState
+                            title="No reranker models yet"
+                            body="Optional second-stage rerankers improve retrieval precision by re-scoring vector hits.".to_string()
+                        />
+                    }.into_any()
+                } else {
+                    view! {
+                        <div class="space-y-2">
+                            {cfg.reranker_models.iter().map(|m| {
+                                let edit_target = m.clone();
+                                let delete_target = m.clone();
+                                view! {
+                                    <RegistryRow
+                                        title=m.model.clone()
+                                        subtitle=format!("{} · {}", m.kind.display_label(), short_uuid(m.reranker_model_id))
+                                        on_edit=move || open_form.run(RegistryForm::EditRerankerModel(edit_target.clone()))
+                                        on_delete=move || open_delete.run(DeleteTarget::RerankerModel(delete_target.clone()))
+                                        busy=busy
+                                    />
+                                }
+                            }).collect_view()}
+                        </div>
+                    }.into_any()
+                }
+            }}
+        </Surface>
+    }
+}
+
+#[component]
 pub(super) fn VectorIndexesSection(
     config: StoredValue<ConfigurationDto>,
     busy: ReadSignal<bool>,

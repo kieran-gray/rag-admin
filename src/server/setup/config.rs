@@ -11,6 +11,7 @@ pub struct Config {
     pub database_url: String,
     pub cloudflare: CloudflareConfig,
     pub ollama: OllamaConfig,
+    pub llama_server: LlamaServerConfig,
     pub kv_backend: KvBackend,
 }
 
@@ -25,6 +26,11 @@ pub struct CloudflareConfig {
 pub struct OllamaConfig {
     pub base_url: String,
     pub num_ctx: u32,
+}
+
+#[derive(Clone)]
+pub struct LlamaServerConfig {
+    pub base_url: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -65,6 +71,15 @@ impl FromEnv for OllamaConfig {
     }
 }
 
+impl FromEnv for LlamaServerConfig {
+    fn from_env() -> Result<Self, SetupError> {
+        Ok(Self {
+            base_url: Config::parse_optional("LLAMA_SERVER_BASE_URL")
+                .unwrap_or_else(|| "http://localhost:8080".into()),
+        })
+    }
+}
+
 impl Config {
     pub fn from_env() -> Result<Self, SetupError> {
         let cloudflare = CloudflareConfig::from_env()?;
@@ -84,6 +99,7 @@ impl Config {
             database_url: Self::parse("DATABASE_URL")?,
             cloudflare,
             ollama: OllamaConfig::from_env()?,
+            llama_server: LlamaServerConfig::from_env()?,
             kv_backend,
         })
     }

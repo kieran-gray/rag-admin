@@ -1,0 +1,23 @@
+healthCheckTimeout: 300
+
+models:
+  "gemma3-12b":
+    cmd: |
+      /app/llama-server
+      --port ${PORT}
+      -hf ggml-org/gemma-3-12b-it-GGUF:Q4_K_M
+      -c 16384
+      -ngl 999
+      --jinja
+    ttl: 600
+
+  "qwen3-embedding-0.6b":
+    cmd: |
+      /app/llama-server
+      --port ${PORT}
+      -hf Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0
+      --embedding
+      --pooling mean
+      -c 8192
+      -ngl 999
+    ttl: 600

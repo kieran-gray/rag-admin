@@ -5,6 +5,7 @@ pub mod generation_model_command_handler;
 pub mod index_profile_command_handler;
 pub mod index_profile_resolver;
 pub mod query_service;
+pub mod reranker_model_command_handler;
 pub mod retrieval_profile_command_handler;
 pub mod retrieval_profile_resolver;
 pub mod sweep_template_command_handler;
@@ -20,6 +21,7 @@ pub use query_service::{
     ChunkingConfigurationQueryService, ConfigurationQueryService, IndexProfileQueryService,
     RetrievalProfileQueryService, SweepTemplateQueryService,
 };
+pub use reranker_model_command_handler::RerankerModelCatalogCommandHandler;
 pub use retrieval_profile_command_handler::RetrievalProfileCatalogCommandHandler;
 pub use retrieval_profile_resolver::{ResolvedRetrievalProfile, RetrievalProfileResolver};
 pub use sweep_template_command_handler::SweepTemplateCommandHandler;

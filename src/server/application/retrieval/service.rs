@@ -9,6 +9,7 @@ use crate::server::application::indexing::ports::vector_index::{
     MetadataFilter, MetadataFilterOperation, VectorQuery,
 };
 use crate::server::application::indexing::VectorIndexResolver;
+use crate::server::application::rerank::{rerank_fetch_k, RerankService};
 use crate::server::application::AppError;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::shared::contracts::{QueryHit, QueryRequest, QueryResult};
@@ -19,6 +20,7 @@ pub struct RetrievalService {
     retrieval_profile_resolver: Arc<RetrievalProfileResolver>,
     embedding_service: Arc<EmbeddingService>,
     vector_index_resolver: Arc<VectorIndexResolver>,
+    rerank_service: Arc<RerankService>,
     source_document_repository: Arc<dyn SourceDocumentRepository>,
 }
 
@@ -27,12 +29,14 @@ impl RetrievalService {
         retrieval_profile_resolver: Arc<RetrievalProfileResolver>,
         embedding_service: Arc<EmbeddingService>,
         vector_index_resolver: Arc<VectorIndexResolver>,
+        rerank_service: Arc<RerankService>,
         source_document_repository: Arc<dyn SourceDocumentRepository>,
     ) -> Arc<Self> {
         Arc::new(Self {
             retrieval_profile_resolver,
             embedding_service,
             vector_index_resolver,
+            rerank_service,
             source_document_repository,
         })
     }
@@ -43,16 +47,17 @@ impl RetrievalService {
         }
         let top_k = req.top_k.clamp(1, 50);
         let min_score = req.min_score.clamp(0.0, 1.0);
-        let fetch_k = if req.document_id.is_some() {
-            top_k.saturating_mul(8).clamp(1, 200)
-        } else {
-            top_k
-        };
 
         let profile = self
             .retrieval_profile_resolver
             .resolve(req.retrieval_profile_id)
             .await?;
+
+        let fetch_k = match (profile.reranker_model.as_ref(), req.document_id) {
+            (Some(_), _) => rerank_fetch_k(top_k),
+            (None, Some(_)) => top_k.saturating_mul(8).clamp(1, 200),
+            (None, None) => top_k,
+        };
 
         let embeddings = self
             .embedding_service
@@ -86,6 +91,15 @@ impl RetrievalService {
                 filter,
             })
             .await?;
+
+        let matches = match profile.reranker_model.as_ref() {
+            Some(reranker) => {
+                self.rerank_service
+                    .rerank_matches(reranker.reranker_model_id, &req.query, matches)
+                    .await?
+            }
+            None => matches,
+        };
 
         let mut hits = Vec::with_capacity(matches.len());
         for m in matches {

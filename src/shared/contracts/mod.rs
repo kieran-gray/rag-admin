@@ -22,18 +22,18 @@ pub use chunk_set::{
     SetChunkSetPinnedRequestDto,
 };
 pub use configuration::{
-    AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto,
+    AddEmbeddingModelDto, AddGenerationModelDto, AddRerankerModelDto, AddVectorIndexDto,
     ChunkingConfigurationCommandDto, ChunkingConfigurationDto, ConfigurationDto,
     CreateChunkingConfigurationDto, CreateIndexProfileDto, CreateRetrievalProfileDto,
     CreateSweepTemplateDto, DeleteChunkingConfigurationDto, DeleteIndexProfileDto,
     DeleteRetrievalProfileDto, DeleteSweepTemplateDto, EmbeddingModelCommandDto, EmbeddingModelDto,
     GenerationModelCommandDto, GenerationModelDto, IndexProfileCommandDto, IndexProfileDto,
-    RemoveEmbeddingModelDto, RemoveGenerationModelDto, RemoveVectorIndexDto,
-    RetrievalProfileCommandDto, RetrievalProfileDto, SetDefaultSweepTemplateDto,
-    SweepTemplateCommandDto, SweepTemplateDto, UpdateChunkingConfigurationDto,
-    UpdateEmbeddingModelDto, UpdateGenerationModelDto, UpdateIndexProfileDto,
-    UpdateRetrievalProfileDto, UpdateSweepTemplateDto, UpdateVectorIndexDto, VectorIndexCommandDto,
-    VectorIndexDto,
+    RemoveEmbeddingModelDto, RemoveGenerationModelDto, RemoveRerankerModelDto,
+    RemoveVectorIndexDto, RerankerModelCommandDto, RerankerModelDto, RetrievalProfileCommandDto,
+    RetrievalProfileDto, SetDefaultSweepTemplateDto, SweepTemplateCommandDto, SweepTemplateDto,
+    UpdateChunkingConfigurationDto, UpdateEmbeddingModelDto, UpdateGenerationModelDto,
+    UpdateIndexProfileDto, UpdateRerankerModelDto, UpdateRetrievalProfileDto,
+    UpdateSweepTemplateDto, UpdateVectorIndexDto, VectorIndexCommandDto, VectorIndexDto,
 };
 pub use connector::{
     BulkImportFailureDto, BulkImportResultDto, ConnectorCommandDto, ConnectorConfigDto,

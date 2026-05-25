@@ -6,6 +6,7 @@ use crate::server::domain::configuration::defaults::ConfigurationDefaultsReposit
 use crate::server::domain::configuration::embedding_model::EmbeddingModelRepository;
 use crate::server::domain::configuration::generation_model::GenerationModelRepository;
 use crate::server::domain::configuration::index_profile::IndexProfileRepository;
+use crate::server::domain::configuration::reranker_model::RerankerModelRepository;
 use crate::server::domain::configuration::retrieval_profile::RetrievalProfileRepository;
 use crate::server::domain::configuration::sweep_template::{
     SweepTemplateRepository, SweepTemplateRepositoryError,
@@ -14,7 +15,7 @@ use crate::server::domain::configuration::vector_index::VectorIndexRepository;
 use crate::server::domain::connector::ConnectorRepository;
 use crate::shared::contracts::{
     ChunkingConfigurationDto, ConfigurationDto, EmbeddingModelDto, GenerationModelDto,
-    IndexProfileDto, RetrievalProfileDto, SweepTemplateDto, VectorIndexDto,
+    IndexProfileDto, RerankerModelDto, RetrievalProfileDto, SweepTemplateDto, VectorIndexDto,
 };
 use crate::shared::ChunkingConfig;
 use uuid::Uuid;
@@ -22,6 +23,7 @@ use uuid::Uuid;
 pub struct ConfigurationQueryService {
     embedding_models: Arc<dyn EmbeddingModelRepository>,
     generation_models: Arc<dyn GenerationModelRepository>,
+    reranker_models: Arc<dyn RerankerModelRepository>,
     vector_indexes: Arc<dyn VectorIndexRepository>,
     index_profiles: Arc<dyn IndexProfileRepository>,
     defaults: Arc<dyn ConfigurationDefaultsRepository>,
@@ -31,6 +33,7 @@ impl ConfigurationQueryService {
     pub fn new(
         embedding_models: Arc<dyn EmbeddingModelRepository>,
         generation_models: Arc<dyn GenerationModelRepository>,
+        reranker_models: Arc<dyn RerankerModelRepository>,
         vector_indexes: Arc<dyn VectorIndexRepository>,
         index_profiles: Arc<dyn IndexProfileRepository>,
         defaults: Arc<dyn ConfigurationDefaultsRepository>,
@@ -38,6 +41,7 @@ impl ConfigurationQueryService {
         Arc::new(Self {
             embedding_models,
             generation_models,
+            reranker_models,
             vector_indexes,
             index_profiles,
             defaults,
@@ -47,6 +51,7 @@ impl ConfigurationQueryService {
     pub async fn get(&self) -> Result<ConfigurationDto, AppError> {
         let embedding_models = self.embedding_models.load_all().await?;
         let generation_models = self.generation_models.load_all().await?;
+        let reranker_models = self.reranker_models.load_all().await?;
         let vector_indexes = self.vector_indexes.load_all().await?;
         let index_profiles = self.index_profiles.load_all().await?;
         let default_id = self.defaults.load().await?.index_profile_id;
@@ -66,6 +71,14 @@ impl ConfigurationQueryService {
                 .into_iter()
                 .map(|m| GenerationModelDto {
                     generation_model_id: m.generation_model_id,
+                    kind: m.kind,
+                    model: m.model,
+                })
+                .collect(),
+            reranker_models: reranker_models
+                .into_iter()
+                .map(|m| RerankerModelDto {
+                    reranker_model_id: m.reranker_model_id,
                     kind: m.kind,
                     model: m.model,
                 })
@@ -160,6 +173,7 @@ pub struct RetrievalProfileQueryService {
     retrieval_profiles: Arc<dyn RetrievalProfileRepository>,
     index_profiles: Arc<dyn IndexProfileRepository>,
     generation_models: Arc<dyn GenerationModelRepository>,
+    reranker_models: Arc<dyn RerankerModelRepository>,
     defaults: Arc<dyn ConfigurationDefaultsRepository>,
 }
 
@@ -168,12 +182,14 @@ impl RetrievalProfileQueryService {
         retrieval_profiles: Arc<dyn RetrievalProfileRepository>,
         index_profiles: Arc<dyn IndexProfileRepository>,
         generation_models: Arc<dyn GenerationModelRepository>,
+        reranker_models: Arc<dyn RerankerModelRepository>,
         defaults: Arc<dyn ConfigurationDefaultsRepository>,
     ) -> Arc<Self> {
         Arc::new(Self {
             retrieval_profiles,
             index_profiles,
             generation_models,
+            reranker_models,
             defaults,
         })
     }
@@ -182,6 +198,7 @@ impl RetrievalProfileQueryService {
         let profiles = self.retrieval_profiles.load_all().await?;
         let index_profiles = self.index_profiles.load_all().await?;
         let generation_models = self.generation_models.load_all().await?;
+        let reranker_models = self.reranker_models.load_all().await?;
         let default_id = self.defaults.load().await?.retrieval_profile_id;
 
         Ok(profiles
@@ -195,6 +212,12 @@ impl RetrievalProfileQueryService {
                     .iter()
                     .find(|m| m.generation_model_id == rp.generation_model_id)
                     .map(|m| m.model.clone()),
+                reranker_model_name: rp.reranker_model_id.and_then(|id| {
+                    reranker_models
+                        .iter()
+                        .find(|m| m.reranker_model_id == id)
+                        .map(|m| m.model.clone())
+                }),
                 is_default: default_id == Some(rp.retrieval_profile_id),
                 retrieval_profile_id: rp.retrieval_profile_id,
                 name: rp.name,

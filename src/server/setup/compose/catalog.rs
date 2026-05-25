@@ -9,13 +9,15 @@ use crate::server::application::configuration::{
     ConfigurationDefaultsCommandHandler, ConfigurationQueryService,
     EmbeddingModelCatalogCommandHandler, GenerationModelCatalogCommandHandler,
     IndexProfileCatalogCommandHandler, IndexProfileQueryService, IndexProfileResolver,
-    RetrievalProfileCatalogCommandHandler, RetrievalProfileQueryService, RetrievalProfileResolver,
-    SweepTemplateCommandHandler, SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
+    RerankerModelCatalogCommandHandler, RetrievalProfileCatalogCommandHandler,
+    RetrievalProfileQueryService, RetrievalProfileResolver, SweepTemplateCommandHandler,
+    SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
 };
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::indexing::{VectorIndexProviderRegistry, VectorIndexResolver};
 use crate::server::application::llm::GenerationService;
 use crate::server::application::ports::IdGenerator;
+use crate::server::application::rerank::RerankService;
 use crate::server::domain::configuration::chunking_configuration::{
     make_chunking_configuration_projector, ChunkingConfigurationCatalog,
 };
@@ -30,6 +32,9 @@ use crate::server::domain::configuration::generation_model::{
 };
 use crate::server::domain::configuration::index_profile::{
     make_index_profile_projector, IndexProfileCatalog,
+};
+use crate::server::domain::configuration::reranker_model::{
+    make_reranker_model_projector, RerankerModelCatalog,
 };
 use crate::server::domain::configuration::retrieval_profile::{
     make_retrieval_profile_projector, RetrievalProfileCatalog,
@@ -50,6 +55,7 @@ use event_sourcing::event_bus::EventBus;
 pub struct CatalogServices {
     pub embedding_model_command_handler: Arc<EmbeddingModelCatalogCommandHandler>,
     pub generation_model_command_handler: Arc<GenerationModelCatalogCommandHandler>,
+    pub reranker_model_command_handler: Arc<RerankerModelCatalogCommandHandler>,
     pub vector_index_command_handler: Arc<VectorIndexCatalogCommandHandler>,
     pub index_profile_command_handler: Arc<IndexProfileCatalogCommandHandler>,
     pub retrieval_profile_command_handler: Arc<RetrievalProfileCatalogCommandHandler>,
@@ -74,6 +80,7 @@ pub struct CatalogDeps<'a> {
     pub wirings: &'a AggregateWirings,
     pub embedding_service: Arc<EmbeddingService>,
     pub generation_service: Arc<GenerationService>,
+    pub rerank_service: Arc<RerankService>,
     pub event_bus: Arc<EventBus>,
     pub wakeups: &'a mut HashMap<String, Arc<Notify>>,
 }
@@ -88,6 +95,7 @@ impl CatalogServices {
             wirings,
             embedding_service,
             generation_service,
+            rerank_service,
             event_bus,
             wakeups,
         } = deps;
@@ -112,6 +120,7 @@ impl CatalogServices {
             Arc::clone(&repos.configuration_defaults),
             Arc::clone(&index_profile_resolver),
             Arc::clone(&generation_service),
+            Arc::clone(&rerank_service),
         );
 
         let embedding_model_command_handler = EmbeddingModelCatalogCommandHandler::new(Arc::clone(
@@ -120,6 +129,9 @@ impl CatalogServices {
         let generation_model_command_handler = GenerationModelCatalogCommandHandler::new(
             Arc::clone(&wirings.generation_model.command_processor),
         );
+        let reranker_model_command_handler = RerankerModelCatalogCommandHandler::new(Arc::clone(
+            &wirings.reranker_model.command_processor,
+        ));
         let vector_index_command_handler = VectorIndexCatalogCommandHandler::new(Arc::clone(
             &wirings.vector_index.command_processor,
         ));
@@ -152,6 +164,7 @@ impl CatalogServices {
         let configuration_query_service = ConfigurationQueryService::new(
             Arc::clone(&repos.embedding_model),
             Arc::clone(&repos.generation_model),
+            Arc::clone(&repos.reranker_model),
             Arc::clone(&repos.vector_index),
             Arc::clone(&repos.index_profile),
             Arc::clone(&repos.configuration_defaults),
@@ -166,6 +179,7 @@ impl CatalogServices {
             Arc::clone(&repos.retrieval_profile),
             Arc::clone(&repos.index_profile),
             Arc::clone(&repos.generation_model),
+            Arc::clone(&repos.reranker_model),
             Arc::clone(&repos.configuration_defaults),
         );
         let chunking_configuration_query_service = ChunkingConfigurationQueryService::new(
@@ -181,6 +195,7 @@ impl CatalogServices {
         Ok(Self {
             embedding_model_command_handler,
             generation_model_command_handler,
+            reranker_model_command_handler,
             vector_index_command_handler,
             index_profile_command_handler,
             retrieval_profile_command_handler,
@@ -219,6 +234,16 @@ fn spawn_drivers(
         Arc::clone(&wirings.generation_model.event_store),
         vec![Arc::new(make_generation_model_projector(
             Arc::clone(&repos.generation_model) as _,
+        ))],
+        None,
+        Arc::clone(&repos.checkpoint),
+        Arc::clone(event_bus),
+        wakeups,
+    );
+    spawn_driver::<RerankerModelCatalog, ()>(
+        Arc::clone(&wirings.reranker_model.event_store),
+        vec![Arc::new(make_reranker_model_projector(
+            Arc::clone(&repos.reranker_model) as _,
         ))],
         None,
         Arc::clone(&repos.checkpoint),

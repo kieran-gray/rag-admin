@@ -12,6 +12,7 @@ use crate::server::domain::configuration::defaults::ConfigurationDefaults;
 use crate::server::domain::configuration::embedding_model::EmbeddingModelCatalog;
 use crate::server::domain::configuration::generation_model::GenerationModelCatalog;
 use crate::server::domain::configuration::index_profile::IndexProfileCatalog;
+use crate::server::domain::configuration::reranker_model::RerankerModelCatalog;
 use crate::server::domain::configuration::retrieval_profile::RetrievalProfileCatalog;
 use crate::server::domain::configuration::sweep_template::SweepTemplate;
 use crate::server::domain::configuration::vector_index::VectorIndexCatalog;
@@ -45,6 +46,7 @@ pub struct AggregateWiring<A: Aggregate> {
 pub struct AggregateWirings {
     pub embedding_model: AggregateWiring<EmbeddingModelCatalog>,
     pub generation_model: AggregateWiring<GenerationModelCatalog>,
+    pub reranker_model: AggregateWiring<RerankerModelCatalog>,
     pub vector_index: AggregateWiring<VectorIndexCatalog>,
     pub chunking_configuration: AggregateWiring<ChunkingConfigurationCatalog>,
     pub index_profile: AggregateWiring<IndexProfileCatalog>,
@@ -63,6 +65,7 @@ pub fn build_aggregate_wirings(pool: &PgPool) -> AggregateWirings {
     AggregateWirings {
         embedding_model: build_aggregate_wiring::<EmbeddingModelCatalog>(pool),
         generation_model: build_aggregate_wiring::<GenerationModelCatalog>(pool),
+        reranker_model: build_aggregate_wiring::<RerankerModelCatalog>(pool),
         vector_index: build_aggregate_wiring::<VectorIndexCatalog>(pool),
         chunking_configuration: build_aggregate_wiring::<ChunkingConfigurationCatalog>(pool),
         index_profile: build_aggregate_wiring::<IndexProfileCatalog>(pool),

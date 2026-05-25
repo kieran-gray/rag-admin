@@ -7,6 +7,7 @@ pub mod embedding_set;
 pub mod evaluation;
 pub mod indexing;
 pub mod llm;
+pub mod rerank;
 pub mod shared;
 pub mod source_document;
 pub mod vector;

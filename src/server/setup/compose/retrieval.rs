@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::server::application::configuration::RetrievalProfileResolver;
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::indexing::VectorIndexResolver;
+use crate::server::application::rerank::RerankService;
 use crate::server::application::retrieval::RetrievalService;
 use crate::server::setup::compose::repositories::Repositories;
 use crate::server::setup::exceptions::SetupError;
@@ -16,6 +17,7 @@ pub struct RetrievalDeps<'a> {
     pub retrieval_profile_resolver: Arc<RetrievalProfileResolver>,
     pub embedding_service: Arc<EmbeddingService>,
     pub vector_index_resolver: Arc<VectorIndexResolver>,
+    pub rerank_service: Arc<RerankService>,
 }
 
 impl RetrievalServices {
@@ -24,6 +26,7 @@ impl RetrievalServices {
             deps.retrieval_profile_resolver,
             deps.embedding_service,
             deps.vector_index_resolver,
+            deps.rerank_service,
             Arc::clone(&deps.repos.source_document),
         );
 

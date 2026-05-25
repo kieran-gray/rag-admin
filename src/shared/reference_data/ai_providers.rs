@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 pub enum AiProviderKind {
     Cloudflare,
     Ollama,
+    LlamaServer,
 }
 
 impl AiProviderKind {
@@ -12,6 +13,7 @@ impl AiProviderKind {
         match self {
             AiProviderKind::Cloudflare => "cloudflare",
             AiProviderKind::Ollama => "ollama",
+            AiProviderKind::LlamaServer => "llama_server",
         }
     }
 
@@ -19,24 +21,32 @@ impl AiProviderKind {
         match self {
             AiProviderKind::Cloudflare => "Cloudflare",
             AiProviderKind::Ollama => "Ollama",
+            AiProviderKind::LlamaServer => "llama-server",
         }
     }
 
     pub fn model_id_well_formed(self, id: &str) -> bool {
         match self {
             AiProviderKind::Cloudflare => id.starts_with("@cf/"),
-            AiProviderKind::Ollama => !id.is_empty() && !id.contains(char::is_whitespace),
+            AiProviderKind::Ollama | AiProviderKind::LlamaServer => {
+                !id.is_empty() && !id.contains(char::is_whitespace)
+            }
         }
     }
 
     pub fn all() -> &'static [AiProviderKind] {
-        &[AiProviderKind::Cloudflare, AiProviderKind::Ollama]
+        &[
+            AiProviderKind::Cloudflare,
+            AiProviderKind::Ollama,
+            AiProviderKind::LlamaServer,
+        ]
     }
 
     pub fn parse(value: &str) -> Option<Self> {
         match value {
             "cloudflare" => Some(AiProviderKind::Cloudflare),
             "ollama" => Some(AiProviderKind::Ollama),
+            "llama_server" => Some(AiProviderKind::LlamaServer),
             _ => None,
         }
     }

@@ -6,6 +6,7 @@ use crate::server::application::configuration::index_profile_resolver::{
     IndexProfileResolver, ResolvedIndexProfile,
 };
 use crate::server::application::llm::{GenerationService, ResolvedGenerationModel};
+use crate::server::application::rerank::{RerankService, ResolvedRerankerModel};
 use crate::server::application::AppError;
 use crate::server::domain::configuration::defaults::ConfigurationDefaultsRepository;
 use crate::server::domain::configuration::retrieval_profile::RetrievalProfileRepository;
@@ -17,7 +18,7 @@ pub struct ResolvedRetrievalProfile {
     pub name: String,
     pub index_profile: ResolvedIndexProfile,
     pub generation_model: ResolvedGenerationModel,
-    pub reranker_model_id: Option<Uuid>,
+    pub reranker_model: Option<ResolvedRerankerModel>,
     pub default_top_k: u32,
     pub default_min_score_milli: u32,
 }
@@ -28,6 +29,7 @@ pub struct RetrievalProfileResolver {
     defaults: Arc<dyn ConfigurationDefaultsRepository>,
     index_profile_resolver: Arc<IndexProfileResolver>,
     generation_service: Arc<GenerationService>,
+    rerank_service: Arc<RerankService>,
 }
 
 impl RetrievalProfileResolver {
@@ -37,6 +39,7 @@ impl RetrievalProfileResolver {
         defaults: Arc<dyn ConfigurationDefaultsRepository>,
         index_profile_resolver: Arc<IndexProfileResolver>,
         generation_service: Arc<GenerationService>,
+        rerank_service: Arc<RerankService>,
     ) -> Arc<Self> {
         Arc::new(Self {
             retrieval_profile_repository,
@@ -44,6 +47,7 @@ impl RetrievalProfileResolver {
             defaults,
             index_profile_resolver,
             generation_service,
+            rerank_service,
         })
     }
 
@@ -98,13 +102,17 @@ impl RetrievalProfileResolver {
             .generation_service
             .resolve(rp.generation_model_id)
             .await?;
+        let reranker_model = match rp.reranker_model_id {
+            Some(id) => Some(self.rerank_service.resolve(id).await?),
+            None => None,
+        };
 
         Ok(ResolvedRetrievalProfile {
             retrieval_profile_id: rp.retrieval_profile_id,
             name: rp.name,
             index_profile,
             generation_model,
-            reranker_model_id: rp.reranker_model_id,
+            reranker_model,
             default_top_k: rp.default_top_k,
             default_min_score_milli: rp.default_min_score_milli,
         })

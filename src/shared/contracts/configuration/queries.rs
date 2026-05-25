@@ -20,6 +20,13 @@ pub struct GenerationModelDto {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RerankerModelDto {
+    pub reranker_model_id: Uuid,
+    pub kind: AiProviderKind,
+    pub model: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VectorIndexDto {
     pub index_id: Uuid,
     pub kind: VectorStoreKind,
@@ -32,6 +39,7 @@ pub struct ConfigurationDto {
     pub configuration_id: Uuid,
     pub embedding_models: Vec<EmbeddingModelDto>,
     pub generation_models: Vec<GenerationModelDto>,
+    pub reranker_models: Vec<RerankerModelDto>,
     pub vector_indexes: Vec<VectorIndexDto>,
     pub index_profiles: Vec<IndexProfileDto>,
 }
@@ -57,6 +65,7 @@ pub struct RetrievalProfileDto {
     pub generation_model_id: Uuid,
     pub generation_model_name: Option<String>,
     pub reranker_model_id: Option<Uuid>,
+    pub reranker_model_name: Option<String>,
     pub default_top_k: u32,
     pub default_min_score_milli: u32,
     pub is_default: bool,

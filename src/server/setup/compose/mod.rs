@@ -21,7 +21,7 @@ use tokio::sync::Notify;
 
 use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::source_document::SourceDocumentCommandHandler;
-use crate::server::infrastructure::shared::clients::{CloudflareApi, OllamaApi};
+use crate::server::infrastructure::shared::clients::{CloudflareApi, LlamaServerApi, OllamaApi};
 use crate::server::infrastructure::shared::event_sourcing::spawn_postgres_event_listener;
 use crate::server::infrastructure::shared::http::ReqwestHttpClient;
 use crate::server::infrastructure::shared::id::UuidGenerator;
@@ -69,6 +69,10 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         Arc::clone(&http),
         config.ollama.base_url.clone(),
     ));
+    let llama_server_api = Arc::new(LlamaServerApi::new(
+        Arc::clone(&http),
+        config.llama_server.base_url.clone(),
+    ));
 
     let repos = build_repositories(&pool, &config, &cf_api)?;
     let wirings = build_aggregate_wirings(&pool);
@@ -84,6 +88,7 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         http: Arc::clone(&http),
         cf_api: Arc::clone(&cf_api),
         ollama_api: Arc::clone(&ollama_api),
+        llama_server_api: Arc::clone(&llama_server_api),
         repos: &repos,
     })?;
 
@@ -97,6 +102,7 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         wirings: &wirings,
         embedding_service: Arc::clone(&platform.embedding_service),
         generation_service: Arc::clone(&platform.generation_service),
+        rerank_service: Arc::clone(&platform.rerank_service),
         event_bus: Arc::clone(&platform.event_bus),
         wakeups: &mut wakeups,
     })?;
@@ -152,6 +158,7 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         retrieval_profile_resolver: Arc::clone(&catalog.retrieval_profile_resolver),
         embedding_service: Arc::clone(&platform.embedding_service),
         vector_index_resolver: Arc::clone(&catalog.vector_index_resolver),
+        rerank_service: Arc::clone(&platform.rerank_service),
     })?;
 
     let chat = ChatServices::build(ChatDeps {
@@ -160,6 +167,7 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         embedding_service: Arc::clone(&platform.embedding_service),
         vector_index_resolver: Arc::clone(&catalog.vector_index_resolver),
         generation_service: Arc::clone(&platform.generation_service),
+        rerank_service: Arc::clone(&platform.rerank_service),
     })?;
 
     let evaluation = EvaluationServices::build(EvaluationDeps {
@@ -226,6 +234,7 @@ impl App {
             &self.catalog.retrieval_profile_query_service,
             &self.catalog.embedding_model_command_handler,
             &self.catalog.generation_model_command_handler,
+            &self.catalog.reranker_model_command_handler,
             &self.catalog.vector_index_command_handler,
             &self.catalog.chunking_configuration_command_handler,
             &self.catalog.index_profile_command_handler,

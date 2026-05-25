@@ -7,22 +7,27 @@ use leptos::prelude::*;
 use crate::server_functions::configuration::get_configuration;
 use crate::shared::contracts::{
     aggregate_type, EmbeddingModelCommandDto, EmbeddingModelDto, GenerationModelCommandDto,
-    GenerationModelDto, VectorIndexCommandDto, VectorIndexDto,
+    GenerationModelDto, RerankerModelCommandDto, RerankerModelDto, VectorIndexCommandDto,
+    VectorIndexDto,
 };
 use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{InlineStatusMessage, PageHeader, Surface};
 use crate::ui::pages::configuration::commands::{
-    run_embedding_model_command, run_generation_model_command, run_vector_index_command,
+    run_embedding_model_command, run_generation_model_command, run_reranker_model_command,
+    run_vector_index_command,
 };
 
 use self::form_dialog::{RegistryDeleteDialog, RegistryFormDialog};
-use self::sections::{EmbeddingModelsSection, GenerationModelsSection, VectorIndexesSection};
+use self::sections::{
+    EmbeddingModelsSection, GenerationModelsSection, RerankerModelsSection, VectorIndexesSection,
+};
 use self::widgets::StatusBanner;
 
 #[derive(Clone)]
 pub(super) enum CatalogCommand {
     Embedding(EmbeddingModelCommandDto),
     Generation(GenerationModelCommandDto),
+    Reranker(RerankerModelCommandDto),
     VectorIndex(VectorIndexCommandDto),
 }
 
@@ -32,6 +37,8 @@ pub(super) enum RegistryForm {
     EditEmbeddingModel(EmbeddingModelDto),
     AddGenerationModel,
     EditGenerationModel(GenerationModelDto),
+    AddRerankerModel,
+    EditRerankerModel(RerankerModelDto),
     AddVectorIndex,
     EditVectorIndex(VectorIndexDto),
 }
@@ -40,6 +47,7 @@ pub(super) enum RegistryForm {
 pub(super) enum DeleteTarget {
     EmbeddingModel(EmbeddingModelDto),
     GenerationModel(GenerationModelDto),
+    RerankerModel(RerankerModelDto),
     VectorIndex(VectorIndexDto),
 }
 
@@ -48,6 +56,7 @@ impl DeleteTarget {
         match self {
             Self::EmbeddingModel(m) => format!("Embedding model · {}", m.model),
             Self::GenerationModel(m) => format!("Generation model · {}", m.model),
+            Self::RerankerModel(m) => format!("Reranker model · {}", m.model),
             Self::VectorIndex(i) => format!("Vector index · {}", i.name),
         }
     }
@@ -81,6 +90,15 @@ pub(super) fn dispatch_catalog_command<F: FnOnce() + 'static>(
             set_refresh,
             on_success,
         ),
+        CatalogCommand::Reranker(cmd) => run_reranker_model_command(
+            cmd,
+            success_message,
+            set_busy,
+            set_status,
+            dialog_status,
+            set_refresh,
+            on_success,
+        ),
         CatalogCommand::VectorIndex(cmd) => run_vector_index_command(
             cmd,
             success_message,
@@ -99,6 +117,7 @@ pub fn CatalogPage() -> impl IntoView {
         e.from_any(&[
             aggregate_type::EMBEDDING_MODEL_CATALOG,
             aggregate_type::GENERATION_MODEL_CATALOG,
+            aggregate_type::RERANKER_MODEL_CATALOG,
             aggregate_type::VECTOR_INDEX_CATALOG,
         ])
     });
@@ -138,6 +157,7 @@ pub fn CatalogPage() -> impl IntoView {
                             <div class="space-y-6">
                                 <EmbeddingModelsSection config=config busy=busy open_form=open_form open_delete=open_delete />
                                 <GenerationModelsSection config=config busy=busy open_form=open_form open_delete=open_delete />
+                                <RerankerModelsSection config=config busy=busy open_form=open_form open_delete=open_delete />
                                 <VectorIndexesSection config=config busy=busy open_form=open_form open_delete=open_delete />
                             </div>
 

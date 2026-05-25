@@ -14,6 +14,7 @@ pub mod llm;
 pub mod markdown;
 pub mod ports;
 pub mod registry;
+pub mod rerank;
 pub mod retrieval;
 pub mod source_document;
 

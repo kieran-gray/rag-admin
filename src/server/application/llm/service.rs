@@ -26,13 +26,13 @@ pub struct GenerationPrompt {
 }
 
 pub struct GenerationService {
-    clients: GenerationClientRegistry,
+    clients: Arc<GenerationClientRegistry>,
     generation_models: Arc<dyn GenerationModelRepository>,
 }
 
 impl GenerationService {
     pub fn new(
-        clients: GenerationClientRegistry,
+        clients: Arc<GenerationClientRegistry>,
         generation_models: Arc<dyn GenerationModelRepository>,
     ) -> Arc<Self> {
         Arc::new(Self {

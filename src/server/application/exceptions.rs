@@ -14,6 +14,7 @@ use crate::server::domain::configuration::{
     embedding_model::EmbeddingModelRepositoryError,
     generation_model::GenerationModelRepositoryError,
     index_profile::IndexProfileRepositoryError,
+    reranker_model::RerankerModelRepositoryError,
     retrieval_profile::RetrievalProfileRepositoryError,
     sweep_template::{SweepTemplateError, SweepTemplateRepositoryError},
     vector_index::VectorIndexRepositoryError,
@@ -96,6 +97,12 @@ impl From<EmbeddingModelRepositoryError> for AppError {
 
 impl From<GenerationModelRepositoryError> for AppError {
     fn from(value: GenerationModelRepositoryError) -> Self {
+        AppError::Internal(value.to_string())
+    }
+}
+
+impl From<RerankerModelRepositoryError> for AppError {
+    fn from(value: RerankerModelRepositoryError) -> Self {
         AppError::Internal(value.to_string())
     }
 }

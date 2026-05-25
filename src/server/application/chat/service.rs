@@ -12,6 +12,7 @@ use crate::server::application::indexing::VectorIndexResolver;
 use crate::server::application::llm::ports::GenerationResponseFormat;
 use crate::server::application::llm::service::GenerationPrompt;
 use crate::server::application::llm::GenerationService;
+use crate::server::application::rerank::{rerank_fetch_k, RerankService};
 use crate::server::application::AppError;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::shared::contracts::{ChatRequest, ChatResponse, QueryHit};
@@ -30,6 +31,7 @@ pub struct ChatService {
     embedding_service: Arc<EmbeddingService>,
     vector_index_resolver: Arc<VectorIndexResolver>,
     generation_service: Arc<GenerationService>,
+    rerank_service: Arc<RerankService>,
     source_document_repository: Arc<dyn SourceDocumentRepository>,
 }
 
@@ -39,6 +41,7 @@ impl ChatService {
         embedding_service: Arc<EmbeddingService>,
         vector_index_resolver: Arc<VectorIndexResolver>,
         generation_service: Arc<GenerationService>,
+        rerank_service: Arc<RerankService>,
         source_document_repository: Arc<dyn SourceDocumentRepository>,
     ) -> Arc<Self> {
         Arc::new(Self {
@@ -46,6 +49,7 @@ impl ChatService {
             embedding_service,
             vector_index_resolver,
             generation_service,
+            rerank_service,
             source_document_repository,
         })
     }
@@ -61,6 +65,12 @@ impl ChatService {
             .retrieval_profile_resolver
             .resolve(req.retrieval_profile_id)
             .await?;
+
+        let fetch_k = if profile.reranker_model.is_some() {
+            rerank_fetch_k(top_k)
+        } else {
+            top_k
+        };
 
         let embeddings = self
             .embedding_service
@@ -90,10 +100,19 @@ impl ChatService {
         let matches = vector_index
             .query(&VectorQuery {
                 vector: query_vector,
-                top_k,
+                top_k: fetch_k,
                 filter,
             })
             .await?;
+
+        let matches = match profile.reranker_model.as_ref() {
+            Some(reranker) => {
+                self.rerank_service
+                    .rerank_matches(reranker.reranker_model_id, &req.query, matches)
+                    .await?
+            }
+            None => matches,
+        };
 
         let mut retrieved: Vec<RetrievedChunk> = Vec::with_capacity(matches.len());
         for m in matches {

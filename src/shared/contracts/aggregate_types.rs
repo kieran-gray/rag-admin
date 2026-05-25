@@ -3,6 +3,7 @@ pub const CONNECTOR: &str = "connector";
 pub const INDEXING: &str = "indexing";
 pub const EMBEDDING_MODEL_CATALOG: &str = "embedding_model_catalog";
 pub const GENERATION_MODEL_CATALOG: &str = "generation_model_catalog";
+pub const RERANKER_MODEL_CATALOG: &str = "reranker_model_catalog";
 pub const VECTOR_INDEX_CATALOG: &str = "vector_index_catalog";
 pub const INDEX_PROFILE_CATALOG: &str = "index_profile_catalog";
 pub const RETRIEVAL_PROFILE_CATALOG: &str = "retrieval_profile_catalog";

@@ -1,10 +1,11 @@
 use leptos::prelude::*;
 
 use crate::shared::contracts::{
-    AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto, EmbeddingModelCommandDto,
-    GenerationModelCommandDto, RemoveEmbeddingModelDto, RemoveGenerationModelDto,
-    RemoveVectorIndexDto, UpdateEmbeddingModelDto, UpdateGenerationModelDto, UpdateVectorIndexDto,
-    VectorIndexCommandDto,
+    AddEmbeddingModelDto, AddGenerationModelDto, AddRerankerModelDto, AddVectorIndexDto,
+    EmbeddingModelCommandDto, GenerationModelCommandDto, RemoveEmbeddingModelDto,
+    RemoveGenerationModelDto, RemoveRerankerModelDto, RemoveVectorIndexDto,
+    RerankerModelCommandDto, UpdateEmbeddingModelDto, UpdateGenerationModelDto,
+    UpdateRerankerModelDto, UpdateVectorIndexDto, VectorIndexCommandDto,
 };
 use crate::shared::reference_data::{AiProviderKind, VectorStoreKind};
 use crate::ui::components::primitives::{Dialog, InlineStatusMessage};
@@ -48,6 +49,14 @@ pub(super) fn RegistryFormDialog(
                 set_model_id.set(String::new());
             }
             Some(RegistryForm::EditGenerationModel(m)) => {
+                set_ai_kind.set(m.kind);
+                set_model_id.set(m.model);
+            }
+            Some(RegistryForm::AddRerankerModel) => {
+                set_ai_kind.set(AiProviderKind::Cloudflare);
+                set_model_id.set(String::new());
+            }
+            Some(RegistryForm::EditRerankerModel(m)) => {
                 set_ai_kind.set(m.kind);
                 set_model_id.set(m.model);
             }
@@ -138,6 +147,15 @@ pub(super) fn RegistryFormDialog(
                             set_value=set_model_id
                         />
                     }.into_any(),
+                    Some(RegistryForm::AddRerankerModel | RegistryForm::EditRerankerModel(_)) => view! {
+                        <AiKindSelect value=ai_kind set_value=set_ai_kind />
+                        <LabelledInput
+                            label="Model ID".to_string()
+                            hint="Reranker model identifier".to_string()
+                            value=model_id
+                            set_value=set_model_id
+                        />
+                    }.into_any(),
                     Some(RegistryForm::AddVectorIndex | RegistryForm::EditVectorIndex(_)) => view! {
                         <VectorKindSelect value=vector_kind set_value=set_vector_kind />
                         <LabelledInput
@@ -193,6 +211,11 @@ pub(super) fn RegistryDeleteDialog(
             DeleteTarget::GenerationModel(m) => CatalogCommand::Generation(
                 GenerationModelCommandDto::RemoveGenerationModel(RemoveGenerationModelDto {
                     model_id: m.generation_model_id,
+                }),
+            ),
+            DeleteTarget::RerankerModel(m) => CatalogCommand::Reranker(
+                RerankerModelCommandDto::RemoveRerankerModel(RemoveRerankerModelDto {
+                    model_id: m.reranker_model_id,
                 }),
             ),
             DeleteTarget::VectorIndex(i) => CatalogCommand::VectorIndex(
@@ -295,6 +318,29 @@ fn build_command(
                 }),
             ))
         }
+        RegistryForm::AddRerankerModel => {
+            if model_id.is_empty() {
+                return Err("Model id is required.".into());
+            }
+            Ok(CatalogCommand::Reranker(
+                RerankerModelCommandDto::AddRerankerModel(AddRerankerModelDto {
+                    kind: ai_kind,
+                    model: model_id,
+                }),
+            ))
+        }
+        RegistryForm::EditRerankerModel(m) => {
+            if model_id.is_empty() {
+                return Err("Model id is required.".into());
+            }
+            Ok(CatalogCommand::Reranker(
+                RerankerModelCommandDto::UpdateRerankerModel(UpdateRerankerModelDto {
+                    model_id: m.reranker_model_id,
+                    kind: ai_kind,
+                    model: model_id,
+                }),
+            ))
+        }
         RegistryForm::AddVectorIndex => {
             if name.is_empty() {
                 return Err("Index name is required.".into());
@@ -330,6 +376,8 @@ fn form_title(form: Option<&RegistryForm>) -> String {
         Some(RegistryForm::EditEmbeddingModel(_)) => "Edit embedding model".into(),
         Some(RegistryForm::AddGenerationModel) => "Add generation model".into(),
         Some(RegistryForm::EditGenerationModel(_)) => "Edit generation model".into(),
+        Some(RegistryForm::AddRerankerModel) => "Add reranker model".into(),
+        Some(RegistryForm::EditRerankerModel(_)) => "Edit reranker model".into(),
         Some(RegistryForm::AddVectorIndex) => "Add vector index".into(),
         Some(RegistryForm::EditVectorIndex(_)) => "Edit vector index".into(),
     }
@@ -343,6 +391,9 @@ fn form_subtitle(form: Option<&RegistryForm>) -> String {
         }
         Some(RegistryForm::AddGenerationModel | RegistryForm::EditGenerationModel(_)) => {
             "Used by LLM-driven chunking and synthetic dataset generation.".into()
+        }
+        Some(RegistryForm::AddRerankerModel | RegistryForm::EditRerankerModel(_)) => {
+            "Optional second-stage scorer applied after vector search.".into()
         }
         Some(RegistryForm::AddVectorIndex | RegistryForm::EditVectorIndex(_)) => {
             "Dimensions must match the embedding model that writes into it.".into()

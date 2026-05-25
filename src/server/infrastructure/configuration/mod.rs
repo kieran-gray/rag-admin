@@ -3,6 +3,7 @@ pub mod postgres_configuration_defaults_repository;
 pub mod postgres_embedding_model_repository;
 pub mod postgres_generation_model_repository;
 pub mod postgres_index_profile_repository;
+pub mod postgres_reranker_model_repository;
 pub mod postgres_retrieval_profile_repository;
 pub mod postgres_sweep_template_repository;
 pub mod postgres_vector_index_repository;
@@ -12,6 +13,7 @@ pub use postgres_configuration_defaults_repository::PostgresConfigurationDefault
 pub use postgres_embedding_model_repository::PostgresEmbeddingModelRepository;
 pub use postgres_generation_model_repository::PostgresGenerationModelRepository;
 pub use postgres_index_profile_repository::PostgresIndexProfileRepository;
+pub use postgres_reranker_model_repository::PostgresRerankerModelRepository;
 pub use postgres_retrieval_profile_repository::PostgresRetrievalProfileRepository;
 pub use postgres_sweep_template_repository::PostgresSweepTemplateRepository;
 pub use postgres_vector_index_repository::PostgresVectorIndexRepository;
