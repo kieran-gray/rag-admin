@@ -9,8 +9,8 @@ use crate::server::domain::evaluation::run::read_model::{
     EvaluationRunReadModel, EvaluationVariantResultDto, NewRunSummary,
 };
 use crate::server::domain::evaluation::run::repository::{
-    EvaluationRunRepository, EvaluationRunRepositoryError, RunListCursor, RunListPage,
-    RunListQuery, RunStatusFilter,
+    EvaluationRunRepository, EvaluationRunRepositoryError, RunKindFilter, RunListCursor,
+    RunListPage, RunListQuery, RunStatusFilter,
 };
 use crate::server::domain::evaluation::run::scoring_policy::{ScoringPolicy, ScoringWeights};
 use crate::server::domain::evaluation::value_objects::{
@@ -154,6 +154,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             let mut qb: QueryBuilder<Postgres> =
                 QueryBuilder::new("SELECT COUNT(*)::BIGINT FROM evaluation_runs WHERE 1=1");
             push_status_filter(&mut qb, &query.statuses);
+            push_kind_filter(&mut qb, &query.kinds);
             qb.build_query_scalar::<i64>()
                 .fetch_one(&self.pool)
                 .await
@@ -187,6 +188,34 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         }
         status_counts.sort_by_key(|(f, _)| status_filter_order(*f));
 
+        let kind_rows = sqlx::query(
+            "SELECT (optimization IS NOT NULL) AS is_opt, COUNT(*)::BIGINT AS count
+             FROM evaluation_runs GROUP BY is_opt",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| EvaluationRunRepositoryError::Internal(format!("kind_counts: {e}")))?;
+
+        let mut kind_counts: Vec<(RunKindFilter, u64)> = Vec::new();
+        for row in kind_rows {
+            let is_opt: bool = row
+                .try_get("is_opt")
+                .map_err(|e| EvaluationRunRepositoryError::Internal(format!("kind row: {e}")))?;
+            let count: i64 = row.try_get("count").map_err(|e| {
+                EvaluationRunRepositoryError::Internal(format!("kind count row: {e}"))
+            })?;
+            let filter = if is_opt {
+                RunKindFilter::Optimization
+            } else {
+                RunKindFilter::Manual
+            };
+            kind_counts.push((filter, count.max(0) as u64));
+        }
+        kind_counts.sort_by_key(|(f, _)| match f {
+            RunKindFilter::Optimization => 0,
+            RunKindFilter::Manual => 1,
+        });
+
         let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
             "SELECT
                 run_id, dataset_id, index_profile_id, retrieval_profile_id, document_id, document_version,
@@ -198,6 +227,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             WHERE 1=1",
         );
         push_status_filter(&mut qb, &query.statuses);
+        push_kind_filter(&mut qb, &query.kinds);
 
         if let Some(cursor) = &query.cursor {
             let parsed =
@@ -240,6 +270,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             total_matching: total_matching.max(0) as u64,
             total_all: total_all.max(0) as u64,
             status_counts,
+            kind_counts,
         })
     }
 
@@ -623,6 +654,19 @@ fn push_status_filter(qb: &mut QueryBuilder<'_, Postgres>, statuses: &[RunStatus
         sep.push_bind(status_filter_as_str(*status));
     }
     sep.push_unseparated(")");
+}
+
+fn push_kind_filter(qb: &mut QueryBuilder<'_, Postgres>, kinds: &[RunKindFilter]) {
+    if kinds.is_empty() {
+        return;
+    }
+    let optimization = kinds.contains(&RunKindFilter::Optimization);
+    let manual = kinds.contains(&RunKindFilter::Manual);
+    if optimization && !manual {
+        qb.push(" AND optimization IS NOT NULL");
+    } else if manual && !optimization {
+        qb.push(" AND optimization IS NULL");
+    }
 }
 
 fn status_filter_as_str(status: RunStatusFilter) -> &'static str {

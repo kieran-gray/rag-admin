@@ -63,6 +63,7 @@ pub fn RunStep<'a>(
                     match info.job_id.parse::<Uuid>() {
                         Ok(run_id) => {
                             selection.run_id.set(Some(run_id));
+                            selection.just_launched.set(true);
                             on_advance.run(());
                         }
                         Err(_) => set_error.set(Some(format!(
@@ -89,6 +90,7 @@ pub fn RunStep<'a>(
                     match info.job_id.parse::<Uuid>() {
                         Ok(run_id) => {
                             selection.run_id.set(Some(run_id));
+                            selection.just_launched.set(true);
                             on_advance.run(());
                         }
                         Err(_) => set_error.set(Some(format!(
@@ -170,7 +172,7 @@ pub fn RunStep<'a>(
 
             <details class="surface-raised rounded p-4">
                 <summary class="cursor-pointer text-sm muted hover:text-text">
-                    "Expert: manual variants"
+                    "Score specific variants instead"
                 </summary>
                 <div class="pt-4">
                     <EvaluationLauncher

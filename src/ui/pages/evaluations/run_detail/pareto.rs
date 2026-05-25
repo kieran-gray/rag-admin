@@ -9,7 +9,7 @@ use crate::shared::{
 use crate::ui::components::primitives::Surface;
 
 #[component]
-pub(super) fn ParetoPanel(
+pub(crate) fn ParetoPanel(
     variants: Vec<EvaluationVariantResult>,
     bucket: Option<EvaluationResultSplit>,
 ) -> impl IntoView {

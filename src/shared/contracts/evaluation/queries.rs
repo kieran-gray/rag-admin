@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::shared::{
-    ChunkingConfig, EvaluationMetrics, EvaluationRunOptions, EvaluationVariantResult, OrderedF32,
+    ChunkingConfig, EvaluationMetrics, EvaluationRunOptions, EvaluationVariantResult,
+    OptimizationConfig, OrderedF32,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -77,6 +78,18 @@ pub struct EvaluationRunDto {
     pub status: String,
     pub variants: Vec<EvaluationVariantResult>,
     pub created_at: String,
+    #[serde(default = "RunKindDto::default_manual")]
+    pub kind: RunKindDto,
+    #[serde(default)]
+    pub optimization: Option<OptimizationConfig>,
+    #[serde(default)]
+    pub document_id: Option<Uuid>,
+    #[serde(default)]
+    pub document_title: Option<String>,
+    #[serde(default)]
+    pub variant_count: u32,
+    #[serde(default)]
+    pub variants_scored: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,6 +115,58 @@ pub struct RecentEvaluationRunDto {
     pub failure_reason: Option<String>,
     pub created_at: String,
     pub best: Option<BestVariantDto>,
+    #[serde(default = "RunKindDto::default_manual")]
+    pub kind: RunKindDto,
+    #[serde(default)]
+    pub optimization: Option<OptimizationConfig>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RunKindDto {
+    Optimization,
+    Manual,
+}
+
+impl RunKindDto {
+    pub fn label(self) -> &'static str {
+        match self {
+            RunKindDto::Optimization => "Optimization",
+            RunKindDto::Manual => "Manual",
+        }
+    }
+
+    pub fn slug(self) -> &'static str {
+        match self {
+            RunKindDto::Optimization => "optimization",
+            RunKindDto::Manual => "manual",
+        }
+    }
+
+    pub fn from_slug(slug: &str) -> Option<Self> {
+        match slug {
+            "optimization" => Some(RunKindDto::Optimization),
+            "manual" => Some(RunKindDto::Manual),
+            _ => None,
+        }
+    }
+
+    pub fn from_optimization(opt: Option<&OptimizationConfig>) -> Self {
+        match opt {
+            Some(_) => RunKindDto::Optimization,
+            None => RunKindDto::Manual,
+        }
+    }
+
+    fn default_manual() -> Self {
+        RunKindDto::Manual
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RunKindFacetDto {
+    pub kind: RunKindDto,
+    pub count: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -150,6 +215,8 @@ pub struct RunListQueryDto {
     pub limit: u32,
     #[serde(default)]
     pub statuses: Vec<RunStatusFilterDto>,
+    #[serde(default)]
+    pub kinds: Vec<RunKindDto>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -165,4 +232,6 @@ pub struct RunListPageDto {
     pub total_matching: u64,
     pub total_all: u64,
     pub status_counts: Vec<RunStatusFacetDto>,
+    #[serde(default)]
+    pub kind_counts: Vec<RunKindFacetDto>,
 }

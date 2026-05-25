@@ -2,67 +2,54 @@ use std::cmp::Ordering;
 
 use leptos::prelude::*;
 use leptos_router::components::A;
-use leptos_router::hooks::{use_params_map, use_query_map};
 use uuid::Uuid;
 
 use crate::server_functions::evaluation::get_run;
 use crate::shared::contracts::EvaluationRunDto;
 use crate::shared::{evaluation_score, EvaluationResultSplit, EvaluationVariantResult};
-use crate::ui::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
+use crate::ui::components::primitives::{EmptyState, Status, StatusPill, Surface};
 
 #[component]
-pub fn ReplicateComparePage() -> impl IntoView {
-    let params = use_params_map();
-    let query = use_query_map();
+pub fn CompareTabBody(run: EvaluationRunDto, other_id: Option<Uuid>) -> impl IntoView {
+    let Some(other_id) = other_id else {
+        return view! {
+            <Surface>
+                <EmptyState
+                    title="No replication to compare yet"
+                    body="Use the Replicate button on this run's variants tab to launch a sibling run; the two will land here side-by-side.".to_string()
+                />
+            </Surface>
+        }
+        .into_any();
+    };
 
-    let left_id = Memo::new(move |_| {
-        params
-            .with(|p| p.get("run_id").unwrap_or_default().to_string())
-            .parse::<Uuid>()
-            .ok()
-    });
-    let right_id = Memo::new(move |_| {
-        query
-            .with(|q| q.get("with").unwrap_or_default().to_string())
-            .parse::<Uuid>()
-            .ok()
-    });
-
-    let runs = Resource::new(
-        move || (left_id.get(), right_id.get()),
-        move |(left, right)| async move {
-            let l = match left {
-                Some(id) => get_run(id).await.map_err(|e| e.to_string())?,
-                None => None,
-            };
-            let r = match right {
-                Some(id) => get_run(id).await.map_err(|e| e.to_string())?,
-                None => None,
-            };
-            Ok::<_, String>((l, r))
-        },
+    let other = Resource::new(
+        move || other_id,
+        |id| async move { get_run(id).await.map_err(|e| e.to_string()) },
     );
 
     view! {
-        <Transition fallback=|| view! { <p class="muted">"Loading runs…"</p> }>
-            {move || runs.get().map(|res| match res {
-                Err(e) => view! {
-                    <Surface><div class="log-line-error">{format!("Failed to load: {e}")}</div></Surface>
-                }.into_any(),
-                Ok((Some(l), Some(r))) => view! {
-                    <CompareView left=l right=r />
-                }.into_any(),
-                Ok(_) => view! {
-                    <Surface>
-                        <EmptyState
-                            title="Missing run for comparison"
-                            body="One of the runs in this comparison link wasn't found. Use the Replicate button on a finished optimization to land here with both runs populated.".to_string()
-                        />
-                    </Surface>
-                }.into_any(),
+        <Transition fallback=|| view! { <p class="muted text-sm">"Loading comparison…"</p> }>
+            {move || other.get().map(|res| {
+                let left = run.clone();
+                match res {
+                    Err(e) => view! {
+                        <Surface><div class="log-line-error text-sm">{format!("Failed to load: {e}")}</div></Surface>
+                    }.into_any(),
+                    Ok(Some(right)) => view! { <CompareView left=left right=right /> }.into_any(),
+                    Ok(None) => view! {
+                        <Surface>
+                            <EmptyState
+                                title="Missing run for comparison"
+                                body="The paired run wasn't found. It may have been removed.".to_string()
+                            />
+                        </Surface>
+                    }.into_any(),
+                }
             })}
         </Transition>
     }
+    .into_any()
 }
 
 #[component]
@@ -100,22 +87,12 @@ fn CompareView(left: EvaluationRunDto, right: EvaluationRunDto) -> impl IntoView
     };
 
     view! {
-        <div>
-            <PageHeader
-                title=format!("replicate {left_short} vs {right_short}")
-                eyebrow="Evaluations / Replication".to_string()
-                subtitle="Side-by-side champion comparison between two optimization runs over the same dataset.".to_string()
-                actions=Box::new(move || view! {
-                    <StatusPill label=verdict_label.clone() kind=verdict_kind />
-                }.into_any())
-            />
-
-            <div class="mb-4 flex items-center gap-3 flex-wrap">
-                <A href="/evaluations" attr:class="muted text-sm">"← Back to evaluations"</A>
-                <span class="muted">"·"</span>
-                <A href=format!("/runs/{left_id}") attr:class="muted text-sm">{format!("View run {left_short}")}</A>
-                <span class="muted">"·"</span>
-                <A href=format!("/runs/{right_id}") attr:class="muted text-sm">{format!("View run {right_short}")}</A>
+        <div class="space-y-4">
+            <div class="flex items-center gap-3 flex-wrap text-sm">
+                <StatusPill label=verdict_label kind=verdict_kind />
+                <A href=format!("/runs/{right_id}?tab=variants") attr:class="muted hover:text-text">
+                    {format!("Open run {right_short}")}
+                </A>
             </div>
 
             <Surface flush=true>

@@ -6,7 +6,7 @@ use crate::ui::components::primitives::Surface;
 use super::shared::{composite_ci_bounds, variant_display};
 
 #[component]
-pub(super) fn EquivalenceClassPanel(
+pub(crate) fn EquivalenceClassPanel(
     members: Vec<EvaluationVariantResult>,
     bucket: Option<EvaluationResultSplit>,
 ) -> impl IntoView {

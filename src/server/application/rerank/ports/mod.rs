@@ -1,3 +1,3 @@
 pub mod reranker;
 
-pub use reranker::{Reranker, RerankRequest, RerankScore};
+pub use reranker::{RerankRequest, RerankScore, Reranker};

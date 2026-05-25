@@ -127,16 +127,16 @@ impl WorkflowStep {
     fn label(self) -> &'static str {
         match self {
             Self::Dataset => "Dataset",
-            Self::Run => "Run",
-            Self::Results => "Results",
+            Self::Run => "Optimize",
+            Self::Results => "Monitor",
         }
     }
 
     fn hint(self) -> &'static str {
         match self {
             Self::Dataset => "Pick or generate questions",
-            Self::Run => "Launch or pick a run",
-            Self::Results => "Inspect scores",
+            Self::Run => "Find the best configuration",
+            Self::Results => "Watch progress and open results",
         }
     }
 }
@@ -349,8 +349,8 @@ fn Stepper(
 fn step_from_query(s: &str) -> Option<WorkflowStep> {
     match s {
         "dataset" | "datasets" => Some(WorkflowStep::Dataset),
-        "run" | "runs" => Some(WorkflowStep::Run),
-        "results" | "result" => Some(WorkflowStep::Results),
+        "run" | "runs" | "optimize" => Some(WorkflowStep::Run),
+        "results" | "result" | "monitor" => Some(WorkflowStep::Results),
         _ => None,
     }
 }

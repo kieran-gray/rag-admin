@@ -3,167 +3,82 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Write as _;
 
 use leptos::prelude::*;
-use leptos_router::components::A;
-use leptos_router::hooks::use_params_map;
-use uuid::Uuid;
 
-use crate::server_functions::evaluation::get_run;
-use crate::shared::contracts::{aggregate_type, EvaluationRunDto};
+use crate::shared::contracts::EvaluationRunDto;
 use crate::shared::{evaluation_score, EvaluationVariantResult};
-use crate::ui::components::app::event_bus::use_invalidator;
-use crate::ui::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
+use crate::ui::components::primitives::{EmptyState, Status, StatusPill, Surface};
 
 #[component]
-pub fn OptimizeProgressPage() -> impl IntoView {
-    let params = use_params_map();
-    let run_id = Memo::new(move |_| {
-        params
-            .with(|p| p.get("run_id").unwrap_or_default().to_string())
-            .parse::<Uuid>()
-            .ok()
-    });
-    let invalidator = use_invalidator(|e| e.from_any(&[aggregate_type::EVALUATION_RUN]));
-    let run = Resource::new(
-        move || (run_id.get(), invalidator.get()),
-        move |(id, _)| async move {
-            match id {
-                Some(id) => get_run(id).await.map_err(|e| e.to_string()),
-                None => Ok(None),
-            }
-        },
-    );
-
-    view! {
-        <Transition fallback=|| view! { <p class="muted">"Loading optimization…"</p> }>
-            {move || run.get().map(|res| match res {
-                Err(e) => view! {
-                    <Surface><div class="log-line-error">{format!("Failed to load: {e}")}</div></Surface>
-                }.into_any(),
-                Ok(None) => view! {
-                    <Surface>
-                        <EmptyState
-                            title="Run not found"
-                            body="This optimization run id is unknown or has been removed.".to_string()
-                        />
-                    </Surface>
-                }.into_any(),
-                Ok(Some(r)) => view! { <ProgressView run=r /> }.into_any(),
-            })}
-        </Transition>
-    }
-}
-
-#[component]
-fn ProgressView(run: EvaluationRunDto) -> impl IntoView {
-    let short = run.run_id.to_string().chars().take(8).collect::<String>();
-    let status_kind = match run.status.as_str() {
-        "completed" => Status::Ok,
-        "failed" => Status::Fail,
-        "running" => Status::Pending,
-        _ => Status::Neutral,
-    };
+pub fn ProgressTabBody(run: EvaluationRunDto) -> impl IntoView {
     let trial_count = run.variants.len();
     let best_so_far = best_so_far_score(&run.variants);
-    let created_at = run.created_at.clone();
-    let run_id = run.run_id.to_string();
     let status_label = run.status.clone();
-    let status_label_header = status_label.clone();
-    let is_completed = run.status == "completed";
-    let run_detail_href = format!("/runs/{run_id}");
-    let run_detail_href_banner = run_detail_href.clone();
+    let is_running = matches!(run.status.as_str(), "running" | "pending");
 
     view! {
-        <div>
-            <PageHeader
-                title=format!("optimize-{short}")
-                eyebrow="Evaluations / Optimization".to_string()
-                subtitle=format!("{trial_count} trials · {created_at}")
-                actions=Box::new(move || view! {
-                    <StatusPill label=status_label_header.clone() kind=status_kind />
-                }.into_any())
-            />
-
-            <div class="mb-4">
-                <A href="/evaluations" attr:class="muted text-sm">"← Back to evaluations"</A>
-            </div>
-
-            <div class="space-y-6">
-                {is_completed.then(move || view! {
-                    <div class="done-banner">
-                        <div class="flex items-center gap-3">
-                            <span class="text-sm">
-                                "Optimization finished. Open the full run detail to compare variants, inspect categories, and promote a champion."
-                            </span>
+        <div class="space-y-6">
+            <Surface flush=true>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-px bg-[var(--color-border)]">
+                    <div class="bg-[var(--color-surface-1)] p-4">
+                        <div class="eyebrow">"Trials evaluated"</div>
+                        <div class="text-lg mt-1 font-mono">{trial_count}</div>
+                    </div>
+                    <div class="bg-[var(--color-surface-1)] p-4">
+                        <div class="eyebrow">"Best so far · tuning"</div>
+                        <div class="text-lg mt-1 font-mono text-[var(--color-accent)]">
+                            {best_so_far
+                                .map(|s| format!("{:.1}%", s * 100.0))
+                                .unwrap_or_else(|| "—".into())}
                         </div>
-                        <div class="done-banner-actions">
-                            <A href=run_detail_href_banner attr:class="btn btn-primary btn-sm flex-shrink-0">
-                                "Open full run detail →"
-                            </A>
+                        <div class="text-xs muted mt-1">
+                            "Preliminary, on the optimizer's tuning split. Not the deployment number."
                         </div>
                     </div>
-                })}
-
-                <Surface flush=true>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-px bg-[var(--color-border)]">
-                        <div class="bg-[var(--color-surface-1)] p-4">
-                            <div class="eyebrow">"Trials evaluated"</div>
-                            <div class="text-lg mt-1 font-mono">{trial_count}</div>
-                        </div>
-                        <div class="bg-[var(--color-surface-1)] p-4">
-                            <div class="eyebrow">"Best so far · tuning"</div>
-                            <div class="text-lg mt-1 font-mono text-[var(--color-accent)]">
-                                {best_so_far
-                                    .map(|s| format!("{:.1}%", s * 100.0))
-                                    .unwrap_or_else(|| "—".into())}
-                            </div>
-                            <div class="text-xs muted mt-1">
-                                "Preliminary, on the optimizer's tuning split. Not the deployment number."
-                            </div>
-                        </div>
-                        <div class="bg-[var(--color-surface-1)] p-4">
-                            <div class="eyebrow">"Status"</div>
-                            <div class="text-lg mt-1 font-mono">{status_label}</div>
-                        </div>
+                    <div class="bg-[var(--color-surface-1)] p-4">
+                        <div class="eyebrow">"Status"</div>
+                        <div class="text-lg mt-1 font-mono">{status_label}</div>
                     </div>
-                </Surface>
+                </div>
+            </Surface>
 
-                {{
-                    let variants_for_chart = run.variants.clone();
-                    let variants_for_rungs = run.variants.clone();
-                    let variants_for_table = run.variants;
-                    view! {
-                        {(!variants_for_chart.is_empty()).then(move || view! {
-                            <Surface title="Best-so-far".to_string()>
-                                <BestSoFarChart trials=variants_for_chart />
-                            </Surface>
-                        })}
-
-                        {{
-                            let rungs = rung_summary(&variants_for_rungs);
-                            (!rungs.is_empty()).then(|| view! { <RungSummaryPanel rows=rungs /> })
-                        }}
-
-                        <Surface title="Trials".to_string()>
-                            {if variants_for_table.is_empty() {
-                                view! {
-                                    <EmptyState
-                                        title="No trials yet"
-                                        body="The optimizer is warming up; trials will appear here as they're scored.".to_string()
-                                    />
-                                }.into_any()
-                            } else {
-                                view! { <TrialList trials=variants_for_table /> }.into_any()
-                            }}
+            {{
+                let variants_for_chart = run.variants.clone();
+                let variants_for_rungs = run.variants.clone();
+                let variants_for_table = run.variants;
+                view! {
+                    {(!variants_for_chart.is_empty()).then(move || view! {
+                        <Surface title="Best-so-far".to_string()>
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-xs muted">
+                                    "Running best composite across trials, with the leader's 95% confidence interval as a band. The plateau tells you when the optimizer stopped finding improvements."
+                                </span>
+                                {is_running.then(|| view! {
+                                    <StatusPill label="Updating live".to_string() kind=Status::Pending />
+                                })}
+                            </div>
+                            <BestSoFarChart trials=variants_for_chart />
                         </Surface>
+                    })}
 
-                        {(!is_completed).then(move || view! {
-                            <div class="text-xs muted text-center">
-                                <A href=run_detail_href attr:class="muted">"Open full run detail →"</A>
-                            </div>
-                        })}
-                    }
-                }}
-            </div>
+                    {{
+                        let rungs = rung_summary(&variants_for_rungs);
+                        (!rungs.is_empty()).then(|| view! { <RungSummaryPanel rows=rungs /> })
+                    }}
+
+                    <Surface title="Trials".to_string()>
+                        {if variants_for_table.is_empty() {
+                            view! {
+                                <EmptyState
+                                    title="No trials yet"
+                                    body="The optimizer is warming up; trials will appear here as they're scored.".to_string()
+                                />
+                            }.into_any()
+                        } else {
+                            view! { <TrialList trials=variants_for_table /> }.into_any()
+                        }}
+                    </Surface>
+                }
+            }}
         </div>
     }
 }
@@ -232,9 +147,6 @@ fn BestSoFarChart(trials: Vec<EvaluationVariantResult>) -> impl IntoView {
     let final_score = best.last().map(|(s, _, _)| *s).unwrap_or(0.0);
 
     view! {
-        <div class="text-xs muted mb-2">
-            "Running best composite across trials, with the leader's 95% confidence interval as a band. The plateau tells you when the optimizer stopped finding improvements."
-        </div>
         <svg
             xmlns="http://www.w3.org/2000/svg"
             viewBox=svg_view_box
@@ -305,7 +217,8 @@ fn BestSoFarChart(trials: Vec<EvaluationVariantResult>) -> impl IntoView {
                 {format!("Trial 1 … Trial {}  ·  best = {:.1}%", best.len(), final_score * 100.0)}
             </text>
         </svg>
-    }.into_any()
+    }
+    .into_any()
 }
 
 fn parse_trial_rung(label: &str) -> Option<(u32, u32)> {
@@ -548,11 +461,6 @@ fn collapse_trials(variants: Vec<EvaluationVariantResult>) -> (Vec<TrialRow>, bo
         }
     }
 
-    let has_split_info = overall_max_rung.is_some()
-        || buckets
-            .values()
-            .any(|b| b.validation.is_some() || b.holdout.is_some());
-
     let mut rows: Vec<TrialRow> = buckets
         .into_values()
         .filter_map(|bucket| {
@@ -586,5 +494,8 @@ fn collapse_trials(variants: Vec<EvaluationVariantResult>) -> (Vec<TrialRow>, bo
             .partial_cmp(&evaluation_score(&a.variant.metrics))
             .unwrap_or(Ordering::Equal)
     });
+    let has_split_info = rows
+        .iter()
+        .any(|r| !matches!(r.outcome, TrialOutcome::Unknown));
     (rows, has_split_info)
 }

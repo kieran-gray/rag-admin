@@ -19,6 +19,12 @@ pub enum RunStatusFilter {
     Pending,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RunKindFilter {
+    Optimization,
+    Manual,
+}
+
 #[derive(Debug, Clone)]
 pub struct RunListCursor {
     pub created_at: String,
@@ -30,6 +36,7 @@ pub struct RunListQuery {
     pub cursor: Option<RunListCursor>,
     pub limit: u32,
     pub statuses: Vec<RunStatusFilter>,
+    pub kinds: Vec<RunKindFilter>,
 }
 
 #[derive(Debug, Clone)]
@@ -39,6 +46,7 @@ pub struct RunListPage {
     pub total_matching: u64,
     pub total_all: u64,
     pub status_counts: Vec<(RunStatusFilter, u64)>,
+    pub kind_counts: Vec<(RunKindFilter, u64)>,
 }
 
 #[async_trait]

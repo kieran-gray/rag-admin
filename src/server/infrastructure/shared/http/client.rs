@@ -21,7 +21,7 @@ impl HttpClient for ReqwestHttpClient {
 impl ReqwestHttpClient {
     pub fn new() -> Result<Self, AppError> {
         let client = Client::builder()
-            .timeout(Duration::from_mins(1))
+            .timeout(Duration::from_mins(15))
             .build()
             .map_err(|e| AppError::Internal(format!("http client build: {e}")))?;
         Ok(Self { client })

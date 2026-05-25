@@ -39,8 +39,7 @@ fn classify(event: &RerankerModelCatalogEvent) -> CatalogProjectorAction<Reranke
 #[cfg(test)]
 mod tests {
     use super::super::events::{
-        RerankerModelAdded, RerankerModelCatalogCreated, RerankerModelRemoved,
-        RerankerModelUpdated,
+        RerankerModelAdded, RerankerModelCatalogCreated, RerankerModelRemoved, RerankerModelUpdated,
     };
     use super::*;
     use crate::shared::reference_data::AiProviderKind;
@@ -48,11 +47,10 @@ mod tests {
 
     #[test]
     fn catalog_created_classifies_as_noop() {
-        let ev = RerankerModelCatalogEvent::RerankerModelCatalogCreated(
-            RerankerModelCatalogCreated {
+        let ev =
+            RerankerModelCatalogEvent::RerankerModelCatalogCreated(RerankerModelCatalogCreated {
                 catalog_id: Uuid::nil(),
-            },
-        );
+            });
         assert!(matches!(classify(&ev), CatalogProjectorAction::Noop));
     }
 
@@ -90,9 +88,8 @@ mod tests {
     #[test]
     fn removed_event_yields_remove_with_same_id() {
         let id = Uuid::new_v4();
-        let ev = RerankerModelCatalogEvent::RerankerModelRemoved(RerankerModelRemoved {
-            model_id: id,
-        });
+        let ev =
+            RerankerModelCatalogEvent::RerankerModelRemoved(RerankerModelRemoved { model_id: id });
         let CatalogProjectorAction::Remove(carried) = classify(&ev) else {
             panic!("expected remove");
         };

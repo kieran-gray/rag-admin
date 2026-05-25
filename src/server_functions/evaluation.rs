@@ -9,7 +9,9 @@ use crate::shared::contracts::{
     RunListQueryDto, RunOptimizationRequestDto,
 };
 #[cfg(feature = "ssr")]
-use crate::shared::contracts::{RunStatusFacetDto, RunStatusFilterDto};
+use crate::shared::contracts::{
+    RunKindDto, RunKindFacetDto, RunStatusFacetDto, RunStatusFilterDto,
+};
 
 #[cfg(feature = "ssr")]
 use crate::server::application::evaluation::StartDatasetGenerationRequest;
@@ -21,7 +23,7 @@ use crate::server::domain::evaluation::run::aggregate::EvaluationRunStatus;
 use crate::server::domain::evaluation::run::read_model::EvaluationRunReadModel;
 #[cfg(feature = "ssr")]
 use crate::server::domain::evaluation::run::repository::{
-    RunListCursor, RunListQuery, RunStatusFilter,
+    RunKindFilter, RunListCursor, RunListQuery, RunStatusFilter,
 };
 #[cfg(feature = "ssr")]
 use crate::server::setup::compose::evaluation::EvaluationServices;
@@ -300,12 +302,27 @@ pub async fn get_run(run_id: Uuid) -> Result<Option<EvaluationRunDto>, ServerFnE
         .await
         .map_err(|e| map_app_error(&e))?;
 
-    Ok(run.map(|r| EvaluationRunDto {
-        run_id: r.run_id,
-        dataset_id: r.dataset_id,
-        status: r.status.as_str().to_string(),
-        variants: r.variant_results.into_iter().map(Into::into).collect(),
-        created_at: r.created_at.to_string(),
+    let ingestion = ctx::<Arc<IngestionServices>>()?;
+    let documents = &ingestion.source_document_query_service;
+    let doc_index = build_doc_index(documents).await?;
+
+    Ok(run.map(|r| {
+        let optimization_dto = r.optimization.clone().map(Into::into);
+        let kind = RunKindDto::from_optimization(optimization_dto.as_ref());
+        let document_title = doc_index.get(&r.document_id).cloned();
+        EvaluationRunDto {
+            run_id: r.run_id,
+            dataset_id: r.dataset_id,
+            status: r.status.as_str().to_string(),
+            variants: r.variant_results.into_iter().map(Into::into).collect(),
+            created_at: r.created_at.to_string(),
+            kind,
+            optimization: optimization_dto,
+            document_id: Some(r.document_id),
+            document_title,
+            variant_count: r.variants_count,
+            variants_scored: r.variants_scored,
+        }
     }))
 }
 
@@ -353,6 +370,14 @@ pub async fn get_evaluation_runs_page(
                 RunStatusFilterDto::Pending => RunStatusFilter::Pending,
             })
             .collect(),
+        kinds: query
+            .kinds
+            .iter()
+            .map(|k| match k {
+                RunKindDto::Optimization => RunKindFilter::Optimization,
+                RunKindDto::Manual => RunKindFilter::Manual,
+            })
+            .collect(),
     };
 
     let services = ctx::<Arc<EvaluationServices>>()?;
@@ -382,6 +407,15 @@ pub async fn get_evaluation_runs_page(
         })
         .collect();
 
+    let kind_counts = page
+        .kind_counts
+        .into_iter()
+        .map(|(filter, count)| RunKindFacetDto {
+            kind: kind_filter_to_dto(filter),
+            count,
+        })
+        .collect();
+
     let next_cursor = page
         .next_cursor
         .as_ref()
@@ -393,6 +427,7 @@ pub async fn get_evaluation_runs_page(
         total_matching: page.total_matching,
         total_all: page.total_all,
         status_counts,
+        kind_counts,
     })
 }
 
@@ -418,6 +453,14 @@ fn status_filter_to_dto(filter: RunStatusFilter) -> RunStatusFilterDto {
         RunStatusFilter::Running => RunStatusFilterDto::Running,
         RunStatusFilter::Failed => RunStatusFilterDto::Failed,
         RunStatusFilter::Pending => RunStatusFilterDto::Pending,
+    }
+}
+
+#[cfg(feature = "ssr")]
+fn kind_filter_to_dto(filter: RunKindFilter) -> RunKindDto {
+    match filter {
+        RunKindFilter::Optimization => RunKindDto::Optimization,
+        RunKindFilter::Manual => RunKindDto::Manual,
     }
 }
 
@@ -462,6 +505,9 @@ fn map_run_to_dto(
         _ => None,
     };
 
+    let optimization_dto = run.optimization.clone().map(Into::into);
+    let kind = RunKindDto::from_optimization(optimization_dto.as_ref());
+
     RecentEvaluationRunDto {
         run_id: run.run_id,
         dataset_id: run.dataset_id,
@@ -473,5 +519,7 @@ fn map_run_to_dto(
         failure_reason,
         created_at: run.created_at.to_string(),
         best,
+        kind,
+        optimization: optimization_dto,
     }
 }

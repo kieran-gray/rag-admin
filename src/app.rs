@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 use leptos_meta::{provide_meta_context, MetaTags, Title};
-use leptos_router::hooks::use_navigate;
+use leptos_router::hooks::{use_navigate, use_params_map, use_query_map};
 use leptos_router::{
     components::{Route, Router, Routes},
     NavigateOptions, ParamSegment, StaticSegment,
@@ -17,10 +17,7 @@ use crate::ui::pages::{
     document_detail::DocumentDetailPage,
     documents::{DocumentByIdRedirect, DocumentsPage},
     evaluate::{EvaluateByIdRedirect, EvaluatePage},
-    evaluations::{
-        DatasetDetailPage, EvaluationsPage, OptimizeProgressPage, ReplicateComparePage,
-        RunDetailPage,
-    },
+    evaluations::{DatasetDetailPage, EvaluationsPage, RunPage},
     playground::{chat::ChatPage, embed::EmbedPage, retrieve::RetrievePage},
 };
 
@@ -37,6 +34,39 @@ fn RedirectTo(to: &'static str) -> impl IntoView {
     });
 
     view! { <p class="muted">"Redirecting…"</p> }
+}
+
+struct LegacyRunTabRedirect;
+
+impl LegacyRunTabRedirect {
+    fn progress() -> impl IntoView {
+        Self::redirect("progress")
+    }
+
+    fn compare() -> impl IntoView {
+        Self::redirect("compare")
+    }
+
+    fn redirect(tab: &'static str) -> impl IntoView {
+        let params = use_params_map();
+        let query = use_query_map();
+        Effect::new(move |_| {
+            let run_id = params.with(|p| p.get("run_id").unwrap_or_default().to_string());
+            let with = query.with(|q| q.get("with").map(|t| t.to_string()));
+            let target = match with {
+                Some(w) => format!("/runs/{run_id}?tab={tab}&with={w}"),
+                None => format!("/runs/{run_id}?tab={tab}"),
+            };
+            use_navigate()(
+                &target,
+                NavigateOptions {
+                    replace: true,
+                    ..Default::default()
+                },
+            );
+        });
+        view! { <p class="muted">"Redirecting…"</p> }
+    }
 }
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
@@ -105,7 +135,7 @@ pub fn App() -> impl IntoView {
                     <Route path=StaticSegment("evaluations") view=EvaluationsPage />
                     <Route
                         path=(StaticSegment("runs"), ParamSegment("run_id"))
-                        view=RunDetailPage
+                        view=RunPage
                     />
                     <Route
                         path=(
@@ -113,7 +143,7 @@ pub fn App() -> impl IntoView {
                             ParamSegment("run_id"),
                             StaticSegment("optimize"),
                         )
-                        view=OptimizeProgressPage
+                        view=LegacyRunTabRedirect::progress
                     />
                     <Route
                         path=(
@@ -121,7 +151,7 @@ pub fn App() -> impl IntoView {
                             ParamSegment("run_id"),
                             StaticSegment("replicate"),
                         )
-                        view=ReplicateComparePage
+                        view=LegacyRunTabRedirect::compare
                     />
                     <Route
                         path=(StaticSegment("datasets"), ParamSegment("dataset_id"))

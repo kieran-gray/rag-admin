@@ -77,9 +77,7 @@ impl RerankerModelRepository for PostgresRerankerModelRepository {
                 .bind(model_id)
                 .fetch_optional(&self.pool)
                 .await
-                .map_err(|e| {
-                    RerankerModelRepositoryError::Internal(format!("find_by_id: {e}"))
-                })?;
+                .map_err(|e| RerankerModelRepositoryError::Internal(format!("find_by_id: {e}")))?;
         Ok(row.map(Into::into))
     }
 }

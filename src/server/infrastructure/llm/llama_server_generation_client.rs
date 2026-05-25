@@ -23,7 +23,10 @@ impl LlamaServerGenerationClient {
 }
 
 pub fn register(registry: &mut GenerationClientRegistry, api: Arc<LlamaServerApi>) {
-    registry.register(AiProviderKind::LlamaServer, LlamaServerGenerationClient::new(api));
+    registry.register(
+        AiProviderKind::LlamaServer,
+        LlamaServerGenerationClient::new(api),
+    );
 }
 
 #[derive(Serialize)]
@@ -106,9 +109,8 @@ impl GenerationClient for LlamaServerGenerationClient {
         let url = format!("{base_url}/v1/chat/completions");
 
         let body = build_chat_request(request);
-        let body_bytes = serde_json::to_vec(&body).map_err(|e| {
-            AppError::Internal(format!("encode llama-server generate body: {e}"))
-        })?;
+        let body_bytes = serde_json::to_vec(&body)
+            .map_err(|e| AppError::Internal(format!("encode llama-server generate body: {e}")))?;
 
         let resp = self
             .api

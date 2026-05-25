@@ -32,10 +32,12 @@ impl RerankerModelCatalogCommandHandler {
 impl From<RerankerModelCommandDto> for RerankerModelCatalogCommand {
     fn from(value: RerankerModelCommandDto) -> Self {
         match value {
-            RerankerModelCommandDto::AddRerankerModel(d) => Self::AddRerankerModel(AddRerankerModel {
-                kind: d.kind,
-                model: d.model,
-            }),
+            RerankerModelCommandDto::AddRerankerModel(d) => {
+                Self::AddRerankerModel(AddRerankerModel {
+                    kind: d.kind,
+                    model: d.model,
+                })
+            }
             RerankerModelCommandDto::UpdateRerankerModel(d) => {
                 Self::UpdateRerankerModel(UpdateRerankerModel {
                     model_id: d.model_id,

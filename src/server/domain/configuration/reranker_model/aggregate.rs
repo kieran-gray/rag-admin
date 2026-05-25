@@ -299,12 +299,11 @@ mod tests {
 
     #[test]
     fn replay_with_event_before_creation_returns_none() {
-        let events =
-            vec![RerankerModelCatalogEvent::RerankerModelRemoved(
-                RerankerModelRemoved {
-                    model_id: Uuid::new_v4(),
-                },
-            )];
+        let events = vec![RerankerModelCatalogEvent::RerankerModelRemoved(
+            RerankerModelRemoved {
+                model_id: Uuid::new_v4(),
+            },
+        )];
         assert!(RerankerModelCatalog::from_events(&events).is_none());
     }
 

@@ -8,6 +8,7 @@ pub struct EvaluateSelection {
     pub dataset_id: RwSignal<Option<Uuid>>,
     pub run_id: RwSignal<Option<Uuid>>,
     pub index_profile_id: RwSignal<Option<Uuid>>,
+    pub just_launched: RwSignal<bool>,
 }
 
 impl EvaluateSelection {
@@ -26,6 +27,7 @@ impl EvaluateSelection {
             dataset_id: RwSignal::new(initial_dataset),
             run_id: RwSignal::new(initial_run),
             index_profile_id: RwSignal::new(initial_index_profile),
+            just_launched: RwSignal::new(false),
         }
     }
 }

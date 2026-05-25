@@ -1,6 +1,9 @@
 use leptos::prelude::*;
 
-use crate::shared::contracts::{BestVariantDto, RecentEvaluationRunDto, RunStatusFilterDto};
+use crate::shared::contracts::{
+    BestVariantDto, RecentEvaluationRunDto, RunKindDto, RunStatusFilterDto,
+};
+use crate::shared::OptimizationBudget;
 use crate::ui::components::primitives::{
     SkeletonColumn, SkeletonRows, Status, StatusPill, TitleCell,
 };
@@ -90,10 +93,7 @@ fn RunRow(run: RecentEvaluationRunDto) -> impl IntoView {
                 />
             </td>
             <td>
-                {match run.best.as_ref() {
-                    Some(best) => view! { <BestVariantCell best=best.clone() /> }.into_any(),
-                    None => view! { <span class="faint text-xs">"—"</span> }.into_any(),
-                }}
+                <TopVariantCell run=run.clone() />
             </td>
             <td class="text-right">
                 {match run.best.as_ref() {
@@ -140,29 +140,100 @@ fn RunStatusCell(
 }
 
 #[component]
-fn BestVariantCell(best: BestVariantDto) -> impl IntoView {
+fn TopVariantCell(run: RecentEvaluationRunDto) -> impl IntoView {
+    let kind = run.kind;
+    let kind_line = kind_summary(&run);
+
+    view! {
+        <div class="flex flex-col gap-0.5 min-w-0">
+            <div class="flex items-center gap-2 min-w-0">
+                <KindChip kind=kind />
+                <span class="text-xs muted truncate">{kind_line}</span>
+            </div>
+            {match run.best.as_ref() {
+                Some(best) => view! { <BestVariantSubline best=best.clone() /> }.into_any(),
+                None => view! { <div class="faint text-xs">"—"</div> }.into_any(),
+            }}
+        </div>
+    }
+}
+
+#[component]
+fn KindChip(kind: RunKindDto) -> impl IntoView {
+    let class = match kind {
+        RunKindDto::Optimization => {
+            "pill text-xs whitespace-nowrap bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
+        }
+        RunKindDto::Manual => "pill text-xs whitespace-nowrap pill-neutral",
+    };
+    view! {
+        <span class=class>{kind.label()}</span>
+    }
+}
+
+#[component]
+fn BestVariantSubline(best: BestVariantDto) -> impl IntoView {
     let label = best.label.clone();
     let metrics = best.metrics.clone();
     let top_k = best.options.top_k;
     let min_score = best.options.min_score();
 
+    let title_attr = label.clone();
     view! {
-        <div class="flex flex-col gap-0.5 min-w-0">
-            <div class="flex items-center gap-2 min-w-0">
-                <span class="font-mono text-xs truncate" title=label.clone()>{label.clone()}</span>
-                <span class="faint text-xs whitespace-nowrap">
-                    {format!("k={top_k} · min {min_score:.2}")}
-                </span>
-            </div>
-            <div class="faint text-xs font-mono whitespace-nowrap">
+        <div class="flex items-center gap-2 min-w-0">
+            <span class="font-mono text-xs truncate" title=title_attr>{label}</span>
+            <span class="faint text-xs whitespace-nowrap">
+                {format!("k={top_k} · min {min_score:.2}")}
+            </span>
+            <span class="faint text-xs font-mono whitespace-nowrap">
                 {format!(
-                    "R {:.0} · P {:.0} · IoU {:.0}",
+                    "· R {:.0} · P {:.0} · IoU {:.0}",
                     metrics.recall_mean * 100.0,
                     metrics.precision_mean * 100.0,
                     metrics.iou_mean * 100.0,
                 )}
-            </div>
+            </span>
         </div>
+    }
+}
+
+fn kind_summary(run: &RecentEvaluationRunDto) -> String {
+    match run.kind {
+        RunKindDto::Optimization => {
+            let budget = run
+                .optimization
+                .as_ref()
+                .map(|o| budget_label(o.budget))
+                .unwrap_or("");
+            let in_flight = matches!(run.status.as_str(), "running" | "pending");
+            if in_flight {
+                if budget.is_empty() {
+                    format!("{} trials so far", run.variants_scored)
+                } else {
+                    format!("{budget} · {} trials so far", run.variants_scored)
+                }
+            } else if budget.is_empty() {
+                String::new()
+            } else {
+                budget.to_string()
+            }
+        }
+        RunKindDto::Manual => {
+            let count = run.variant_count;
+            if count == 1 {
+                "1 variant".to_string()
+            } else {
+                format!("{count} variants")
+            }
+        }
+    }
+}
+
+fn budget_label(budget: OptimizationBudget) -> &'static str {
+    match budget {
+        OptimizationBudget::Quick => "Quick",
+        OptimizationBudget::Thorough => "Thorough",
+        OptimizationBudget::Exhaustive => "Exhaustive",
     }
 }
 

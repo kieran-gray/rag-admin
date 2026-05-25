@@ -7,15 +7,16 @@ use crate::server::application::configuration::{
     ConfigurationQueryService, EmbeddingModelCatalogCommandHandler,
     GenerationModelCatalogCommandHandler, IndexProfileCatalogCommandHandler,
     IndexProfileQueryService, RerankerModelCatalogCommandHandler,
-    RetrievalProfileCatalogCommandHandler, RetrievalProfileQueryService, SweepTemplateCommandHandler,
-    SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
+    RetrievalProfileCatalogCommandHandler, RetrievalProfileQueryService,
+    SweepTemplateCommandHandler, SweepTemplateQueryService, VectorIndexCatalogCommandHandler,
 };
 use crate::shared::contracts::{
-    AddEmbeddingModelDto, AddGenerationModelDto, AddVectorIndexDto,
+    AddEmbeddingModelDto, AddGenerationModelDto, AddRerankerModelDto, AddVectorIndexDto,
     ChunkingConfigurationCommandDto, CreateChunkingConfigurationDto, CreateIndexProfileDto,
     CreateRetrievalProfileDto, CreateSweepTemplateDto, EmbeddingModelCommandDto,
-    GenerationModelCommandDto, IndexProfileCommandDto, RetrievalProfileCommandDto,
-    SetDefaultSweepTemplateDto, SweepTemplateCommandDto, VectorIndexCommandDto,
+    GenerationModelCommandDto, IndexProfileCommandDto, RerankerModelCommandDto,
+    RetrievalProfileCommandDto, SetDefaultSweepTemplateDto, SweepTemplateCommandDto,
+    VectorIndexCommandDto,
 };
 use crate::shared::reference_data::{AiProviderKind, VectorStoreKind};
 use crate::shared::{
@@ -28,8 +29,9 @@ const DEFAULT_INDEX_PROFILE_NAME: &str = "default";
 const DEFAULT_RETRIEVAL_PROFILE_NAME: &str = "default";
 const DEFAULT_CHUNKING_NAME: &str = "darn-500-50";
 const DEFAULT_VECTOR_INDEX_NAME: &str = "default-pgvector";
-const DEFAULT_EMBEDDING_MODEL: &str = "qwen3-embedding-0.6b";
-const DEFAULT_GENERATION_MODEL: &str = "gemma3-12b";
+const DEFAULT_EMBEDDING_MODEL: &str = "qwen3-embedding:0.6b";
+const DEFAULT_GENERATION_MODEL: &str = "gemma3:12b-it-qat";
+const DEFAULT_RERANKER_MODEL: &str = "qwen3-reranker-0.6b";
 const DEFAULT_TOP_K: u32 = 8;
 const DEFAULT_MIN_SCORE_MILLI: u32 = 400;
 
@@ -45,6 +47,11 @@ struct EmbeddingSeed {
 }
 
 struct GenerationSeed {
+    kind: AiProviderKind,
+    model: &'static str,
+}
+
+struct RerankerSeed {
     kind: AiProviderKind,
     model: &'static str,
 }
@@ -67,7 +74,7 @@ const EMBEDDING_SEEDS: &[EmbeddingSeed] = &[
         dimensions: 1024,
     },
     EmbeddingSeed {
-        kind: AiProviderKind::LlamaServer,
+        kind: AiProviderKind::Ollama,
         model: DEFAULT_EMBEDDING_MODEL,
         dimensions: 1024,
     },
@@ -83,8 +90,19 @@ const GENERATION_SEEDS: &[GenerationSeed] = &[
         model: "@cf/google/gemma-4-26b-a4b-it",
     },
     GenerationSeed {
-        kind: AiProviderKind::LlamaServer,
+        kind: AiProviderKind::Ollama,
         model: DEFAULT_GENERATION_MODEL,
+    },
+];
+
+const RERANKER_SEEDS: &[RerankerSeed] = &[
+    RerankerSeed {
+        kind: AiProviderKind::Cloudflare,
+        model: "@cf/baai/bge-reranker-base",
+    },
+    RerankerSeed {
+        kind: AiProviderKind::LlamaServer,
+        model: DEFAULT_RERANKER_MODEL,
     },
 ];
 
@@ -164,14 +182,20 @@ pub async fn seed_if_empty(
     retrieval_profile_query: &Arc<RetrievalProfileQueryService>,
     embedding_handler: &Arc<EmbeddingModelCatalogCommandHandler>,
     generation_handler: &Arc<GenerationModelCatalogCommandHandler>,
-    _reranker_handler: &Arc<RerankerModelCatalogCommandHandler>,
+    reranker_handler: &Arc<RerankerModelCatalogCommandHandler>,
     vector_index_handler: &Arc<VectorIndexCatalogCommandHandler>,
     chunking_handler: &Arc<ChunkingConfigurationCatalogCommandHandler>,
     index_profile_handler: &Arc<IndexProfileCatalogCommandHandler>,
     retrieval_profile_handler: &Arc<RetrievalProfileCatalogCommandHandler>,
     sweep_template_handler: &Arc<SweepTemplateCommandHandler>,
 ) -> Result<(), String> {
-    seed_models_if_empty(configuration_query, embedding_handler, generation_handler).await?;
+    seed_models_if_empty(
+        configuration_query,
+        embedding_handler,
+        generation_handler,
+        reranker_handler,
+    )
+    .await?;
     seed_vector_indexes_if_empty(configuration_query, vector_index_handler).await?;
     seed_chunking_configurations_if_empty(chunking_query, configuration_query, chunking_handler)
         .await?;
@@ -345,6 +369,7 @@ async fn seed_models_if_empty(
     configuration_query: &Arc<ConfigurationQueryService>,
     embedding_handler: &Arc<EmbeddingModelCatalogCommandHandler>,
     generation_handler: &Arc<GenerationModelCatalogCommandHandler>,
+    reranker_handler: &Arc<RerankerModelCatalogCommandHandler>,
 ) -> Result<(), String> {
     let catalog = configuration_query.get().await.map_err(|e| e.to_string())?;
 
@@ -374,6 +399,20 @@ async fn seed_models_if_empty(
                 ))
                 .await
                 .map_err(|e| format!("seed generation {}: {e}", seed.model))?;
+        }
+    }
+
+    if catalog.reranker_models.is_empty() {
+        for seed in RERANKER_SEEDS {
+            reranker_handler
+                .handle_dto(RerankerModelCommandDto::AddRerankerModel(
+                    AddRerankerModelDto {
+                        kind: seed.kind,
+                        model: seed.model.to_owned(),
+                    },
+                ))
+                .await
+                .map_err(|e| format!("seed reranker {}: {e}", seed.model))?;
         }
     }
 

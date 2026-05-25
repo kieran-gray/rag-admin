@@ -44,17 +44,13 @@ pub(super) fn RegistryFormDialog(
                 set_model_id.set(m.model);
                 set_dims.set(m.dimensions);
             }
-            Some(RegistryForm::AddGenerationModel) => {
+            Some(RegistryForm::AddGenerationModel | RegistryForm::AddRerankerModel) => {
                 set_ai_kind.set(AiProviderKind::Cloudflare);
                 set_model_id.set(String::new());
             }
             Some(RegistryForm::EditGenerationModel(m)) => {
                 set_ai_kind.set(m.kind);
                 set_model_id.set(m.model);
-            }
-            Some(RegistryForm::AddRerankerModel) => {
-                set_ai_kind.set(AiProviderKind::Cloudflare);
-                set_model_id.set(String::new());
             }
             Some(RegistryForm::EditRerankerModel(m)) => {
                 set_ai_kind.set(m.kind);

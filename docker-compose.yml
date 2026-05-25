@@ -30,6 +30,8 @@ services:
   llama-swap:
     image: ${LLAMA_SWAP_IMAGE:-ghcr.io/mostlygeek/llama-swap:cuda}
     restart: "no"
+    profiles:
+      - llama
     ports:
       - "8080:8080"
     volumes:
@@ -55,9 +57,58 @@ services:
               count: all
               capabilities: [gpu]
 
+  llama-pull-models:
+    image: ${LLAMA_SWAP_IMAGE:-ghcr.io/mostlygeek/llama-swap:cuda}
+    profiles: ["pull"]
+    restart: "no"
+    volumes:
+      - llama-models:/models
+    environment:
+      - HF_TOKEN=${HF_ACCESS_TOKEN}
+      - LLAMA_CACHE=/models
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -ue
+        pull() {
+          model="$$1"
+          shift
+          echo ">>> Pre-pulling $$model"
+          before=$$(du -sb /models 2>/dev/null | cut -f1 || echo 0)
+          /app/llama-server -hf "$$model" --port 9999 -ngl 0 -c 256 "$$@" 2>&1 &
+          pid=$$!
+          ticks=0
+          loaded=0
+          while kill -0 "$$pid" 2>/dev/null; do
+            if curl -fs http://localhost:9999/health >/dev/null 2>&1; then
+              echo ">>> Loaded $$model"
+              loaded=1
+              break
+            fi
+            ticks=$$((ticks + 1))
+            if [ $$((ticks % 10)) -eq 0 ]; then
+              size=$$(du -sh /models 2>/dev/null | cut -f1 || echo "?")
+              delta=$$(( $$(du -sb /models 2>/dev/null | cut -f1 || echo 0) - before ))
+              echo "    [progress] /models=$$size  (+$$((delta / 1048576)) MiB since start)"
+            fi
+            sleep 3
+          done
+          kill "$$pid" 2>/dev/null || true
+          wait "$$pid" 2>/dev/null || true
+          if [ "$$loaded" -ne 1 ]; then
+            echo ">>> FAILED $$model" >&2
+            return 1
+          fi
+          echo ">>> Done $$model"
+        }
+        pull "google/gemma-3-4b-it-qat-q4_0-gguf:Q4_0" || exit 1
+        pull "Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0" --embedding --pooling mean || exit 1
+        pull "mradermacher/Qwen3-Reranker-0.6B-GGUF:Q8_0" --reranking --pooling rank || exit 1
+
   ollama:
     image: ollama/ollama:latest
-    profiles: ["ollama"]
+    profiles: 
+      - "ollama"
     restart: "no"
     ports:
       - "11435:11435"
@@ -68,6 +119,7 @@ services:
       - OLLAMA_KEEP_ALIVE=10m
       - OLLAMA_MAX_LOADED_MODELS=1
       - OLLAMA_NUM_PARALLEL=1
+      - OLLAMA_KV_CACHE_TYPE=q8_0
       - OLLAMA_HOST=0.0.0.0:11435
     healthcheck:
       test: [ "CMD", "ollama", "list" ]
@@ -88,7 +140,8 @@ services:
 
   ollama-pull-embedding:
     image: ollama/ollama:latest
-    profiles: ["ollama"]
+    profiles: 
+      - "ollama"
     restart: "no"
     depends_on:
       ollama:
@@ -100,7 +153,8 @@ services:
 
   ollama-pull-generation:
     image: ollama/ollama:latest
-    profiles: ["ollama"]
+    profiles: 
+      - "ollama"
     restart: "no"
     depends_on:
       ollama:

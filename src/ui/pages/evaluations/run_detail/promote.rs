@@ -3,7 +3,7 @@ use leptos::prelude::*;
 use crate::ui::components::primitives::Surface;
 
 #[derive(Clone, Copy)]
-pub(super) struct PromoteHandle {
+pub(crate) struct PromoteHandle {
     pub run_id: uuid::Uuid,
     pub busy_label: ReadSignal<Option<String>>,
     pub set_busy_label: WriteSignal<Option<String>>,
@@ -46,7 +46,7 @@ impl PromoteHandle {
 }
 
 #[component]
-pub(super) fn VariantSaveButton(
+pub(crate) fn VariantSaveButton(
     variant_label: String,
     is_leader: bool,
     promote: PromoteHandle,
@@ -85,7 +85,7 @@ pub(super) fn VariantSaveButton(
 }
 
 #[component]
-pub(super) fn ReplicatePanel(run_id: uuid::Uuid) -> impl IntoView {
+pub(crate) fn ReplicatePanel(run_id: uuid::Uuid) -> impl IntoView {
     use crate::server_functions::evaluation::replicate_optimization_run;
     let (replicating, set_replicating) = signal(false);
     let (error, set_error) = signal::<Option<String>>(None);
@@ -96,7 +96,7 @@ pub(super) fn ReplicatePanel(run_id: uuid::Uuid) -> impl IntoView {
         leptos::task::spawn_local(async move {
             match replicate_optimization_run(run_id).await {
                 Ok(new_run_id) => {
-                    let url = format!("/runs/{new_run_id}/replicate?with={run_id}");
+                    let url = format!("/runs/{new_run_id}?tab=compare&with={run_id}");
                     let _ =
                         leptos::web_sys::window().and_then(|w| w.location().set_href(&url).ok());
                 }

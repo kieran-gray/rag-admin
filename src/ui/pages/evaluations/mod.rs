@@ -5,7 +5,7 @@ use leptos_router::hooks::query_signal;
 
 use crate::server_functions::evaluation::get_evaluation_runs_page;
 use crate::shared::contracts::{
-    aggregate_type, RunListPageDto, RunListQueryDto, RunStatusFilterDto,
+    aggregate_type, RunKindDto, RunListPageDto, RunListQueryDto, RunStatusFilterDto,
 };
 use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{
@@ -15,16 +15,13 @@ use crate::ui::components::primitives::{
 
 mod dataset_detail;
 mod new_run_dialog;
-mod optimize_progress;
-mod replicate_compare;
 mod run_detail;
+mod run_view;
 mod runs_table;
 
 pub use dataset_detail::DatasetDetailPage;
 pub use new_run_dialog::NewEvaluationDialog;
-pub use optimize_progress::OptimizeProgressPage;
-pub use replicate_compare::ReplicateComparePage;
-pub use run_detail::RunDetailPage;
+pub use run_view::RunPage;
 use runs_table::{status_color, RunsTable, SkeletonRunsTable};
 
 const PAGE_SIZE: u32 = 25;
@@ -32,11 +29,12 @@ const PAGE_SIZE: u32 = 25;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct RunFilterState {
     statuses: Vec<RunStatusFilterDto>,
+    kinds: Vec<RunKindDto>,
 }
 
 impl RunFilterState {
     fn is_empty(&self) -> bool {
-        self.statuses.is_empty()
+        self.statuses.is_empty() && self.kinds.is_empty()
     }
 
     fn to_query(&self, cursor: Option<String>) -> RunListQueryDto {
@@ -44,6 +42,7 @@ impl RunFilterState {
             cursor,
             limit: PAGE_SIZE,
             statuses: self.statuses.clone(),
+            kinds: self.kinds.clone(),
         }
     }
 }
@@ -53,6 +52,7 @@ pub fn EvaluationsPage() -> impl IntoView {
     let invalidator = use_invalidator(|e| e.from_any(&[aggregate_type::EVALUATION_RUN]));
 
     let (statuses_query, set_statuses_query) = query_signal::<String>("status");
+    let (kinds_query, set_kinds_query) = query_signal::<String>("kind");
 
     let filter_state = Memo::new(move |_| RunFilterState {
         statuses: statuses_query
@@ -62,6 +62,10 @@ pub fn EvaluationsPage() -> impl IntoView {
                     .filter_map(RunStatusFilterDto::from_slug)
                     .collect()
             })
+            .unwrap_or_default(),
+        kinds: kinds_query
+            .get()
+            .map(|s| s.split(',').filter_map(RunKindDto::from_slug).collect())
             .unwrap_or_default(),
     });
 
@@ -105,7 +109,26 @@ pub fn EvaluationsPage() -> impl IntoView {
         }));
     });
 
-    let clear_filters = move |_| set_statuses_query.set(None);
+    let toggle_kind = Callback::<RunKindDto>::new(move |kind| {
+        let mut current = filter_state.get_untracked().kinds;
+        if let Some(pos) = current.iter().position(|k| k == &kind) {
+            current.remove(pos);
+        } else {
+            current.push(kind);
+        }
+        set_kinds_query.set((!current.is_empty()).then(|| {
+            current
+                .iter()
+                .map(|k| k.slug())
+                .collect::<Vec<_>>()
+                .join(",")
+        }));
+    });
+
+    let clear_filters = move |_| {
+        set_statuses_query.set(None);
+        set_kinds_query.set(None);
+    };
 
     let push_cursor = pagination.push_cursor;
     let on_next = Callback::<()>::new(move |_| {
@@ -170,11 +193,13 @@ pub fn EvaluationsPage() -> impl IntoView {
                     page=page
                     filter_state=filter_state
                     toggle_status=toggle_status
+                    toggle_kind=toggle_kind
                 />
                 <ActiveFilters
                     filter_state=filter_state
                     page=page
                     toggle_status=toggle_status
+                    toggle_kind=toggle_kind
                     on_clear=Callback::new(clear_filters)
                 />
 
@@ -227,6 +252,7 @@ fn FilterBar(
     page: Resource<Result<RunListPageDto, ServerFnError>>,
     filter_state: Memo<RunFilterState>,
     toggle_status: Callback<RunStatusFilterDto>,
+    toggle_kind: Callback<RunKindDto>,
 ) -> impl IntoView {
     let all_statuses = [
         RunStatusFilterDto::Running,
@@ -234,6 +260,7 @@ fn FilterBar(
         RunStatusFilterDto::Completed,
         RunStatusFilterDto::Failed,
     ];
+    let all_kinds = [RunKindDto::Optimization, RunKindDto::Manual];
 
     view! {
         <div class="list-page-toolbar">
@@ -265,7 +292,42 @@ fn FilterBar(
                     })}
                 </Transition>
             </div>
+            <div class="list-page-filter-group">
+                <span class="list-page-filter-label">"Kind"</span>
+                <Transition fallback=|| view! { <span class="faint text-xs">"…"</span> }>
+                    {move || page.get().and_then(Result::ok).map(move |p| {
+                        all_kinds.iter().map(|kind| {
+                            let kind = *kind;
+                            let count = p.kind_counts.iter()
+                                .find(|f| f.kind == kind)
+                                .map(|f| f.count)
+                                .unwrap_or(0);
+                            let is_active = filter_state.with(|s| s.kinds.contains(&kind));
+                            let color = kind_color(kind);
+                            if count == 0 && !is_active {
+                                return ().into_any();
+                            }
+                            view! {
+                                <FilterChip
+                                    label=kind.label().to_string()
+                                    color=color.to_string()
+                                    active=Signal::derive(move || filter_state.with(|s| s.kinds.contains(&kind)))
+                                    count=count
+                                    on_click=Callback::new(move |_| toggle_kind.run(kind))
+                                />
+                            }.into_any()
+                        }).collect_view()
+                    })}
+                </Transition>
+            </div>
         </div>
+    }
+}
+
+pub fn kind_color(kind: RunKindDto) -> &'static str {
+    match kind {
+        RunKindDto::Optimization => "var(--color-accent)",
+        RunKindDto::Manual => "var(--color-text-muted)",
     }
 }
 
@@ -274,6 +336,7 @@ fn ActiveFilters(
     filter_state: Memo<RunFilterState>,
     page: Resource<Result<RunListPageDto, ServerFnError>>,
     toggle_status: Callback<RunStatusFilterDto>,
+    toggle_kind: Callback<RunKindDto>,
     on_clear: Callback<()>,
 ) -> impl IntoView {
     let has_filters = Memo::new(move |_| !filter_state.get().is_empty());
@@ -305,6 +368,18 @@ fn ActiveFilters(
                                         active=Signal::derive(move || true)
                                         show_remove=true
                                         on_click=Callback::new(move |_| toggle_status.run(status))
+                                    />
+                                }
+                            }).collect_view()}
+                            {state.kinds.iter().copied().map(|kind| {
+                                let color = kind_color(kind);
+                                view! {
+                                    <FilterChip
+                                        label=kind.label().to_string()
+                                        color=color.to_string()
+                                        active=Signal::derive(move || true)
+                                        show_remove=true
+                                        on_click=Callback::new(move |_| toggle_kind.run(kind))
                                     />
                                 }
                             }).collect_view()}

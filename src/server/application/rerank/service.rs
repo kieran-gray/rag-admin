@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::sync::Arc;
 
 use uuid::Uuid;
@@ -79,7 +80,7 @@ impl RerankService {
         let scores = self
             .rerank(reranker_model_id, query.to_string(), documents)
             .await?;
-        Ok(reorder_matches_by_scores(matches, scores))
+        Ok(reorder_matches_by_scores(matches, &scores))
     }
 
     pub async fn resolve(
@@ -103,22 +104,20 @@ impl RerankService {
 
 fn reorder_matches_by_scores(
     mut matches: Vec<VectorMatch>,
-    scores: Vec<RerankScore>,
+    scores: &[RerankScore],
 ) -> Vec<VectorMatch> {
     let mut score_by_index: Vec<f32> = vec![0.0; matches.len()];
-    for s in &scores {
-        if s.index < score_by_index.len() {
-            score_by_index[s.index] = s.score;
+    for s in scores {
+        if let Some(slot) = score_by_index.get_mut(s.index) {
+            *slot = s.score;
         }
     }
     for (i, m) in matches.iter_mut().enumerate() {
-        m.score = score_by_index[i];
+        if let Some(score) = score_by_index.get(i) {
+            m.score = *score;
+        }
     }
-    matches.sort_by(|a, b| {
-        b.score
-            .partial_cmp(&a.score)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    matches.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(Ordering::Equal));
     matches
 }
 
@@ -149,12 +148,21 @@ mod tests {
             vm("c", 0.7, "gamma"),
         ];
         let scores = vec![
-            RerankScore { index: 0, score: 0.1 },
-            RerankScore { index: 1, score: 0.95 },
-            RerankScore { index: 2, score: 0.55 },
+            RerankScore {
+                index: 0,
+                score: 0.1,
+            },
+            RerankScore {
+                index: 1,
+                score: 0.95,
+            },
+            RerankScore {
+                index: 2,
+                score: 0.55,
+            },
         ];
 
-        let reordered = reorder_matches_by_scores(matches, scores);
+        let reordered = reorder_matches_by_scores(matches, &scores);
 
         assert_eq!(reordered[0].id, "b");
         assert!((reordered[0].score - 0.95).abs() < 1e-5);

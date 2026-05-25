@@ -19,7 +19,7 @@ enum VariantsView {
 }
 
 #[component]
-pub(super) fn VariantsSection(
+pub(crate) fn VariantsSection(
     variants: Vec<EvaluationVariantResult>,
     bests: MetricBests,
     leader_key: Option<String>,

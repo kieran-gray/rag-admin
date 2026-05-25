@@ -68,6 +68,22 @@ impl OptimizationBudget {
             OptimizationBudget::Exhaustive => "96 + 48 + 24 + 12 trials · 4 rungs · holdout top 5",
         }
     }
+
+    pub fn trial_estimate(self) -> u32 {
+        match self {
+            OptimizationBudget::Quick => 42,
+            OptimizationBudget::Thorough => 90,
+            OptimizationBudget::Exhaustive => 180,
+        }
+    }
+
+    pub fn duration_estimate(self) -> &'static str {
+        match self {
+            OptimizationBudget::Quick => "~3 min",
+            OptimizationBudget::Thorough => "~8 min",
+            OptimizationBudget::Exhaustive => "~15 min",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]

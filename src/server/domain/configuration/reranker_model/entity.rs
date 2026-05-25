@@ -63,9 +63,11 @@ mod tests {
 
     #[test]
     fn validate_accepts_cloudflare_id_with_at_cf_prefix() {
-        assert!(model(AiProviderKind::Cloudflare, "@cf/baai/bge-reranker-base")
-            .validate()
-            .is_ok());
+        assert!(
+            model(AiProviderKind::Cloudflare, "@cf/baai/bge-reranker-base")
+                .validate()
+                .is_ok()
+        );
     }
 
     #[test]

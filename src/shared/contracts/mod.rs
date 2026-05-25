@@ -45,8 +45,8 @@ pub use error::{ApiError, ApiErrorKind};
 pub use evaluation::{
     BestVariantDto, EvaluationDatasetDto, EvaluationDatasetSummaryDto, EvaluationJobInfo,
     EvaluationQuestionDto, EvaluationReferenceDto, EvaluationRunDto, EvaluationRunSummaryDto,
-    RecentEvaluationRunDto, RunEvaluationRequestDto, RunListPageDto, RunListQueryDto,
-    RunOptimizationRequestDto, RunStatusFacetDto, RunStatusFilterDto,
+    RecentEvaluationRunDto, RunEvaluationRequestDto, RunKindDto, RunKindFacetDto, RunListPageDto,
+    RunListQueryDto, RunOptimizationRequestDto, RunStatusFacetDto, RunStatusFilterDto,
 };
 pub use events::PublishedEvent;
 pub use ingest::{IngestOptions, LogEvent, LogLevel};

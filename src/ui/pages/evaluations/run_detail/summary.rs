@@ -6,13 +6,13 @@ use crate::ui::components::primitives::Surface;
 use super::shared::METRIC_DEFS;
 
 #[derive(Clone)]
-pub(super) struct RetrievalSummary {
+pub(crate) struct RetrievalSummary {
     pub headline: String,
     pub detail: String,
     pub tooltip: String,
 }
 
-pub(super) fn summarise_retrieval(variants: &[EvaluationVariantResult]) -> RetrievalSummary {
+pub(crate) fn summarise_retrieval(variants: &[EvaluationVariantResult]) -> RetrievalSummary {
     if variants.is_empty() {
         return RetrievalSummary {
             headline: "—".into(),
@@ -93,7 +93,7 @@ pub(super) fn summarise_retrieval(variants: &[EvaluationVariantResult]) -> Retri
 }
 
 #[component]
-pub(super) fn RunSummary(
+pub(crate) fn RunSummary(
     leader_score: Option<f32>,
     leader_ci_half: Option<f32>,
     leader_split: Option<EvaluationResultSplit>,
@@ -164,7 +164,7 @@ pub(super) fn RunSummary(
 }
 
 #[component]
-pub(super) fn MetricLegend() -> impl IntoView {
+pub(crate) fn MetricLegend() -> impl IntoView {
     view! {
         <div class="my-4">
             <details>
@@ -207,7 +207,7 @@ pub(super) fn MetricLegend() -> impl IntoView {
 }
 
 #[component]
-pub(super) fn AxisLegend() -> impl IntoView {
+pub(crate) fn AxisLegend() -> impl IntoView {
     view! {
         <div class="metric-bar-axis mt-4 pt-3 border-t border-[var(--color-border)]">
             <span></span>

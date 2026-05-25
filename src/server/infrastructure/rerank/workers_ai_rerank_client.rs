@@ -5,7 +5,7 @@ use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::server::application::rerank::ports::{Reranker, RerankRequest, RerankScore};
+use crate::server::application::rerank::ports::{RerankRequest, RerankScore, Reranker};
 use crate::server::application::rerank::RerankerRegistry;
 use crate::server::application::AppError;
 use crate::server::infrastructure::shared::clients::{CloudflareApi, CLOUDFLARE_API_BASE};
@@ -106,10 +106,7 @@ fn parse_rerank_response(body: &str) -> Result<Vec<RerankScore>, AppError> {
                 .unwrap_or_else(|| "<no error body>".into())
         )));
     }
-    let response = envelope
-        .result
-        .map(|r| r.response)
-        .unwrap_or_default();
+    let response = envelope.result.map(|r| r.response).unwrap_or_default();
     Ok(response
         .into_iter()
         .map(|item| RerankScore {

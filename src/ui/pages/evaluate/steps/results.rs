@@ -2,9 +2,11 @@ use std::cmp::Ordering;
 
 use leptos::prelude::*;
 use leptos_router::components::A;
+use leptos_router::hooks::use_navigate;
+use leptos_router::NavigateOptions;
 
 use crate::server_functions::evaluation::get_run;
-use crate::shared::contracts::{aggregate_type, EvaluationRunDto};
+use crate::shared::contracts::{aggregate_type, EvaluationRunDto, RunKindDto};
 use crate::shared::{evaluation_score, EvaluationResultSplit, EvaluationVariantResult};
 use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{EmptyState, Status, StatusPill, Surface};
@@ -22,6 +24,32 @@ pub fn ResultsStep(selection: EvaluateSelection, on_back: Callback<()>) -> impl 
             }
         },
     );
+
+    Effect::new(move |_| {
+        if !selection.just_launched.get() {
+            return;
+        }
+        let Some(Ok(Some(r))) = run.get() else {
+            return;
+        };
+        let in_flight = matches!(r.status.as_str(), "running" | "pending");
+        if !in_flight {
+            return;
+        }
+        let tab = match r.kind {
+            RunKindDto::Optimization => "progress",
+            RunKindDto::Manual => "variants",
+        };
+        let target = format!("/runs/{}?tab={tab}", r.run_id);
+        selection.just_launched.set(false);
+        use_navigate()(
+            &target,
+            NavigateOptions {
+                replace: true,
+                ..Default::default()
+            },
+        );
+    });
 
     view! {
         <div class="space-y-6">
@@ -54,7 +82,7 @@ pub fn ResultsStep(selection: EvaluateSelection, on_back: Callback<()>) -> impl 
                     class="btn btn-ghost"
                     on:click=move |_| on_back.run(())
                 >
-                    "← Back to run"
+                    "← Back to optimize"
                 </button>
             </div>
         </div>
@@ -65,13 +93,17 @@ pub fn ResultsStep(selection: EvaluateSelection, on_back: Callback<()>) -> impl 
 fn ResultsSummary(run: EvaluationRunDto) -> impl IntoView {
     let run_id = run.run_id;
     let (status_kind, status_label) = run_status(&run.status);
-    let is_in_flight = matches!(run.status.as_str(), "running" | "pending");
     let short = run.run_id.to_string().chars().take(8).collect::<String>();
     let variant_count = run.variants.len();
     let leader = primary_leader(&run.variants).cloned();
     let leader_score = leader.as_ref().map(|v| evaluation_score(&v.metrics));
     let leader_label = leader.as_ref().map(|v| v.variant.label.clone());
     let created_at = run.created_at.clone();
+    let default_tab = match run.kind {
+        RunKindDto::Optimization => "progress",
+        RunKindDto::Manual => "variants",
+    };
+    let open_href = format!("/runs/{run_id}?tab={default_tab}");
 
     view! {
         <Surface>
@@ -105,16 +137,8 @@ fn ResultsSummary(run: EvaluationRunDto) -> impl IntoView {
             </div>
 
             <div class="flex items-center justify-end gap-2 pt-4 mt-4 border-t border-[var(--color-border)]">
-                {is_in_flight.then(|| view! {
-                    <A
-                        href=format!("/runs/{run_id}/optimize")
-                        attr:class="btn btn-ghost"
-                    >
-                        "Watch live progress →"
-                    </A>
-                })}
                 <A
-                    href=format!("/runs/{run_id}")
+                    href=open_href
                     attr:class="btn btn-primary"
                 >
                     "Open run →"

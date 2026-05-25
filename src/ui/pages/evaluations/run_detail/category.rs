@@ -3,7 +3,7 @@ use leptos::prelude::*;
 use crate::shared::EvaluationVariantResult;
 use crate::ui::components::primitives::Surface;
 
-pub(super) struct CategoryRow {
+pub(crate) struct CategoryRow {
     pub category: String,
     pub n: usize,
     pub recall: f32,
@@ -11,7 +11,7 @@ pub(super) struct CategoryRow {
     pub iou: f32,
 }
 
-pub(super) fn category_breakdown(leader: &EvaluationVariantResult) -> Vec<CategoryRow> {
+pub(crate) fn category_breakdown(leader: &EvaluationVariantResult) -> Vec<CategoryRow> {
     use std::collections::BTreeMap;
     if leader.question_results.is_empty() {
         return Vec::new();
@@ -53,7 +53,7 @@ fn pretty_category(slug: &str) -> &'static str {
 }
 
 #[component]
-pub(super) fn CategoryBreakdownPanel(rows: Vec<CategoryRow>) -> impl IntoView {
+pub(crate) fn CategoryBreakdownPanel(rows: Vec<CategoryRow>) -> impl IntoView {
     view! {
         <Surface title="Per-category breakdown".to_string()>
             <div class="text-xs muted mb-3">

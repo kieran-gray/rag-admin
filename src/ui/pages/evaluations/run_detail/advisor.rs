@@ -14,12 +14,12 @@ const SMALL_SAMPLE_THRESHOLD: u32 = 25;
 const WINNERS_CURSE_TRIAL_THRESHOLD: usize = 16;
 
 #[derive(Clone)]
-pub(super) struct AdvisorEntry {
+pub(crate) struct AdvisorEntry {
     pub flag: ReliabilityFlag,
     pub detail: String,
 }
 
-pub(super) fn analysis_bucket_for(
+pub(crate) fn analysis_bucket_for(
     variants: &[EvaluationVariantResult],
 ) -> Option<EvaluationResultSplit> {
     let has_validation = variants
@@ -31,7 +31,7 @@ pub(super) fn analysis_bucket_for(
     primary_leader(variants).map(|v| v.split)
 }
 
-pub(super) fn equivalence_class_members(
+pub(crate) fn equivalence_class_members(
     variants: &[EvaluationVariantResult],
     bucket: Option<EvaluationResultSplit>,
 ) -> Vec<EvaluationVariantResult> {
@@ -79,7 +79,7 @@ fn leader_question_count(v: &EvaluationVariantResult) -> Option<u32> {
     }
 }
 
-pub(super) fn reliability_advisor(
+pub(crate) fn reliability_advisor(
     variants: &[EvaluationVariantResult],
     tied: &[EvaluationVariantResult],
     analysis_bucket: Option<EvaluationResultSplit>,
@@ -227,7 +227,7 @@ pub(super) fn reliability_advisor(
 }
 
 #[component]
-pub(super) fn ReliabilityAdvisor(entries: Vec<AdvisorEntry>) -> impl IntoView {
+pub(crate) fn ReliabilityAdvisor(entries: Vec<AdvisorEntry>) -> impl IntoView {
     view! {
         <Surface title="Reliability advisor".to_string()>
             <div class="space-y-3">

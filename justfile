@@ -32,11 +32,14 @@ fmt-check:
     cargo fmt --check
 
 up:
-    docker compose up -d --build
+    docker compose --profile ollama up -d --build
     docker compose logs -f rag-admin
 
 down:
     docker compose down
+
+pull-models:
+    docker compose up llama-pull-models
 
 db-up:
     docker compose up -d db
