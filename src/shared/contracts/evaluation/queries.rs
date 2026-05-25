@@ -44,6 +44,85 @@ pub struct EvaluationDatasetSummaryDto {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatasetListItemDto {
+    pub dataset_id: Uuid,
+    pub document_id: Uuid,
+    pub document_title: Option<String>,
+    pub label: String,
+    pub status: String,
+    pub failure_reason: Option<String>,
+    pub target_question_count: u32,
+    pub question_count: u32,
+    pub rejection_count: u32,
+    pub run_count: u32,
+    pub generation_model: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DatasetStatusFilterDto {
+    Completed,
+    Generating,
+    Failed,
+    Cancelled,
+}
+
+impl DatasetStatusFilterDto {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Completed => "Completed",
+            Self::Generating => "Generating",
+            Self::Failed => "Failed",
+            Self::Cancelled => "Cancelled",
+        }
+    }
+
+    pub fn slug(self) -> &'static str {
+        match self {
+            Self::Completed => "completed",
+            Self::Generating => "generating",
+            Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
+        }
+    }
+
+    pub fn from_slug(slug: &str) -> Option<Self> {
+        match slug {
+            "completed" => Some(Self::Completed),
+            "generating" => Some(Self::Generating),
+            "failed" => Some(Self::Failed),
+            "cancelled" => Some(Self::Cancelled),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DatasetListQueryDto {
+    #[serde(default)]
+    pub cursor: Option<String>,
+    pub limit: u32,
+    #[serde(default)]
+    pub statuses: Vec<DatasetStatusFilterDto>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatasetStatusFacetDto {
+    pub status: DatasetStatusFilterDto,
+    pub count: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatasetListPageDto {
+    pub items: Vec<DatasetListItemDto>,
+    pub next_cursor: Option<String>,
+    pub total_matching: u64,
+    pub total_all: u64,
+    pub status_counts: Vec<DatasetStatusFacetDto>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvaluationDatasetDto {
     pub dataset_id: Uuid,
     pub document_id: Uuid,

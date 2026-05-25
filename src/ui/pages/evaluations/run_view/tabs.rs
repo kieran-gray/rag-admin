@@ -81,7 +81,7 @@ fn TabLink(
     active: RunTab,
     #[prop(optional)] disabled: bool,
 ) -> impl IntoView {
-    let href = format!("/runs/{run_id}?tab={}", tab.slug());
+    let href = format!("/evaluations/runs/{run_id}?tab={}", tab.slug());
     let is_active = tab == active;
     let class = if is_active {
         "flex-1 px-4 py-3 text-left text-sm font-semibold bg-[var(--color-surface-2)] text-[var(--color-text)]"

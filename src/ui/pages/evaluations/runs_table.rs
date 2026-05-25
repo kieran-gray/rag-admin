@@ -1,4 +1,6 @@
 use leptos::prelude::*;
+use leptos_router::hooks::use_navigate;
+use leptos_router::NavigateOptions;
 
 use crate::shared::contracts::{
     BestVariantDto, RecentEvaluationRunDto, RunKindDto, RunStatusFilterDto,
@@ -21,19 +23,26 @@ pub fn runs_skeleton_columns() -> Vec<SkeletonColumn> {
 }
 
 #[component]
+fn RunsTableHead() -> impl IntoView {
+    view! {
+        <thead>
+            <tr>
+                <th class="w-[36%]">"Document"</th>
+                <th class="w-[12%]">"Status"</th>
+                <th class="w-[28%]">"Top variant"</th>
+                <th class="w-[8%] text-right">"Score"</th>
+                <th class="w-[12%] text-right">"When"</th>
+                <th class="w-[4%] text-right"></th>
+            </tr>
+        </thead>
+    }
+}
+
+#[component]
 pub fn RunsTable(runs: Vec<RecentEvaluationRunDto>) -> impl IntoView {
     view! {
         <table class="data-table">
-            <thead>
-                <tr>
-                    <th class="w-[34%]">"Document"</th>
-                    <th>"Status"</th>
-                    <th class="w-[34%]">"Top variant"</th>
-                    <th class="text-right">"Score"</th>
-                    <th class="text-right">"When"</th>
-                    <th class="w-8 text-right"></th>
-                </tr>
-            </thead>
+            <RunsTableHead />
             <tbody>
                 {runs.into_iter().map(|r| view! { <RunRow run=r /> }).collect_view()}
             </tbody>
@@ -45,16 +54,7 @@ pub fn RunsTable(runs: Vec<RecentEvaluationRunDto>) -> impl IntoView {
 pub fn SkeletonRunsTable() -> impl IntoView {
     view! {
         <table class="data-table">
-            <thead>
-                <tr>
-                    <th class="w-[34%]">"Document"</th>
-                    <th>"Status"</th>
-                    <th class="w-[34%]">"Top variant"</th>
-                    <th class="text-right">"Score"</th>
-                    <th class="text-right">"When"</th>
-                    <th class="w-8 text-right"></th>
-                </tr>
-            </thead>
+            <RunsTableHead />
             <tbody>
                 <SkeletonRows columns=runs_skeleton_columns() />
             </tbody>
@@ -66,7 +66,7 @@ pub fn SkeletonRunsTable() -> impl IntoView {
 fn RunRow(run: RecentEvaluationRunDto) -> impl IntoView {
     use leptos_router::components::A;
 
-    let href = format!("/runs/{}", run.run_id);
+    let href = format!("/evaluations/runs/{}", run.run_id);
     let title = run
         .document_title
         .clone()
@@ -77,8 +77,16 @@ fn RunRow(run: RecentEvaluationRunDto) -> impl IntoView {
     let when_full = run.created_at.clone();
     let subtitle = variant_subtitle(&run.status, variants_scored, variant_count);
 
+    let nav_href = href.clone();
+    let on_row_click = move |ev: leptos::ev::MouseEvent| {
+        if ev.default_prevented() || ev.ctrl_key() || ev.meta_key() || ev.shift_key() {
+            return;
+        }
+        use_navigate()(&nav_href, NavigateOptions::default());
+    };
+
     view! {
-        <tr>
+        <tr on:click=on_row_click>
             <td>
                 <A href=href.clone() attr:class="block">
                     <TitleCell title=title sub=subtitle />
@@ -108,7 +116,7 @@ fn RunRow(run: RecentEvaluationRunDto) -> impl IntoView {
                     None => view! { <span class="faint text-xs">"—"</span> }.into_any(),
                 }}
             </td>
-            <td class="text-right text-xs muted" title=when_full>{when}</td>
+            <td class="text-right text-xs muted whitespace-nowrap" title=when_full>{when}</td>
             <td class="text-right faint">"›"</td>
         </tr>
     }
@@ -174,7 +182,6 @@ fn KindChip(kind: RunKindDto) -> impl IntoView {
 #[component]
 fn BestVariantSubline(best: BestVariantDto) -> impl IntoView {
     let label = best.label.clone();
-    let metrics = best.metrics.clone();
     let top_k = best.options.top_k;
     let min_score = best.options.min_score();
 
@@ -184,14 +191,6 @@ fn BestVariantSubline(best: BestVariantDto) -> impl IntoView {
             <span class="font-mono text-xs truncate" title=title_attr>{label}</span>
             <span class="faint text-xs whitespace-nowrap">
                 {format!("k={top_k} · min {min_score:.2}")}
-            </span>
-            <span class="faint text-xs font-mono whitespace-nowrap">
-                {format!(
-                    "· R {:.0} · P {:.0} · IoU {:.0}",
-                    metrics.recall_mean * 100.0,
-                    metrics.precision_mean * 100.0,
-                    metrics.iou_mean * 100.0,
-                )}
             </span>
         </div>
     }

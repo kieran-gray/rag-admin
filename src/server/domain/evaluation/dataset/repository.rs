@@ -13,6 +13,43 @@ pub enum EvaluationDatasetRepositoryError {
     Internal(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DatasetStatusFilter {
+    Completed,
+    Generating,
+    Failed,
+    Cancelled,
+}
+
+#[derive(Debug, Clone)]
+pub struct DatasetListCursor {
+    pub created_at: String,
+    pub dataset_id: Uuid,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct DatasetListQuery {
+    pub cursor: Option<DatasetListCursor>,
+    pub limit: u32,
+    pub statuses: Vec<DatasetStatusFilter>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DatasetListPageItem {
+    pub dataset: EvaluationDatasetReadModel,
+    pub document_title: Option<String>,
+    pub run_count: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct DatasetListPage {
+    pub items: Vec<DatasetListPageItem>,
+    pub next_cursor: Option<DatasetListCursor>,
+    pub total_matching: u64,
+    pub total_all: u64,
+    pub status_counts: Vec<(DatasetStatusFilter, u64)>,
+}
+
 #[async_trait]
 pub trait EvaluationDatasetRepository: Send + Sync {
     async fn load(
@@ -24,6 +61,11 @@ pub trait EvaluationDatasetRepository: Send + Sync {
         &self,
         document_id: Uuid,
     ) -> Result<Vec<EvaluationDatasetReadModel>, EvaluationDatasetRepositoryError>;
+
+    async fn list_page(
+        &self,
+        query: &DatasetListQuery,
+    ) -> Result<DatasetListPage, EvaluationDatasetRepositoryError>;
 
     async fn load_questions(
         &self,

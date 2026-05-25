@@ -9,7 +9,7 @@ mod steps;
 
 pub use redirect_by_id::EvaluateByIdRedirect;
 use state::EvaluateSelection;
-use steps::{DatasetStep, ResultsStep, RunStep};
+use steps::{DatasetStep, RunStep};
 
 use crate::server_functions::configuration::{
     get_chunking_configurations, get_index_profiles, get_sweep_templates,
@@ -112,7 +112,6 @@ pub fn EvaluatePage() -> impl IntoView {
 enum WorkflowStep {
     Dataset,
     Run,
-    Results,
 }
 
 impl WorkflowStep {
@@ -120,23 +119,20 @@ impl WorkflowStep {
         match self {
             Self::Dataset => 1,
             Self::Run => 2,
-            Self::Results => 3,
         }
     }
 
     fn label(self) -> &'static str {
         match self {
             Self::Dataset => "Dataset",
-            Self::Run => "Optimize",
-            Self::Results => "Monitor",
+            Self::Run => "Run",
         }
     }
 
     fn hint(self) -> &'static str {
         match self {
             Self::Dataset => "Pick or generate questions",
-            Self::Run => "Find the best configuration",
-            Self::Results => "Watch progress and open results",
+            Self::Run => "Configure and launch",
         }
     }
 }
@@ -166,9 +162,7 @@ fn EvaluateWorkspace(
     let selection = EvaluateSelection::new(&index_profiles, initial_dataset, initial_run);
 
     let initial_step_value = initial_step.unwrap_or_else(|| {
-        if initial_run.is_some() {
-            WorkflowStep::Results
-        } else if initial_dataset.is_some() {
+        if initial_dataset.is_some() || initial_run.is_some() {
             WorkflowStep::Run
         } else {
             WorkflowStep::Dataset
@@ -184,7 +178,6 @@ fn EvaluateWorkspace(
     let step_state = move |step: WorkflowStep| -> StepState {
         let active = active_step.get();
         let has_dataset = selection.dataset_id.get().is_some();
-        let has_run = selection.run_id.get().is_some();
 
         if step == active {
             return StepState::Current;
@@ -192,15 +185,13 @@ fn EvaluateWorkspace(
         let locked = match step {
             WorkflowStep::Dataset => false,
             WorkflowStep::Run => !has_dataset,
-            WorkflowStep::Results => !has_run,
         };
         if locked {
             return StepState::Locked;
         }
         let done = match step {
             WorkflowStep::Dataset => has_dataset,
-            WorkflowStep::Run => has_run,
-            WorkflowStep::Results => false,
+            WorkflowStep::Run => false,
         };
         if done {
             StepState::Done
@@ -210,9 +201,7 @@ fn EvaluateWorkspace(
     };
 
     let on_advance_to_run = Callback::new(move |_| set_active_step.set(WorkflowStep::Run));
-    let on_advance_to_results = Callback::new(move |_| set_active_step.set(WorkflowStep::Results));
     let on_back_to_dataset = Callback::new(move |_| set_active_step.set(WorkflowStep::Dataset));
-    let on_back_to_run = Callback::new(move |_| set_active_step.set(WorkflowStep::Run));
 
     view! {
         <div>
@@ -251,13 +240,6 @@ fn EvaluateWorkspace(
                                 chunking_configurations=chunking
                                 sweep_templates=sweep
                                 on_back=on_back_to_dataset
-                                on_advance=on_advance_to_results
-                            />
-                        }.into_any(),
-                        WorkflowStep::Results => view! {
-                            <ResultsStep
-                                selection=selection
-                                on_back=on_back_to_run
                             />
                         }.into_any(),
                     }
@@ -272,11 +254,7 @@ fn Stepper(
     set_active: WriteSignal<WorkflowStep>,
     step_state: impl Fn(WorkflowStep) -> StepState + Copy + Send + Sync + 'static,
 ) -> impl IntoView {
-    let steps = [
-        WorkflowStep::Dataset,
-        WorkflowStep::Run,
-        WorkflowStep::Results,
-    ];
+    let steps = [WorkflowStep::Dataset, WorkflowStep::Run];
 
     view! {
         <div class="surface flex p-0 overflow-hidden">
@@ -286,7 +264,6 @@ fn Stepper(
                 let state = move || step_state(step);
                 let tooltip = move || match step {
                     WorkflowStep::Run => "Select a dataset first",
-                    WorkflowStep::Results => "Launch or select a run first",
                     WorkflowStep::Dataset => "",
                 };
                 view! {
@@ -349,8 +326,7 @@ fn Stepper(
 fn step_from_query(s: &str) -> Option<WorkflowStep> {
     match s {
         "dataset" | "datasets" => Some(WorkflowStep::Dataset),
-        "run" | "runs" | "optimize" => Some(WorkflowStep::Run),
-        "results" | "result" | "monitor" => Some(WorkflowStep::Results),
+        "run" | "runs" | "optimize" | "results" | "result" | "monitor" => Some(WorkflowStep::Run),
         _ => None,
     }
 }

@@ -16,7 +16,7 @@ use crate::ui::components::primitives::{
     ConfirmDialog, EmptyState, Kv, PageHeader, Status, StatusPill, Surface,
 };
 
-use crate::ui::pages::shared::short_hash;
+use crate::ui::pages::shared::{format_when, short_hash};
 
 #[component]
 pub fn DatasetDetailPage() -> impl IntoView {
@@ -81,7 +81,7 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
     let target = dataset.target_question_count;
     let actual = dataset.question_count;
     let rejected = dataset.rejection_count;
-    let created_at = dataset.created_at.clone();
+    let created_at = format_when(&dataset.created_at);
     let failure_reason = dataset.failure_reason.clone();
     let questions = dataset.questions;
     let label = dataset.label;
@@ -166,7 +166,7 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
             match delete_dataset(dataset_id).await {
                 Ok(_) => {
                     use_navigate()(
-                        "/evaluations",
+                        "/evaluations/datasets",
                         NavigateOptions {
                             replace: true,
                             ..Default::default()

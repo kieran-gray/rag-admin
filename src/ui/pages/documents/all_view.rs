@@ -2,7 +2,8 @@ use leptos::either::Either;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::components::A;
-use leptos_router::hooks::query_signal;
+use leptos_router::hooks::{query_signal, use_navigate};
+use leptos_router::NavigateOptions;
 
 use crate::server_functions::source_document::list_documents_page;
 use crate::shared::contracts::{
@@ -285,19 +286,26 @@ pub fn AllDocumentsView(open_import: Callback<()>) -> impl IntoView {
 }
 
 #[component]
+fn DocumentsTableHead() -> impl IntoView {
+    view! {
+        <thead>
+            <tr>
+                <th class="w-[42%]">"Title"</th>
+                <th class="w-[14%]">"Source"</th>
+                <th class="w-[18%]">"Connector"</th>
+                <th class="w-[14%]">"Status"</th>
+                <th class="w-[8%] text-right">"Version"</th>
+                <th class="w-[4%] text-right"></th>
+            </tr>
+        </thead>
+    }
+}
+
+#[component]
 fn DocumentsTable(docs: Vec<DocumentListItemDto>) -> impl IntoView {
     view! {
         <table class="data-table">
-            <thead>
-                <tr>
-                    <th class="w-[38%]">"Title"</th>
-                    <th>"Source"</th>
-                    <th>"Connector"</th>
-                    <th>"Status"</th>
-                    <th class="text-right">"Version"</th>
-                    <th class="w-8 text-right"></th>
-                </tr>
-            </thead>
+            <DocumentsTableHead />
             <tbody>
                 {docs.into_iter().map(|doc| view! { <DocumentRow doc /> }).collect_view()}
             </tbody>
@@ -325,8 +333,16 @@ fn DocumentRow(doc: DocumentListItemDto) -> impl IntoView {
     let source = doc.source.clone();
     let connectors = doc.connectors.clone();
 
+    let nav_href = href.clone();
+    let on_row_click = move |ev: leptos::ev::MouseEvent| {
+        if ev.default_prevented() || ev.ctrl_key() || ev.meta_key() || ev.shift_key() {
+            return;
+        }
+        use_navigate()(&nav_href, NavigateOptions::default());
+    };
+
     view! {
-        <tr>
+        <tr on:click=on_row_click>
             <td>
                 <A href=href.clone() attr:class="block">
                     <TitleCell title=title sub=sub_text />
@@ -359,16 +375,7 @@ fn DocumentRow(doc: DocumentListItemDto) -> impl IntoView {
 fn SkeletonTable() -> impl IntoView {
     view! {
         <table class="data-table">
-            <thead>
-                <tr>
-                    <th class="w-[38%]">"Title"</th>
-                    <th>"Source"</th>
-                    <th>"Connector"</th>
-                    <th>"Status"</th>
-                    <th class="text-right">"Version"</th>
-                    <th class="w-8 text-right"></th>
-                </tr>
-            </thead>
+            <DocumentsTableHead />
             <tbody>
                 <SkeletonRows columns=document_skeleton_columns() />
             </tbody>

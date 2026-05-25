@@ -4,9 +4,9 @@ use uuid::Uuid;
 #[cfg(feature = "ssr")]
 use crate::shared::contracts::BestVariantDto;
 use crate::shared::contracts::{
-    EvaluationDatasetDto, EvaluationDatasetSummaryDto, EvaluationJobInfo, EvaluationRunDto,
-    EvaluationRunSummaryDto, RecentEvaluationRunDto, RunEvaluationRequestDto, RunListPageDto,
-    RunListQueryDto, RunOptimizationRequestDto,
+    DatasetListPageDto, DatasetListQueryDto, EvaluationDatasetDto, EvaluationDatasetSummaryDto,
+    EvaluationJobInfo, EvaluationRunDto, EvaluationRunSummaryDto, RecentEvaluationRunDto,
+    RunEvaluationRequestDto, RunListPageDto, RunListQueryDto, RunOptimizationRequestDto,
 };
 #[cfg(feature = "ssr")]
 use crate::shared::contracts::{
@@ -62,6 +62,21 @@ pub async fn get_datasets_for_document(
             created_at: d.created_at.to_string(),
         })
         .collect())
+}
+
+#[server(
+    name = GetEvaluationDatasetsPage,
+    prefix = "/api",
+    endpoint = "get_evaluation_datasets_page"
+)]
+pub async fn get_evaluation_datasets_page(
+    query: DatasetListQueryDto,
+) -> Result<DatasetListPageDto, ServerFnError> {
+    ctx::<Arc<EvaluationServices>>()?
+        .evaluation_query_service
+        .list_datasets_page(query)
+        .await
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(name = GetDataset, prefix = "/api", endpoint = "get_dataset")]

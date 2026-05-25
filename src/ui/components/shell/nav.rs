@@ -8,6 +8,19 @@ use crate::shared::contracts::{ActivityJobDto, ActivityKind};
 use crate::ui::components::app::activity::{open_tray_with, set_tray_open, use_activity_state};
 use crate::ui::components::app::event_bus::{use_event_bus, ConnectionState};
 
+const EVALUATIONS_ITEMS: &[NavMenuItem] = &[
+    NavMenuItem {
+        href: "/evaluations/runs",
+        label: "Runs",
+        hint: "evaluation runs",
+    },
+    NavMenuItem {
+        href: "/evaluations/datasets",
+        label: "Datasets",
+        hint: "question sets",
+    },
+];
+
 const CONFIGURATION_ITEMS: &[NavMenuItem] = &[
     NavMenuItem {
         href: "/configuration/catalog",
@@ -101,7 +114,7 @@ pub fn AppNav() -> impl IntoView {
                     "rag-admin"
                 </A>
                 <nav class="flex flex-grow justify-around gap-5 text-sm items-center">
-                    {[("/", "Documents"), ("/evaluations", "Evaluations")].iter().copied().map(|(href, label)| {
+                    {[("/", "Documents")].iter().copied().map(|(href, label)| {
                         let active = move || is_active(href);
                         view! {
                             <A
@@ -113,6 +126,7 @@ pub fn AppNav() -> impl IntoView {
                             </A>
                         }
                     }).collect_view()}
+                    <NavMenu label="Evaluations" prefix="/evaluations" items=EVALUATIONS_ITEMS />
                     <NavMenu label="Playground" prefix="/playground" items=PLAYGROUND_ITEMS />
                     <NavMenu label="Artifacts" prefix="/artifacts" items=ARTIFACTS_ITEMS />
                     <NavMenu label="Config" prefix="/configuration" items=CONFIGURATION_ITEMS />

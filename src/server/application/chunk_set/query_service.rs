@@ -4,8 +4,13 @@ use uuid::Uuid;
 
 use crate::server::application::AppError;
 use crate::server::domain::chunk_set::read_model::ChunkSetReadModel;
-use crate::server::domain::chunk_set::repository::ChunkSetRepository;
-use crate::shared::contracts::ChunkSetSummaryDto;
+use crate::server::domain::chunk_set::repository::{
+    ChunkSetListCursor, ChunkSetListQuery, ChunkSetRepository, ChunkSetStatusFilter,
+};
+use crate::shared::contracts::{
+    ChunkSetListPageDto, ChunkSetListQueryDto, ChunkSetStatusFacetDto, ChunkSetStatusFilterDto,
+    ChunkSetSummaryDto,
+};
 
 pub struct ChunkSetQueryService {
     repository: Arc<dyn ChunkSetRepository>,
@@ -31,6 +36,45 @@ impl ChunkSetQueryService {
             .await?;
         Ok(rows.into_iter().map(read_model_to_dto).collect())
     }
+
+    pub async fn list_page(
+        &self,
+        query: ChunkSetListQueryDto,
+    ) -> Result<ChunkSetListPageDto, AppError> {
+        let cursor = match query.cursor.as_deref() {
+            Some(raw) => Some(parse_cursor(raw)?),
+            None => None,
+        };
+        let statuses = query
+            .statuses
+            .into_iter()
+            .map(filter_dto_to_domain)
+            .collect();
+        let domain_query = ChunkSetListQuery {
+            cursor,
+            limit: query.limit,
+            statuses,
+        };
+        let page = self
+            .repository
+            .list_page_with_referrers(&domain_query)
+            .await?;
+
+        Ok(ChunkSetListPageDto {
+            items: page.items.into_iter().map(read_model_to_dto).collect(),
+            next_cursor: page.next_cursor.map(|c| encode_cursor(&c)),
+            total_matching: page.total_matching,
+            total_all: page.total_all,
+            status_counts: page
+                .status_counts
+                .into_iter()
+                .map(|(status, count)| ChunkSetStatusFacetDto {
+                    status: filter_domain_to_dto(status),
+                    count,
+                })
+                .collect(),
+        })
+    }
 }
 
 fn read_model_to_dto(rm: ChunkSetReadModel) -> ChunkSetSummaryDto {
@@ -45,4 +89,38 @@ fn read_model_to_dto(rm: ChunkSetReadModel) -> ChunkSetSummaryDto {
         indexing_refs: rm.indexing_refs,
         variant_result_refs: rm.variant_result_refs,
     }
+}
+
+fn filter_dto_to_domain(status: ChunkSetStatusFilterDto) -> ChunkSetStatusFilter {
+    match status {
+        ChunkSetStatusFilterDto::Pinned => ChunkSetStatusFilter::Pinned,
+        ChunkSetStatusFilterDto::Indexed => ChunkSetStatusFilter::Indexed,
+        ChunkSetStatusFilterDto::UsedByEval => ChunkSetStatusFilter::UsedByEval,
+        ChunkSetStatusFilterDto::Unused => ChunkSetStatusFilter::Unused,
+    }
+}
+
+fn filter_domain_to_dto(status: ChunkSetStatusFilter) -> ChunkSetStatusFilterDto {
+    match status {
+        ChunkSetStatusFilter::Pinned => ChunkSetStatusFilterDto::Pinned,
+        ChunkSetStatusFilter::Indexed => ChunkSetStatusFilterDto::Indexed,
+        ChunkSetStatusFilter::UsedByEval => ChunkSetStatusFilterDto::UsedByEval,
+        ChunkSetStatusFilter::Unused => ChunkSetStatusFilterDto::Unused,
+    }
+}
+
+fn encode_cursor(cursor: &ChunkSetListCursor) -> String {
+    format!("{}|{}", cursor.created_at, cursor.chunk_set_id)
+}
+
+fn parse_cursor(raw: &str) -> Result<ChunkSetListCursor, AppError> {
+    let (created_at, id) = raw
+        .split_once('|')
+        .ok_or_else(|| AppError::Validation(format!("invalid chunk-set cursor: {raw}")))?;
+    let chunk_set_id = Uuid::parse_str(id)
+        .map_err(|e| AppError::Validation(format!("invalid chunk-set cursor uuid: {e}")))?;
+    Ok(ChunkSetListCursor {
+        created_at: created_at.to_string(),
+        chunk_set_id,
+    })
 }

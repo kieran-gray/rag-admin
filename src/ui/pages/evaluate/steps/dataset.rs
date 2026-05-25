@@ -302,7 +302,7 @@ where
                 <span class="text-xs muted">{format!("{q_count} questions")}</span>
                 <StatusPill label=label.to_string() kind=kind />
                 <A
-                    href=format!("/datasets/{dataset_id}")
+                    href=format!("/evaluations/datasets/{dataset_id}")
                     attr:class="text-xs muted hover:text-text underline-offset-2 hover:underline"
                 >
                     "View →"

@@ -1,6 +1,7 @@
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use leptos_router::hooks::{use_params_map, use_query_map};
+use leptos_router::hooks::{use_navigate, use_params_map, use_query_map};
+use leptos_router::NavigateOptions;
 
 mod steps;
 
@@ -245,11 +246,21 @@ fn DocumentWorkspace(
         });
     });
 
-    let actions = vec![ActionItem::new(
-        "Delete document",
-        Callback::new(move |_| open_confirm_delete.run(())),
-    )
-    .danger()];
+    let open_evaluate = Callback::new(move |_| {
+        use_navigate()(
+            &format!("/evaluate/by-id/{document_id}"),
+            NavigateOptions::default(),
+        );
+    });
+
+    let actions = vec![
+        ActionItem::new("Evaluate", open_evaluate),
+        ActionItem::new(
+            "Delete document",
+            Callback::new(move |_| open_confirm_delete.run(())),
+        )
+        .danger(),
+    ];
 
     view! {
         <div>

@@ -2,8 +2,8 @@ use leptos::prelude::*;
 use uuid::Uuid;
 
 use crate::shared::contracts::{
-    ChunkSetSummaryDto, DeleteChunkSetRequestDto, GcChunkSetsRequestDto, GcChunkSetsResponseDto,
-    SetChunkSetPinnedRequestDto,
+    ChunkSetListPageDto, ChunkSetListQueryDto, ChunkSetSummaryDto, DeleteChunkSetRequestDto,
+    GcChunkSetsRequestDto, GcChunkSetsResponseDto, SetChunkSetPinnedRequestDto,
 };
 
 #[cfg(feature = "ssr")]
@@ -22,6 +22,21 @@ pub async fn get_chunk_sets() -> Result<Vec<ChunkSetSummaryDto>, ServerFnError> 
     ctx::<Arc<IndexingServices>>()?
         .chunk_set_query_service
         .list_all()
+        .await
+        .map_err(|e| map_app_error(&e))
+}
+
+#[server(
+    name = GetChunkSetsPage,
+    prefix = "/api",
+    endpoint = "get_chunk_sets_page"
+)]
+pub async fn get_chunk_sets_page(
+    query: ChunkSetListQueryDto,
+) -> Result<ChunkSetListPageDto, ServerFnError> {
+    ctx::<Arc<IndexingServices>>()?
+        .chunk_set_query_service
+        .list_page(query)
         .await
         .map_err(|e| map_app_error(&e))
 }

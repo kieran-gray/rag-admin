@@ -18,6 +18,7 @@ pub use activity::{
 pub use aggregate_types as aggregate_type;
 pub use chat::{ChatRequest, ChatResponse, MetadataFilterDto};
 pub use chunk_set::{
+    ChunkSetListPageDto, ChunkSetListQueryDto, ChunkSetStatusFacetDto, ChunkSetStatusFilterDto,
     ChunkSetSummaryDto, DeleteChunkSetRequestDto, GcChunkSetsRequestDto, GcChunkSetsResponseDto,
     SetChunkSetPinnedRequestDto,
 };
@@ -43,10 +44,12 @@ pub use connector::{
 };
 pub use error::{ApiError, ApiErrorKind};
 pub use evaluation::{
-    BestVariantDto, EvaluationDatasetDto, EvaluationDatasetSummaryDto, EvaluationJobInfo,
-    EvaluationQuestionDto, EvaluationReferenceDto, EvaluationRunDto, EvaluationRunSummaryDto,
-    RecentEvaluationRunDto, RunEvaluationRequestDto, RunKindDto, RunKindFacetDto, RunListPageDto,
-    RunListQueryDto, RunOptimizationRequestDto, RunStatusFacetDto, RunStatusFilterDto,
+    BestVariantDto, DatasetListItemDto, DatasetListPageDto, DatasetListQueryDto,
+    DatasetStatusFacetDto, DatasetStatusFilterDto, EvaluationDatasetDto,
+    EvaluationDatasetSummaryDto, EvaluationJobInfo, EvaluationQuestionDto, EvaluationReferenceDto,
+    EvaluationRunDto, EvaluationRunSummaryDto, RecentEvaluationRunDto, RunEvaluationRequestDto,
+    RunKindDto, RunKindFacetDto, RunListPageDto, RunListQueryDto, RunOptimizationRequestDto,
+    RunStatusFacetDto, RunStatusFilterDto,
 };
 pub use events::PublishedEvent;
 pub use ingest::{IngestOptions, LogEvent, LogLevel};

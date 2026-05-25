@@ -4,6 +4,7 @@ use leptos_router::components::A;
 use crate::shared::contracts::{EvaluationRunDto, RunKindDto};
 use crate::shared::OptimizationBudget;
 use crate::ui::components::primitives::{PageHeader, Status, StatusPill};
+use crate::ui::pages::shared::format_when;
 
 #[allow(clippy::needless_pass_by_value)]
 #[component]
@@ -16,7 +17,7 @@ pub fn RunHeader(run: EvaluationRunDto) -> impl IntoView {
     let kind_chip = kind_chip_label(&run);
     let context_line = context_line(&run);
 
-    let dataset_href = format!("/datasets/{}", run.dataset_id);
+    let dataset_href = format!("/evaluations/datasets/{}", run.dataset_id);
     let workflow_href = run
         .document_id
         .map(|id| format!("/evaluate/by-id/{id}?dataset={}&step=run", run.dataset_id));
@@ -44,10 +45,10 @@ pub fn RunHeader(run: EvaluationRunDto) -> impl IntoView {
 
         <div class="mb-4 flex items-center gap-3 flex-wrap text-sm">
             {workflow_href.map(|href| view! {
-                <A href=href attr:class="muted hover:text-text">"↩ Back to workflow"</A>
+                <A href=href attr:class="muted hover:text-text">"← Back to workflow"</A>
             })}
             <A href=dataset_href attr:class="muted hover:text-text">"Open dataset"</A>
-            <A href="/evaluations" attr:class="muted hover:text-text">"All evaluations"</A>
+            <A href="/evaluations/runs" attr:class="muted hover:text-text">"All evaluations"</A>
         </div>
     }
 }
@@ -91,7 +92,7 @@ fn context_line(run: &EvaluationRunDto) -> String {
         .take(8)
         .collect::<String>();
     parts.push(format!("Dataset · {dataset_short}"));
-    parts.push(format!("Started · {}", run.created_at));
+    parts.push(format!("Started · {}", format_when(&run.created_at)));
     parts.join("  ·  ")
 }
 

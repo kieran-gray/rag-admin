@@ -7,7 +7,7 @@ use leptos::prelude::*;
 use uuid::Uuid;
 
 use crate::shared::contracts::{
-    ChunkingConfigurationDto, IndexProfileDto, RunEvaluationRequestDto, SweepTemplateDto,
+    ChunkingConfigurationDto, RunEvaluationRequestDto, SweepTemplateDto,
 };
 use crate::shared::reference_data::ChunkStrategy;
 use crate::shared::{ChunkingVariant, EvaluationRunOptions};
@@ -24,19 +24,19 @@ use self::variants::{VariantsMode, VariantsPicker};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Preset {
-    FindBestChunking,
-    TuneRetrieval,
-    FullSweep,
-    TestOne,
+    ChunkingGrid,
+    RetrievalGrid,
+    FullGrid,
+    SingleVariant,
 }
 
 impl Preset {
     fn label(self) -> &'static str {
         match self {
-            Self::FindBestChunking => "Find best chunking",
-            Self::TuneRetrieval => "Tune retrieval",
-            Self::FullSweep => "Full sweep",
-            Self::TestOne => "Test one",
+            Self::ChunkingGrid => "Grid: chunking",
+            Self::RetrievalGrid => "Grid: retrieval",
+            Self::FullGrid => "Full grid",
+            Self::SingleVariant => "Single variant",
         }
     }
 }
@@ -48,12 +48,10 @@ pub struct LauncherCallbacks {
 
 #[component]
 pub fn EvaluationLauncher(
-    index_profiles: StoredValue<Vec<IndexProfileDto>>,
     chunking_configurations: StoredValue<Vec<ChunkingConfigurationDto>>,
     sweep_templates: StoredValue<Vec<SweepTemplateDto>>,
     active_dataset: ReadSignal<Option<Uuid>>,
     active_index_profile: ReadSignal<Option<Uuid>>,
-    set_active_index_profile: WriteSignal<Option<Uuid>>,
     running: ReadSignal<bool>,
     callbacks: LauncherCallbacks,
 ) -> impl IntoView {
@@ -108,19 +106,19 @@ pub fn EvaluationLauncher(
     let (sweep_min_score_input, set_sweep_min_score_input) = signal("500,600,700,800".to_string());
 
     let apply_preset = move |p: Preset| match p {
-        Preset::FindBestChunking => {
+        Preset::ChunkingGrid => {
             set_variants_mode.set(VariantsMode::SweepTemplate);
             set_options_mode.set(OptionsMode::Single);
         }
-        Preset::TuneRetrieval => {
+        Preset::RetrievalGrid => {
             set_variants_mode.set(VariantsMode::Single);
             set_options_mode.set(OptionsMode::Sweep);
         }
-        Preset::FullSweep => {
+        Preset::FullGrid => {
             set_variants_mode.set(VariantsMode::SweepTemplate);
             set_options_mode.set(OptionsMode::Sweep);
         }
-        Preset::TestOne => {
+        Preset::SingleVariant => {
             set_variants_mode.set(VariantsMode::Single);
             set_options_mode.set(OptionsMode::Single);
         }
@@ -274,11 +272,14 @@ pub fn EvaluationLauncher(
     };
 
     view! {
-        <Surface title="Tune for best chunking".to_string()>
+        <Surface title="Score specific variants".to_string()>
+            <p class="text-sm muted mb-4">
+                "Explicit grid of chunking variants × retrieval options. Use this to compare a hand-picked set against a baseline, or to reproduce a prior run; the optimizer above is the right choice when you want to find the best."
+            </p>
             <div class="space-y-5">
                 <div class="flex items-center gap-2 flex-wrap">
                     <span class="eyebrow shrink-0">"Presets"</span>
-                    {[Preset::FindBestChunking, Preset::TuneRetrieval, Preset::FullSweep, Preset::TestOne]
+                    {[Preset::ChunkingGrid, Preset::RetrievalGrid, Preset::FullGrid, Preset::SingleVariant]
                         .into_iter().map(|p| view! {
                             <button
                                 type="button"
@@ -289,12 +290,6 @@ pub fn EvaluationLauncher(
                             </button>
                         }).collect_view()}
                 </div>
-
-                <IndexProfileRow
-                    index_profiles=index_profiles
-                    active_index_profile=active_index_profile
-                    set_active_index_profile=set_active_index_profile
-                />
 
                 <Section
                     title="Chunking variants".to_string()
@@ -379,7 +374,7 @@ pub fn EvaluationLauncher(
                         } else if cost_summary.with(Result::is_err) {
                             "Fix errors above"
                         } else {
-                            "Start tuning"
+                            "Score variants"
                         }}
                     </button>
                 </div>
@@ -415,44 +410,6 @@ fn Section(
                     {children.with_value(|c| c())}
                 </div>
             })}
-        </div>
-    }
-}
-
-#[component]
-fn IndexProfileRow(
-    index_profiles: StoredValue<Vec<IndexProfileDto>>,
-    active_index_profile: ReadSignal<Option<Uuid>>,
-    set_active_index_profile: WriteSignal<Option<Uuid>>,
-) -> impl IntoView {
-    view! {
-        <div class="flex items-center gap-3">
-            <span class="eyebrow shrink-0">"Index profile"</span>
-            <select
-                class="input max-w-md"
-                on:change=move |ev| {
-                    let v = event_target_value(&ev);
-                    if v.is_empty() {
-                        set_active_index_profile.set(None);
-                    } else if let Ok(id) = v.parse::<Uuid>() {
-                        set_active_index_profile.set(Some(id));
-                    }
-                }
-            >
-                <option value="">"— select index profile —"</option>
-                {move || {
-                    let ps = index_profiles.get_value();
-                    ps.into_iter().map(|pc| {
-                        let id = pc.index_profile_id;
-                        let selected = active_index_profile.get() == Some(id);
-                        view! {
-                            <option value=id.to_string() selected=selected>
-                                {pc.name}
-                            </option>
-                        }
-                    }).collect_view()
-                }}
-            </select>
         </div>
     }
 }

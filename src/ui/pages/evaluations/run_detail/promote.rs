@@ -1,4 +1,6 @@
 use leptos::prelude::*;
+use leptos_router::hooks::use_navigate;
+use leptos_router::NavigateOptions;
 
 use crate::ui::components::primitives::Surface;
 
@@ -96,9 +98,9 @@ pub(crate) fn ReplicatePanel(run_id: uuid::Uuid) -> impl IntoView {
         leptos::task::spawn_local(async move {
             match replicate_optimization_run(run_id).await {
                 Ok(new_run_id) => {
-                    let url = format!("/runs/{new_run_id}?tab=compare&with={run_id}");
-                    let _ =
-                        leptos::web_sys::window().and_then(|w| w.location().set_href(&url).ok());
+                    let url = format!("/evaluations/runs/{new_run_id}?tab=compare&with={run_id}");
+                    use_navigate()(&url, NavigateOptions::default());
+                    set_replicating.set(false);
                 }
                 Err(e) => {
                     set_replicating.set(false);

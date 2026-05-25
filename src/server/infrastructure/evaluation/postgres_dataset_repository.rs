@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, QueryBuilder, Row};
 use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
 
@@ -7,7 +7,10 @@ use crate::server::domain::evaluation::{
     dataset::{
         aggregate::DatasetGenerationStatus,
         read_model::{EvaluationDatasetReadModel, NewDatasetSummary},
-        repository::{EvaluationDatasetRepository, EvaluationDatasetRepositoryError},
+        repository::{
+            DatasetListCursor, DatasetListPage, DatasetListPageItem, DatasetListQuery,
+            DatasetStatusFilter, EvaluationDatasetRepository, EvaluationDatasetRepositoryError,
+        },
     },
     question::{EvaluationQuestion, EvaluationReference},
 };
@@ -78,6 +81,141 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
             .into_iter()
             .map(EvaluationDatasetReadModel::from)
             .collect())
+    }
+
+    async fn list_page(
+        &self,
+        query: &DatasetListQuery,
+    ) -> Result<DatasetListPage, EvaluationDatasetRepositoryError> {
+        let limit = query.limit.clamp(1, 200) as i64;
+        let fetch_limit = limit + 1;
+
+        let total_all: i64 = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*)::BIGINT FROM evaluation_datasets WHERE deleted_at IS NULL",
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("count_all: {e}")))?;
+
+        let total_matching: i64 = {
+            let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
+                "SELECT COUNT(*)::BIGINT FROM evaluation_datasets WHERE deleted_at IS NULL",
+            );
+            push_dataset_status_filter(&mut qb, &query.statuses);
+            qb.build_query_scalar::<i64>()
+                .fetch_one(&self.pool)
+                .await
+                .map_err(|e| {
+                    EvaluationDatasetRepositoryError::Internal(format!("count_matching: {e}"))
+                })?
+        };
+
+        let count_rows = sqlx::query(
+            "SELECT status, COUNT(*)::BIGINT AS count FROM evaluation_datasets \
+             WHERE deleted_at IS NULL GROUP BY status",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("status_counts: {e}")))?;
+
+        let mut status_counts: Vec<(DatasetStatusFilter, u64)> = Vec::new();
+        for row in count_rows {
+            let status: String = row.try_get("status").map_err(|e| {
+                EvaluationDatasetRepositoryError::Internal(format!("status row: {e}"))
+            })?;
+            let count: i64 = row.try_get("count").map_err(|e| {
+                EvaluationDatasetRepositoryError::Internal(format!("count row: {e}"))
+            })?;
+            if let Some(filter) = dataset_status_filter_from_str(&status) {
+                status_counts.push((filter, count.max(0) as u64));
+            }
+        }
+        status_counts.sort_by_key(|(f, _)| dataset_status_filter_order(*f));
+
+        let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
+            "SELECT
+                d.dataset_id, d.document_id, d.document_version, d.content_hash, d.label,
+                d.target_question_count, d.generation_model_id, d.generation_model,
+                d.excerpt_similarity_threshold_milli, d.duplicate_similarity_threshold_milli,
+                d.embedding_model_id, d.status, d.question_count, d.rejection_count,
+                d.failure_reason, d.created_at,
+                (SELECT latest_metadata->>'title' FROM source_documents sd WHERE sd.document_id = d.document_id) AS document_title,
+                (SELECT COUNT(*)::BIGINT FROM evaluation_runs r WHERE r.dataset_id = d.dataset_id) AS run_count
+            FROM evaluation_datasets d
+            WHERE d.deleted_at IS NULL",
+        );
+        push_dataset_status_filter(&mut qb, &query.statuses);
+
+        if let Some(cursor) = &query.cursor {
+            let parsed =
+                time::OffsetDateTime::parse(&cursor.created_at, &Rfc3339).map_err(|e| {
+                    EvaluationDatasetRepositoryError::Internal(format!("cursor timestamp: {e}"))
+                })?;
+            qb.push(" AND (d.created_at, d.dataset_id) < (");
+            qb.push_bind(parsed);
+            qb.push(", ");
+            qb.push_bind(cursor.dataset_id);
+            qb.push(")");
+        }
+        qb.push(" ORDER BY d.created_at DESC, d.dataset_id DESC LIMIT ");
+        qb.push_bind(fetch_limit);
+
+        let rows =
+            qb.build().fetch_all(&self.pool).await.map_err(|e| {
+                EvaluationDatasetRepositoryError::Internal(format!("list_page: {e}"))
+            })?;
+
+        let mut items: Vec<DatasetListPageItem> = Vec::with_capacity(rows.len());
+        for row in rows {
+            let dataset_row = DatasetRow {
+                dataset_id: row.try_get("dataset_id").map_err(|e| map_row_err(&e))?,
+                document_id: row.try_get("document_id").map_err(|e| map_row_err(&e))?,
+                document_version: row.try_get("document_version").map_err(|e| map_row_err(&e))?,
+                content_hash: row.try_get("content_hash").map_err(|e| map_row_err(&e))?,
+                label: row.try_get("label").map_err(|e| map_row_err(&e))?,
+                target_question_count: row.try_get("target_question_count").map_err(|e| map_row_err(&e))?,
+                generation_model_id: row.try_get("generation_model_id").map_err(|e| map_row_err(&e))?,
+                generation_model: row.try_get("generation_model").map_err(|e| map_row_err(&e))?,
+                excerpt_similarity_threshold_milli: row
+                    .try_get("excerpt_similarity_threshold_milli")
+                    .map_err(|e| map_row_err(&e))?,
+                duplicate_similarity_threshold_milli: row
+                    .try_get("duplicate_similarity_threshold_milli")
+                    .map_err(|e| map_row_err(&e))?,
+                embedding_model_id: row.try_get("embedding_model_id").map_err(|e| map_row_err(&e))?,
+                status: row.try_get("status").map_err(|e| map_row_err(&e))?,
+                question_count: row.try_get("question_count").map_err(|e| map_row_err(&e))?,
+                rejection_count: row.try_get("rejection_count").map_err(|e| map_row_err(&e))?,
+                failure_reason: row.try_get("failure_reason").map_err(|e| map_row_err(&e))?,
+                created_at: row.try_get("created_at").map_err(|e| map_row_err(&e))?,
+            };
+            let document_title: Option<String> =
+                row.try_get("document_title").map_err(|e| map_row_err(&e))?;
+            let run_count: i64 = row.try_get("run_count").map_err(|e| map_row_err(&e))?;
+            items.push(DatasetListPageItem {
+                dataset: EvaluationDatasetReadModel::from(dataset_row),
+                document_title,
+                run_count: run_count.max(0) as u32,
+            });
+        }
+
+        let next_cursor = if items.len() as i64 > limit {
+            items.pop();
+            items.last().map(|m| DatasetListCursor {
+                created_at: m.dataset.created_at.to_string(),
+                dataset_id: m.dataset.dataset_id,
+            })
+        } else {
+            None
+        };
+
+        Ok(DatasetListPage {
+            items,
+            next_cursor,
+            total_matching: total_matching.max(0) as u64,
+            total_all: total_all.max(0) as u64,
+            status_counts,
+        })
     }
 
     async fn load_questions(
@@ -336,6 +474,57 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         .await
         .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("mark_deleted: {e}")))?;
         Ok(())
+    }
+}
+
+fn map_row_err(e: &sqlx::Error) -> EvaluationDatasetRepositoryError {
+    EvaluationDatasetRepositoryError::Internal(format!("row: {e}"))
+}
+
+fn push_dataset_status_filter(
+    qb: &mut QueryBuilder<'_, Postgres>,
+    statuses: &[DatasetStatusFilter],
+) {
+    if statuses.is_empty() {
+        return;
+    }
+    qb.push(" AND status IN (");
+    let mut first = true;
+    for status in statuses {
+        if !first {
+            qb.push(", ");
+        }
+        first = false;
+        qb.push_bind(dataset_status_filter_db(*status));
+    }
+    qb.push(")");
+}
+
+fn dataset_status_filter_db(filter: DatasetStatusFilter) -> &'static str {
+    match filter {
+        DatasetStatusFilter::Completed => "completed",
+        DatasetStatusFilter::Generating => "generating",
+        DatasetStatusFilter::Failed => "failed",
+        DatasetStatusFilter::Cancelled => "cancelled",
+    }
+}
+
+fn dataset_status_filter_from_str(s: &str) -> Option<DatasetStatusFilter> {
+    match s {
+        "completed" => Some(DatasetStatusFilter::Completed),
+        "generating" => Some(DatasetStatusFilter::Generating),
+        "failed" => Some(DatasetStatusFilter::Failed),
+        "cancelled" => Some(DatasetStatusFilter::Cancelled),
+        _ => None,
+    }
+}
+
+fn dataset_status_filter_order(filter: DatasetStatusFilter) -> u8 {
+    match filter {
+        DatasetStatusFilter::Generating => 0,
+        DatasetStatusFilter::Completed => 1,
+        DatasetStatusFilter::Failed => 2,
+        DatasetStatusFilter::Cancelled => 3,
     }
 }
 

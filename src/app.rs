@@ -17,7 +17,7 @@ use crate::ui::pages::{
     document_detail::DocumentDetailPage,
     documents::{DocumentByIdRedirect, DocumentsPage},
     evaluate::{EvaluateByIdRedirect, EvaluatePage},
-    evaluations::{DatasetDetailPage, EvaluationsPage, RunPage},
+    evaluations::{DatasetDetailPage, DatasetsPage, EvaluationsPage, RunPage},
     playground::{chat::ChatPage, embed::EmbedPage, retrieve::RetrievePage},
 };
 
@@ -54,8 +54,8 @@ impl LegacyRunTabRedirect {
             let run_id = params.with(|p| p.get("run_id").unwrap_or_default().to_string());
             let with = query.with(|q| q.get("with").map(|t| t.to_string()));
             let target = match with {
-                Some(w) => format!("/runs/{run_id}?tab={tab}&with={w}"),
-                None => format!("/runs/{run_id}?tab={tab}"),
+                Some(w) => format!("/evaluations/runs/{run_id}?tab={tab}&with={w}"),
+                None => format!("/evaluations/runs/{run_id}?tab={tab}"),
             };
             use_navigate()(
                 &target,
@@ -67,6 +67,53 @@ impl LegacyRunTabRedirect {
         });
         view! { <p class="muted">"Redirecting…"</p> }
     }
+}
+
+#[component]
+fn LegacyRunRedirect() -> impl IntoView {
+    let params = use_params_map();
+    let query = use_query_map();
+    Effect::new(move |_| {
+        let run_id = params.with(|p| p.get("run_id").unwrap_or_default().to_string());
+        let q = query.with(|q| {
+            let mut parts: Vec<String> = Vec::new();
+            for k in ["tab", "with"] {
+                if let Some(v) = q.get(k) {
+                    parts.push(format!("{k}={v}"));
+                }
+            }
+            parts.join("&")
+        });
+        let target = if q.is_empty() {
+            format!("/evaluations/runs/{run_id}")
+        } else {
+            format!("/evaluations/runs/{run_id}?{q}")
+        };
+        use_navigate()(
+            &target,
+            NavigateOptions {
+                replace: true,
+                ..Default::default()
+            },
+        );
+    });
+    view! { <p class="muted">"Redirecting…"</p> }
+}
+
+#[component]
+fn LegacyDatasetRedirect() -> impl IntoView {
+    let params = use_params_map();
+    Effect::new(move |_| {
+        let dataset_id = params.with(|p| p.get("dataset_id").unwrap_or_default().to_string());
+        use_navigate()(
+            &format!("/evaluations/datasets/{dataset_id}"),
+            NavigateOptions {
+                replace: true,
+                ..Default::default()
+            },
+        );
+    });
+    view! { <p class="muted">"Redirecting…"</p> }
 }
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
@@ -132,10 +179,37 @@ pub fn App() -> impl IntoView {
                         )
                         view=EvaluatePage
                     />
-                    <Route path=StaticSegment("evaluations") view=EvaluationsPage />
+                    <Route
+                        path=StaticSegment("evaluations")
+                        view=|| view! { <RedirectTo to="/evaluations/runs" /> }
+                    />
+                    <Route
+                        path=(StaticSegment("evaluations"), StaticSegment("runs"))
+                        view=EvaluationsPage
+                    />
+                    <Route
+                        path=(
+                            StaticSegment("evaluations"),
+                            StaticSegment("runs"),
+                            ParamSegment("run_id"),
+                        )
+                        view=RunPage
+                    />
+                    <Route
+                        path=(StaticSegment("evaluations"), StaticSegment("datasets"))
+                        view=DatasetsPage
+                    />
+                    <Route
+                        path=(
+                            StaticSegment("evaluations"),
+                            StaticSegment("datasets"),
+                            ParamSegment("dataset_id"),
+                        )
+                        view=DatasetDetailPage
+                    />
                     <Route
                         path=(StaticSegment("runs"), ParamSegment("run_id"))
-                        view=RunPage
+                        view=LegacyRunRedirect
                     />
                     <Route
                         path=(
@@ -155,7 +229,7 @@ pub fn App() -> impl IntoView {
                     />
                     <Route
                         path=(StaticSegment("datasets"), ParamSegment("dataset_id"))
-                        view=DatasetDetailPage
+                        view=LegacyDatasetRedirect
                     />
                     <Route
                         path=(StaticSegment("configuration"), StaticSegment("catalog"))

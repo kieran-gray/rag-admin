@@ -1,11 +1,15 @@
 use async_trait::async_trait;
 use sqlx::postgres::PgRow;
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, QueryBuilder, Row};
+use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
 
 use crate::server::domain::chunk_set::entity::{Chunk, ChunkSet};
 use crate::server::domain::chunk_set::read_model::ChunkSetReadModel;
-use crate::server::domain::chunk_set::repository::{ChunkSetRepository, ChunkSetRepositoryError};
+use crate::server::domain::chunk_set::repository::{
+    ChunkSetListCursor, ChunkSetListPage, ChunkSetListQuery, ChunkSetRepository,
+    ChunkSetRepositoryError, ChunkSetStatusFilter,
+};
 
 pub struct PostgresChunkSetRepository {
     pool: PgPool,
@@ -194,6 +198,183 @@ impl ChunkSetRepository for PostgresChunkSetRepository {
         .map_err(|e| ChunkSetRepositoryError::Internal(format!("delete_unused: {e}")))?;
         Ok(result.rows_affected())
     }
+
+    async fn list_page_with_referrers(
+        &self,
+        query: &ChunkSetListQuery,
+    ) -> Result<ChunkSetListPage, ChunkSetRepositoryError> {
+        let limit = query.limit.clamp(1, 200) as i64;
+        let fetch_limit = limit + 1;
+
+        let total_all: i64 =
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::BIGINT FROM chunk_sets")
+                .fetch_one(&self.pool)
+                .await
+                .map_err(|e| ChunkSetRepositoryError::Internal(format!("count_all: {e}")))?;
+
+        let total_matching: i64 = {
+            let mut qb: QueryBuilder<Postgres> =
+                QueryBuilder::new("SELECT COUNT(*)::BIGINT FROM chunk_sets cs WHERE 1=1");
+            push_status_filter(&mut qb, &query.statuses);
+            qb.build_query_scalar::<i64>()
+                .fetch_one(&self.pool)
+                .await
+                .map_err(|e| ChunkSetRepositoryError::Internal(format!("count_matching: {e}")))?
+        };
+
+        let facet_row = sqlx::query(
+            "
+            SELECT
+                SUM(CASE WHEN cs.pinned THEN 1 ELSE 0 END)::BIGINT AS pinned,
+                SUM(CASE WHEN EXISTS (
+                    SELECT 1 FROM indexings i
+                    WHERE i.chunk_set_id = cs.chunk_set_id AND NOT i.removed
+                ) THEN 1 ELSE 0 END)::BIGINT AS indexed,
+                SUM(CASE WHEN EXISTS (
+                    SELECT 1 FROM evaluation_variant_results r
+                    WHERE r.chunk_set_id = cs.chunk_set_id
+                ) THEN 1 ELSE 0 END)::BIGINT AS used_by_eval,
+                SUM(CASE WHEN NOT cs.pinned
+                    AND NOT EXISTS (
+                        SELECT 1 FROM indexings i
+                        WHERE i.chunk_set_id = cs.chunk_set_id AND NOT i.removed
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1 FROM evaluation_variant_results r
+                        WHERE r.chunk_set_id = cs.chunk_set_id
+                    )
+                THEN 1 ELSE 0 END)::BIGINT AS unused
+            FROM chunk_sets cs
+            ",
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| ChunkSetRepositoryError::Internal(format!("status_counts: {e}")))?;
+
+        let pinned: Option<i64> = facet_row.try_get("pinned").ok();
+        let indexed: Option<i64> = facet_row.try_get("indexed").ok();
+        let used_by_eval: Option<i64> = facet_row.try_get("used_by_eval").ok();
+        let unused: Option<i64> = facet_row.try_get("unused").ok();
+        let status_counts: Vec<(ChunkSetStatusFilter, u64)> = vec![
+            (
+                ChunkSetStatusFilter::Pinned,
+                pinned.unwrap_or(0).max(0) as u64,
+            ),
+            (
+                ChunkSetStatusFilter::Indexed,
+                indexed.unwrap_or(0).max(0) as u64,
+            ),
+            (
+                ChunkSetStatusFilter::UsedByEval,
+                used_by_eval.unwrap_or(0).max(0) as u64,
+            ),
+            (
+                ChunkSetStatusFilter::Unused,
+                unused.unwrap_or(0).max(0) as u64,
+            ),
+        ];
+
+        let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
+            "
+            SELECT
+                cs.chunk_set_id,
+                cs.document_id,
+                cs.document_version,
+                cs.chunking_config,
+                cs.created_at,
+                cs.pinned,
+                (SELECT COUNT(*)::BIGINT FROM chunks c WHERE c.chunk_set_id = cs.chunk_set_id) AS chunk_count,
+                (SELECT COUNT(*)::BIGINT FROM indexings i
+                    WHERE i.chunk_set_id = cs.chunk_set_id AND NOT i.removed) AS indexing_refs,
+                (SELECT COUNT(*)::BIGINT FROM evaluation_variant_results r
+                    WHERE r.chunk_set_id = cs.chunk_set_id) AS variant_result_refs
+            FROM chunk_sets cs
+            WHERE 1=1",
+        );
+        push_status_filter(&mut qb, &query.statuses);
+
+        if let Some(cursor) = &query.cursor {
+            let parsed = time::OffsetDateTime::parse(&cursor.created_at, &Rfc3339)
+                .map_err(|e| ChunkSetRepositoryError::Internal(format!("cursor timestamp: {e}")))?;
+            qb.push(" AND (cs.created_at::timestamptz, cs.chunk_set_id) < (");
+            qb.push_bind(parsed);
+            qb.push(", ");
+            qb.push_bind(cursor.chunk_set_id);
+            qb.push(")");
+        }
+        qb.push(" ORDER BY cs.created_at::timestamptz DESC, cs.chunk_set_id DESC LIMIT ");
+        qb.push_bind(fetch_limit);
+
+        let rows: Vec<ChunkSetReferrerRow> = qb
+            .build_query_as()
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| ChunkSetRepositoryError::Internal(format!("list_page: {e}")))?;
+
+        let mut items: Vec<ChunkSetReadModel> = rows
+            .into_iter()
+            .map(ChunkSetReadModel::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let next_cursor = if items.len() as i64 > limit {
+            items.pop();
+            items.last().map(|m| ChunkSetListCursor {
+                created_at: m.created_at.clone(),
+                chunk_set_id: m.chunk_set_id,
+            })
+        } else {
+            None
+        };
+
+        Ok(ChunkSetListPage {
+            items,
+            next_cursor,
+            total_matching: total_matching.max(0) as u64,
+            total_all: total_all.max(0) as u64,
+            status_counts,
+        })
+    }
+}
+
+fn push_status_filter(qb: &mut QueryBuilder<'_, Postgres>, filters: &[ChunkSetStatusFilter]) {
+    if filters.is_empty() {
+        return;
+    }
+    qb.push(" AND (");
+    let mut first = true;
+    for filter in filters {
+        if !first {
+            qb.push(" OR ");
+        }
+        first = false;
+        match filter {
+            ChunkSetStatusFilter::Pinned => {
+                qb.push("cs.pinned");
+            }
+            ChunkSetStatusFilter::Indexed => {
+                qb.push(
+                    "EXISTS (SELECT 1 FROM indexings i \
+                     WHERE i.chunk_set_id = cs.chunk_set_id AND NOT i.removed)",
+                );
+            }
+            ChunkSetStatusFilter::UsedByEval => {
+                qb.push(
+                    "EXISTS (SELECT 1 FROM evaluation_variant_results r \
+                     WHERE r.chunk_set_id = cs.chunk_set_id)",
+                );
+            }
+            ChunkSetStatusFilter::Unused => {
+                qb.push(
+                    "(NOT cs.pinned \
+                     AND NOT EXISTS (SELECT 1 FROM indexings i \
+                        WHERE i.chunk_set_id = cs.chunk_set_id AND NOT i.removed) \
+                     AND NOT EXISTS (SELECT 1 FROM evaluation_variant_results r \
+                        WHERE r.chunk_set_id = cs.chunk_set_id))",
+                );
+            }
+        }
+    }
+    qb.push(")");
 }
 
 struct ChunkSetRow {
