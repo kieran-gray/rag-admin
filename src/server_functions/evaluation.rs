@@ -7,11 +7,15 @@ use crate::shared::contracts::{
     DatasetListPageDto, DatasetListQueryDto, EvaluationDatasetDto, EvaluationDatasetSummaryDto,
     EvaluationJobInfo, EvaluationRunDto, EvaluationRunSummaryDto, RecentEvaluationRunDto,
     RunEvaluationRequestDto, RunListPageDto, RunListQueryDto, RunOptimizationRequestDto,
+    RunQuestionResultsDto,
 };
 #[cfg(feature = "ssr")]
 use crate::shared::contracts::{
     RunKindDto, RunKindFacetDto, RunStatusFacetDto, RunStatusFilterDto,
 };
+use crate::shared::EvaluationResultSplit;
+#[cfg(feature = "ssr")]
+use crate::shared::EvaluationScoreWeights;
 
 #[cfg(feature = "ssr")]
 use crate::server::application::evaluation::StartDatasetGenerationRequest;
@@ -325,6 +329,12 @@ pub async fn get_run(run_id: Uuid) -> Result<Option<EvaluationRunDto>, ServerFnE
         let optimization_dto = r.optimization.clone().map(Into::into);
         let kind = RunKindDto::from_optimization(optimization_dto.as_ref());
         let document_title = doc_index.get(&r.document_id).cloned();
+        let scoring_weights = EvaluationScoreWeights {
+            recall: r.scoring_policy.weights.recall,
+            iou: r.scoring_policy.weights.iou,
+            precision: r.scoring_policy.weights.precision,
+            precision_omega: r.scoring_policy.weights.precision_omega,
+        };
         EvaluationRunDto {
             run_id: r.run_id,
             dataset_id: r.dataset_id,
@@ -337,8 +347,26 @@ pub async fn get_run(run_id: Uuid) -> Result<Option<EvaluationRunDto>, ServerFnE
             document_title,
             variant_count: r.variants_count,
             variants_scored: r.variants_scored,
+            scoring_weights,
         }
     }))
+}
+
+#[server(
+    name = GetRunQuestionResults,
+    prefix = "/api",
+    endpoint = "get_run_question_results"
+)]
+pub async fn get_run_question_results(
+    run_id: Uuid,
+    variant_label: String,
+    split: Option<EvaluationResultSplit>,
+) -> Result<Option<RunQuestionResultsDto>, ServerFnError> {
+    ctx::<Arc<EvaluationServices>>()?
+        .evaluation_query_service
+        .get_run_question_results(run_id, &variant_label, split)
+        .await
+        .map_err(|e| map_app_error(&e))
 }
 
 #[server(name = GetRecentRuns, prefix = "/api", endpoint = "get_recent_runs")]

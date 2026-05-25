@@ -170,22 +170,34 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
             let dataset_row = DatasetRow {
                 dataset_id: row.try_get("dataset_id").map_err(|e| map_row_err(&e))?,
                 document_id: row.try_get("document_id").map_err(|e| map_row_err(&e))?,
-                document_version: row.try_get("document_version").map_err(|e| map_row_err(&e))?,
+                document_version: row
+                    .try_get("document_version")
+                    .map_err(|e| map_row_err(&e))?,
                 content_hash: row.try_get("content_hash").map_err(|e| map_row_err(&e))?,
                 label: row.try_get("label").map_err(|e| map_row_err(&e))?,
-                target_question_count: row.try_get("target_question_count").map_err(|e| map_row_err(&e))?,
-                generation_model_id: row.try_get("generation_model_id").map_err(|e| map_row_err(&e))?,
-                generation_model: row.try_get("generation_model").map_err(|e| map_row_err(&e))?,
+                target_question_count: row
+                    .try_get("target_question_count")
+                    .map_err(|e| map_row_err(&e))?,
+                generation_model_id: row
+                    .try_get("generation_model_id")
+                    .map_err(|e| map_row_err(&e))?,
+                generation_model: row
+                    .try_get("generation_model")
+                    .map_err(|e| map_row_err(&e))?,
                 excerpt_similarity_threshold_milli: row
                     .try_get("excerpt_similarity_threshold_milli")
                     .map_err(|e| map_row_err(&e))?,
                 duplicate_similarity_threshold_milli: row
                     .try_get("duplicate_similarity_threshold_milli")
                     .map_err(|e| map_row_err(&e))?,
-                embedding_model_id: row.try_get("embedding_model_id").map_err(|e| map_row_err(&e))?,
+                embedding_model_id: row
+                    .try_get("embedding_model_id")
+                    .map_err(|e| map_row_err(&e))?,
                 status: row.try_get("status").map_err(|e| map_row_err(&e))?,
                 question_count: row.try_get("question_count").map_err(|e| map_row_err(&e))?,
-                rejection_count: row.try_get("rejection_count").map_err(|e| map_row_err(&e))?,
+                rejection_count: row
+                    .try_get("rejection_count")
+                    .map_err(|e| map_row_err(&e))?,
                 failure_reason: row.try_get("failure_reason").map_err(|e| map_row_err(&e))?,
                 created_at: row.try_get("created_at").map_err(|e| map_row_err(&e))?,
             };

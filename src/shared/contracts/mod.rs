@@ -47,9 +47,10 @@ pub use evaluation::{
     BestVariantDto, DatasetListItemDto, DatasetListPageDto, DatasetListQueryDto,
     DatasetStatusFacetDto, DatasetStatusFilterDto, EvaluationDatasetDto,
     EvaluationDatasetSummaryDto, EvaluationJobInfo, EvaluationQuestionDto, EvaluationReferenceDto,
-    EvaluationRunDto, EvaluationRunSummaryDto, RecentEvaluationRunDto, RunEvaluationRequestDto,
-    RunKindDto, RunKindFacetDto, RunListPageDto, RunListQueryDto, RunOptimizationRequestDto,
-    RunStatusFacetDto, RunStatusFilterDto,
+    EvaluationRunDto, EvaluationRunSummaryDto, RecentEvaluationRunDto, ReferenceExcerptDto,
+    RetrievedChunkDto, RunEvaluationRequestDto, RunKindDto, RunKindFacetDto, RunListPageDto,
+    RunListQueryDto, RunOptimizationRequestDto, RunQuestionResultDto, RunQuestionResultsDto,
+    RunQuestionVariantOptionDto, RunStatusFacetDto, RunStatusFilterDto,
 };
 pub use events::PublishedEvent;
 pub use ingest::{IngestOptions, LogEvent, LogLevel};

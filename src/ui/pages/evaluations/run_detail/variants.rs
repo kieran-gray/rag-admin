@@ -1,9 +1,11 @@
 use std::cmp::Ordering;
 
 use leptos::prelude::*;
+use uuid::Uuid;
 
 use crate::shared::{evaluation_score, EvaluationVariantResult};
 use crate::ui::components::primitives::{MetricBar, MetricKind, Surface};
+use crate::ui::pages::evaluations::run_view::QuestionDrilldown;
 
 use super::promote::{PromoteHandle, VariantSaveButton};
 use super::shared::{
@@ -20,6 +22,7 @@ enum VariantsView {
 
 #[component]
 pub(crate) fn VariantsSection(
+    run_id: Uuid,
     variants: Vec<EvaluationVariantResult>,
     bests: MetricBests,
     leader_key: Option<String>,
@@ -29,6 +32,7 @@ pub(crate) fn VariantsSection(
     let variants = StoredValue::new(variants);
     let leader_key = StoredValue::new(leader_key);
     let (mode, set_mode) = signal(VariantsView::Bars);
+    let (expanded_key, set_expanded_key) = signal::<Option<String>>(None);
 
     let actions: Box<dyn Fn() -> leptos::prelude::AnyView + Send + Sync> = Box::new(move || {
         view! {
@@ -60,7 +64,15 @@ pub(crate) fn VariantsSection(
                     vs.iter().cloned().map(|v| {
                         let leader = leader_key.with_value(|l| l.as_deref() == Some(row_key(&v).as_str()));
                         view! {
-                            <VariantCard variant=v leader=leader bests=bests promote=promote />
+                            <VariantCard
+                                run_id=run_id
+                                variant=v
+                                leader=leader
+                                bests=bests
+                                promote=promote
+                                expanded_key=expanded_key
+                                set_expanded_key=set_expanded_key
+                            />
                         }
                     }).collect_view()
                 })}
@@ -70,10 +82,13 @@ pub(crate) fn VariantsSection(
         .into_any(),
         VariantsView::Table => view! {
             <VariantTable
+                run_id=run_id
                 variants=variants.with_value(Clone::clone)
                 bests=bests
                 leader_key=leader_key.with_value(Clone::clone)
                 promote=promote
+                expanded_key=expanded_key
+                set_expanded_key=set_expanded_key
             />
         }
         .into_any(),
@@ -103,16 +118,20 @@ pub(crate) fn VariantsSection(
 
 #[component]
 fn VariantCard(
+    run_id: Uuid,
     variant: EvaluationVariantResult,
     leader: bool,
     bests: MetricBests,
     promote: PromoteHandle,
+    expanded_key: ReadSignal<Option<String>>,
+    set_expanded_key: WriteSignal<Option<String>>,
 ) -> impl IntoView {
     let kind = if leader {
         MetricKind::Best
     } else {
         MetricKind::Default
     };
+    let key = row_key(&variant);
     let score = evaluation_score(&variant.metrics);
     let (headline, trial_tag) = variant_display(&variant);
     let split = variant.split.as_str().to_string();
@@ -123,6 +142,12 @@ fn VariantCard(
     let min_score = variant.options.min_score();
     let m = variant.metrics;
     let variant_label = variant.variant.label.clone();
+    let variant_split = variant.split;
+    let key_aria = key.clone();
+    let key_click = key.clone();
+    let key_chevron = key.clone();
+    let key_open = key.clone();
+    let drill_label = variant_label.clone();
 
     view! {
         <div class=move || format!(
@@ -197,6 +222,36 @@ fn VariantCard(
                     kind=kind
                 />
             </div>
+            <div class="variant-card-footer">
+                <button
+                    type="button"
+                    class="variant-questions-toggle"
+                    aria-expanded=move || (expanded_key.get().as_deref() == Some(key_aria.as_str())).to_string()
+                    on:click=move |_| {
+                        let k = key_click.clone();
+                        set_expanded_key.update(|v| {
+                            *v = if v.as_deref() == Some(k.as_str()) { None } else { Some(k) };
+                        });
+                    }
+                >
+                    <span aria-hidden="true">
+                        {move || if expanded_key.get().as_deref() == Some(key_chevron.as_str()) { "▾" } else { "▸" }}
+                    </span>
+                    "Per-question diagnostics"
+                </button>
+            </div>
+            <Show
+                when=move || expanded_key.get().as_deref() == Some(key_open.as_str())
+                fallback=|| ()
+            >
+                <div class="variant-card-drilldown">
+                    <QuestionDrilldown
+                        run_id=run_id
+                        variant_label=drill_label.clone()
+                        split=variant_split
+                    />
+                </div>
+            </Show>
         </div>
     }
 }
@@ -282,10 +337,13 @@ fn cmp_variants(
 
 #[component]
 fn VariantTable(
+    run_id: Uuid,
     variants: Vec<EvaluationVariantResult>,
     bests: MetricBests,
     leader_key: Option<String>,
     promote: PromoteHandle,
+    expanded_key: ReadSignal<Option<String>>,
+    set_expanded_key: WriteSignal<Option<String>>,
 ) -> impl IntoView {
     let leader_key = StoredValue::new(leader_key);
     let variants = StoredValue::new(variants);
@@ -350,9 +408,31 @@ fn VariantTable(
                         let m = v.metrics.clone();
                         let row_class = if leader { "is-leader" } else { "" };
                         let (headline, trial_tag) = variant_display(&v);
+                        let key_click = key.clone();
+                        let key_chevron = key.clone();
+                        let key_open = key.clone();
+                        let key_class = key.clone();
+                        let drill_label = v.variant.label.clone();
+                        let variant_split = v.split;
+                        let row_is_open = move || expanded_key.get().as_deref() == Some(key_class.as_str());
                         view! {
-                            <tr class=row_class>
-                                <td class="num muted">{i + 1}</td>
+                            <tr
+                                class=row_class
+                                class:is-expanded=row_is_open
+                                class:variant-row-clickable=true
+                                on:click=move |_| {
+                                    let k = key_click.clone();
+                                    set_expanded_key.update(|v| {
+                                        *v = if v.as_deref() == Some(k.as_str()) { None } else { Some(k) };
+                                    });
+                                }
+                            >
+                                <td class="num muted">
+                                    <span class="variant-row-chevron" aria-hidden="true">
+                                        {move || if expanded_key.get().as_deref() == Some(key_chevron.as_str()) { "▾" } else { "▸" }}
+                                    </span>
+                                    {i + 1}
+                                </td>
                                 <td>
                                     <span class="flex items-center gap-2">
                                         {leader.then(|| view! {
@@ -382,7 +462,7 @@ fn VariantTable(
                                         .map(|s| format!("{:.0}%", s * 100.0))
                                         .unwrap_or_else(|| "—".into())
                                 }</td>
-                                <td class="num">
+                                <td class="num" on:click=move |ev| ev.stop_propagation()>
                                     <VariantSaveButton
                                         variant_label=v.variant.label.clone()
                                         is_leader=leader
@@ -391,6 +471,20 @@ fn VariantTable(
                                     />
                                 </td>
                             </tr>
+                            <Show
+                                when=move || expanded_key.get().as_deref() == Some(key_open.as_str())
+                                fallback=|| ()
+                            >
+                                <tr class="variant-drilldown-row">
+                                    <td colspan="14" class="p-0">
+                                        <QuestionDrilldown
+                                            run_id=run_id
+                                            variant_label=drill_label.clone()
+                                            split=variant_split
+                                        />
+                                    </td>
+                                </tr>
+                            </Show>
                         }
                     }).collect_view()}
                 </tbody>

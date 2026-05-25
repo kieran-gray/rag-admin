@@ -99,8 +99,8 @@ pub(crate) fn RunSummary(
     leader_split: Option<EvaluationResultSplit>,
     variants_count: usize,
     retrieval: RetrievalSummary,
+    weights: EvaluationScoreWeights,
 ) -> impl IntoView {
-    let weights = EvaluationScoreWeights::default();
     let score_str = leader_score
         .map(|s| format!("{:.1}%", s * 100.0))
         .unwrap_or_else(|| "—".to_string());

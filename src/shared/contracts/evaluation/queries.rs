@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::shared::{
-    ChunkingConfig, EvaluationMetrics, EvaluationRunOptions, EvaluationVariantResult,
-    OptimizationConfig, OrderedF32,
+    ChunkingConfig, EvaluationMetrics, EvaluationResultSplit, EvaluationRunOptions,
+    EvaluationScoreWeights, EvaluationVariantResult, OptimizationConfig, OrderedF32,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -169,6 +169,8 @@ pub struct EvaluationRunDto {
     pub variant_count: u32,
     #[serde(default)]
     pub variants_scored: u32,
+    #[serde(default)]
+    pub scoring_weights: EvaluationScoreWeights,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -313,4 +315,55 @@ pub struct RunListPageDto {
     pub status_counts: Vec<RunStatusFacetDto>,
     #[serde(default)]
     pub kind_counts: Vec<RunKindFacetDto>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RunQuestionVariantOptionDto {
+    pub variant_label: String,
+    pub splits: Vec<EvaluationResultSplit>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RetrievedChunkDto {
+    pub chunk_id: Uuid,
+    pub rank: u32,
+    pub score: f32,
+    pub sequence: u32,
+    pub heading: String,
+    pub text: String,
+    pub char_start: u32,
+    pub char_end: u32,
+    pub is_reference_hit: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReferenceExcerptDto {
+    pub sequence: u32,
+    pub content: String,
+    pub char_start: u32,
+    pub char_end: u32,
+    pub covered: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RunQuestionResultDto {
+    pub sequence: u32,
+    pub question: String,
+    pub category: String,
+    pub recall: f32,
+    pub precision: f32,
+    pub iou: f32,
+    pub retrieved: Vec<RetrievedChunkDto>,
+    pub references: Vec<ReferenceExcerptDto>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RunQuestionResultsDto {
+    pub run_id: Uuid,
+    pub dataset_id: Uuid,
+    pub variant_label: String,
+    pub split: EvaluationResultSplit,
+    pub options: EvaluationRunOptions,
+    pub variants: Vec<RunQuestionVariantOptionDto>,
+    pub questions: Vec<RunQuestionResultDto>,
 }

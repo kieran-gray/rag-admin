@@ -1,3 +1,5 @@
+use std::collections::{BTreeMap, HashMap};
+
 use async_trait::async_trait;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row};
 use time::format_description::well_known::Rfc3339;
@@ -9,8 +11,9 @@ use crate::server::domain::evaluation::run::read_model::{
     EvaluationRunReadModel, EvaluationVariantResultDto, NewRunSummary,
 };
 use crate::server::domain::evaluation::run::repository::{
-    EvaluationRunRepository, EvaluationRunRepositoryError, RunKindFilter, RunListCursor,
-    RunListPage, RunListQuery, RunStatusFilter,
+    ChunkExcerpt, EvaluationRunRepository, EvaluationRunRepositoryError, QuestionResultRow,
+    ReferenceExcerpt, RunKindFilter, RunListCursor, RunListPage, RunListQuery,
+    RunQuestionResultsLoad, RunStatusFilter, VariantSplitOption,
 };
 use crate::server::domain::evaluation::run::scoring_policy::{ScoringPolicy, ScoringWeights};
 use crate::server::domain::evaluation::value_objects::{
@@ -380,6 +383,215 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         }
 
         Ok(results)
+    }
+
+    async fn load_question_results(
+        &self,
+        run_id: Uuid,
+        variant_label: &str,
+        split: Option<EvaluationResultSplit>,
+    ) -> Result<Option<RunQuestionResultsLoad>, EvaluationRunRepositoryError> {
+        let dataset_id: Option<(Uuid,)> =
+            sqlx::query_as("SELECT dataset_id FROM evaluation_runs WHERE run_id = $1")
+                .bind(run_id)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(|e| {
+                    EvaluationRunRepositoryError::Internal(format!(
+                        "load_question_results dataset_id: {e}"
+                    ))
+                })?;
+        let Some((dataset_id,)) = dataset_id else {
+            return Ok(None);
+        };
+
+        let variant_rows: Vec<VariantSplitRow> = sqlx::query_as(
+            "
+            SELECT variant_label, split, top_k, min_score_milli, chunk_set_id, options
+            FROM evaluation_variant_results
+            WHERE run_id = $1
+            ORDER BY variant_label, split, top_k, min_score_milli
+            ",
+        )
+        .bind(run_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| {
+            EvaluationRunRepositoryError::Internal(format!("load_question_results variants: {e}"))
+        })?;
+
+        if variant_rows.is_empty() {
+            return Ok(None);
+        }
+
+        let mut variants_by_label: BTreeMap<String, Vec<EvaluationResultSplit>> = BTreeMap::new();
+        for row in &variant_rows {
+            let s = EvaluationResultSplit::parse(&row.split).unwrap_or(EvaluationResultSplit::Full);
+            let entry = variants_by_label
+                .entry(row.variant_label.clone())
+                .or_default();
+            if !entry.contains(&s) {
+                entry.push(s);
+            }
+        }
+        let variants_list: Vec<VariantSplitOption> = variants_by_label
+            .into_iter()
+            .map(|(variant_label, mut splits)| {
+                splits.sort();
+                VariantSplitOption {
+                    variant_label,
+                    splits,
+                }
+            })
+            .collect();
+
+        let candidates: Vec<&VariantSplitRow> = variant_rows
+            .iter()
+            .filter(|r| r.variant_label == variant_label)
+            .collect();
+        if candidates.is_empty() {
+            return Ok(None);
+        }
+
+        let Some(chosen) = pick_variant_row(&candidates, split) else {
+            return Ok(None);
+        };
+        let chosen_split =
+            EvaluationResultSplit::parse(&chosen.split).unwrap_or(EvaluationResultSplit::Full);
+        let options: EvaluationRunOptions = serde_json::from_value(chosen.options.clone())
+            .map_err(|e| {
+                EvaluationRunRepositoryError::Internal(format!("deserialize variant options: {e}"))
+            })?;
+
+        let trace_rows: Vec<RetrievalTraceRow> = sqlx::query_as(
+            "
+            SELECT
+                question_sequence, retrieved_chunk_ids, scores, recall, precision, iou, category
+            FROM retrieval_traces
+            WHERE run_id = $1 AND variant_label = $2 AND split = $3
+              AND top_k = $4 AND min_score_milli = $5
+            ORDER BY question_sequence ASC
+            ",
+        )
+        .bind(run_id)
+        .bind(&chosen.variant_label)
+        .bind(&chosen.split)
+        .bind(chosen.top_k)
+        .bind(chosen.min_score_milli)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| {
+            EvaluationRunRepositoryError::Internal(format!("load_question_results traces: {e}"))
+        })?;
+
+        let question_rows: Vec<(i32, String, String)> = sqlx::query_as(
+            "SELECT sequence, question, category FROM evaluation_questions WHERE dataset_id = $1",
+        )
+        .bind(dataset_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| {
+            EvaluationRunRepositoryError::Internal(format!("load_question_results questions: {e}"))
+        })?;
+        let question_text: HashMap<u32, (String, String)> = question_rows
+            .into_iter()
+            .map(|(seq, q, cat)| (seq as u32, (q, cat)))
+            .collect();
+
+        let reference_rows: Vec<(i32, i32, String, i32, i32)> = sqlx::query_as(
+            "
+            SELECT question_sequence, sequence, content, char_start, char_end
+            FROM evaluation_references
+            WHERE dataset_id = $1
+            ORDER BY question_sequence, sequence
+            ",
+        )
+        .bind(dataset_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| {
+            EvaluationRunRepositoryError::Internal(format!("load_question_results refs: {e}"))
+        })?;
+        let references: Vec<ReferenceExcerpt> = reference_rows
+            .into_iter()
+            .map(|(qs, seq, content, cs, ce)| ReferenceExcerpt {
+                question_sequence: qs as u32,
+                sequence: seq as u32,
+                content,
+                char_start: cs.max(0) as u32,
+                char_end: ce.max(0) as u32,
+            })
+            .collect();
+
+        let chunk_rows: Vec<(Uuid, i32, String, String, i32, i32)> = sqlx::query_as(
+            "
+            SELECT chunk_id, sequence, heading, text, char_start, char_end
+            FROM chunks
+            WHERE chunk_set_id = $1
+            ",
+        )
+        .bind(chosen.chunk_set_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| {
+            EvaluationRunRepositoryError::Internal(format!("load_question_results chunks: {e}"))
+        })?;
+        let chunks: HashMap<Uuid, ChunkExcerpt> = chunk_rows
+            .into_iter()
+            .map(|(id, seq, heading, text, cs, ce)| {
+                (
+                    id,
+                    ChunkExcerpt {
+                        chunk_id: id,
+                        sequence: seq.max(0) as u32,
+                        heading,
+                        text,
+                        char_start: cs.max(0) as u32,
+                        char_end: ce.max(0) as u32,
+                    },
+                )
+            })
+            .collect();
+
+        let mut questions: Vec<QuestionResultRow> = Vec::with_capacity(trace_rows.len());
+        for row in trace_rows {
+            let retrieved_chunk_ids: Vec<Uuid> = serde_json::from_value(row.retrieved_chunk_ids)
+                .map_err(|e| {
+                    EvaluationRunRepositoryError::Internal(format!(
+                        "deserialize retrieved_chunk_ids: {e}"
+                    ))
+                })?;
+            let scores: Vec<f32> = serde_json::from_value(row.scores).map_err(|e| {
+                EvaluationRunRepositoryError::Internal(format!("deserialize scores: {e}"))
+            })?;
+            let seq = row.question_sequence as u32;
+            let (question, _) = question_text
+                .get(&seq)
+                .cloned()
+                .unwrap_or_else(|| (format!("Q{}", seq + 1), String::new()));
+            questions.push(QuestionResultRow {
+                sequence: seq,
+                question,
+                category: row.category,
+                recall: row.recall,
+                precision: row.precision,
+                iou: row.iou,
+                retrieved_chunk_ids,
+                scores,
+            });
+        }
+
+        Ok(Some(RunQuestionResultsLoad {
+            run_id,
+            dataset_id,
+            variant_label: chosen.variant_label.clone(),
+            split: chosen_split,
+            options,
+            questions,
+            references,
+            chunks,
+            variants: variants_list,
+        }))
     }
 
     async fn insert_summary(
@@ -808,6 +1020,45 @@ struct VariantResultRow {
     composite_ci_low: f32,
     composite_ci_high: f32,
     judge_score: Option<f32>,
+}
+
+#[derive(sqlx::FromRow)]
+struct VariantSplitRow {
+    variant_label: String,
+    split: String,
+    top_k: i32,
+    min_score_milli: i32,
+    chunk_set_id: Uuid,
+    options: serde_json::Value,
+}
+
+fn pick_variant_row<'a>(
+    candidates: &'a [&'a VariantSplitRow],
+    requested: Option<EvaluationResultSplit>,
+) -> Option<&'a VariantSplitRow> {
+    if let Some(want) = requested {
+        if let Some(row) = candidates
+            .iter()
+            .find(|r| EvaluationResultSplit::parse(&r.split).ok() == Some(want))
+        {
+            return Some(row);
+        }
+    }
+    const PREF: [EvaluationResultSplit; 4] = [
+        EvaluationResultSplit::Holdout,
+        EvaluationResultSplit::Validation,
+        EvaluationResultSplit::Full,
+        EvaluationResultSplit::Tuning,
+    ];
+    for pref in PREF {
+        if let Some(row) = candidates
+            .iter()
+            .find(|r| EvaluationResultSplit::parse(&r.split).ok() == Some(pref))
+        {
+            return Some(row);
+        }
+    }
+    candidates.first().copied()
 }
 
 #[derive(sqlx::FromRow)]

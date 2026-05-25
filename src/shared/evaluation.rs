@@ -196,7 +196,7 @@ impl EvaluationMetrics {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct EvaluationScoreWeights {
     pub recall: f32,
     pub iou: f32,

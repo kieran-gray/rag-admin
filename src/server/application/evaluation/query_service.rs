@@ -1,9 +1,11 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use uuid::Uuid;
 
 use crate::server::application::AppError;
 use crate::server::domain::evaluation::question::EvaluationQuestion;
+use crate::server::domain::evaluation::value_objects::EvaluationResultSplit as DomainSplit;
 use crate::server::domain::evaluation::{
     dataset::{
         read_model::EvaluationDatasetReadModel,
@@ -14,13 +16,18 @@ use crate::server::domain::evaluation::{
     },
     run::{
         read_model::{EvaluationRunReadModel, EvaluationVariantResultDto},
-        repository::{EvaluationRunRepository, RunListPage, RunListQuery},
+        repository::{
+            ChunkExcerpt, EvaluationRunRepository, ReferenceExcerpt, RunListPage, RunListQuery,
+            RunQuestionResultsLoad,
+        },
     },
 };
 use crate::shared::contracts::{
     DatasetListItemDto, DatasetListPageDto, DatasetListQueryDto, DatasetStatusFacetDto,
-    DatasetStatusFilterDto,
+    DatasetStatusFilterDto, ReferenceExcerptDto, RetrievedChunkDto, RunQuestionResultDto,
+    RunQuestionResultsDto, RunQuestionVariantOptionDto,
 };
+use crate::shared::EvaluationResultSplit as SplitDto;
 
 pub struct EvaluationQueryService {
     dataset_repository: Arc<dyn EvaluationDatasetRepository>,
@@ -197,6 +204,123 @@ impl EvaluationQueryService {
             .await
             .map_err(|e| AppError::Internal(format!("failed to load variant results: {e}")))
     }
+
+    pub async fn get_run_question_results(
+        &self,
+        run_id: Uuid,
+        variant_label: &str,
+        split: Option<SplitDto>,
+    ) -> Result<Option<RunQuestionResultsDto>, AppError> {
+        let domain_split = split.map(DomainSplit::from);
+        let load = self
+            .run_repository
+            .load_question_results(run_id, variant_label, domain_split)
+            .await
+            .map_err(|e| AppError::Internal(format!("failed to load question results: {e}")))?;
+        Ok(load.map(build_question_results_dto))
+    }
+}
+
+fn build_question_results_dto(load: RunQuestionResultsLoad) -> RunQuestionResultsDto {
+    let mut refs_by_question: HashMap<u32, Vec<&ReferenceExcerpt>> = HashMap::new();
+    for r in &load.references {
+        refs_by_question
+            .entry(r.question_sequence)
+            .or_default()
+            .push(r);
+    }
+
+    let questions = load
+        .questions
+        .iter()
+        .map(|q| {
+            let empty: Vec<&ReferenceExcerpt> = Vec::new();
+            let refs_for = refs_by_question.get(&q.sequence).unwrap_or(&empty);
+
+            let mut retrieved: Vec<RetrievedChunkDto> = q
+                .retrieved_chunk_ids
+                .iter()
+                .enumerate()
+                .map(|(rank, chunk_id)| {
+                    let score = q.scores.get(rank).copied().unwrap_or(0.0);
+                    let excerpt = load.chunks.get(chunk_id);
+                    let (sequence, heading, text, char_start, char_end) = match excerpt {
+                        Some(c) => (
+                            c.sequence,
+                            c.heading.clone(),
+                            c.text.clone(),
+                            c.char_start,
+                            c.char_end,
+                        ),
+                        None => (0, String::new(), String::new(), 0, 0),
+                    };
+                    let is_reference_hit =
+                        excerpt.is_some_and(|c| refs_for.iter().any(|r| spans_overlap(c, r)));
+                    RetrievedChunkDto {
+                        chunk_id: *chunk_id,
+                        rank: rank as u32,
+                        score,
+                        sequence,
+                        heading,
+                        text,
+                        char_start,
+                        char_end,
+                        is_reference_hit,
+                    }
+                })
+                .collect();
+            retrieved.sort_by_key(|c| c.rank);
+
+            let references = refs_for
+                .iter()
+                .map(|r| {
+                    let covered = q
+                        .retrieved_chunk_ids
+                        .iter()
+                        .any(|id| load.chunks.get(id).is_some_and(|c| spans_overlap(c, r)));
+                    ReferenceExcerptDto {
+                        sequence: r.sequence,
+                        content: r.content.clone(),
+                        char_start: r.char_start,
+                        char_end: r.char_end,
+                        covered,
+                    }
+                })
+                .collect();
+
+            RunQuestionResultDto {
+                sequence: q.sequence,
+                question: q.question.clone(),
+                category: q.category.clone(),
+                recall: q.recall,
+                precision: q.precision,
+                iou: q.iou,
+                retrieved,
+                references,
+            }
+        })
+        .collect();
+
+    RunQuestionResultsDto {
+        run_id: load.run_id,
+        dataset_id: load.dataset_id,
+        variant_label: load.variant_label,
+        split: SplitDto::from(load.split),
+        options: load.options.into(),
+        variants: load
+            .variants
+            .into_iter()
+            .map(|v| RunQuestionVariantOptionDto {
+                variant_label: v.variant_label,
+                splits: v.splits.into_iter().map(SplitDto::from).collect(),
+            })
+            .collect(),
+        questions,
+    }
+}
+
+fn spans_overlap(chunk: &ChunkExcerpt, reference: &ReferenceExcerpt) -> bool {
+    chunk.char_start < reference.char_end && reference.char_start < chunk.char_end
 }
 
 fn dataset_filter_dto_to_domain(status: DatasetStatusFilterDto) -> DatasetStatusFilter {

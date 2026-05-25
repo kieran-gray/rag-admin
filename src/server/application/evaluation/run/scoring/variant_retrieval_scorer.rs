@@ -68,12 +68,7 @@ impl VariantRetrievalScorer {
         let mut omega_scores = Vec::with_capacity(n);
         let mut traces = Vec::with_capacity(n);
 
-        for (q_idx, (question, q_emb)) in subset
-            .questions
-            .iter()
-            .zip(subset.embeddings.iter())
-            .enumerate()
-        {
+        for (question, q_emb) in subset.questions.iter().zip(subset.embeddings.iter()) {
             let question = *question;
             let retrieved = self
                 .retriever
@@ -110,7 +105,7 @@ impl VariantRetrievalScorer {
             omega_scores.push(omega);
 
             traces.push(RetrievalTraceEntry {
-                question_sequence: q_idx as u32,
+                question_sequence: question.sequence,
                 retrieved_chunk_ids,
                 scores,
                 recall,

@@ -15,6 +15,7 @@ use crate::ui::pages::evaluations::run_detail::{
 
 #[component]
 pub fn VariantsTabBody(run: EvaluationRunDto) -> impl IntoView {
+    let scoring_weights = run.scoring_weights;
     let mut variants = run.variants;
     variants.sort_by(|a, b| {
         evaluation_score(&b.metrics)
@@ -54,6 +55,7 @@ pub fn VariantsTabBody(run: EvaluationRunDto) -> impl IntoView {
                 leader_split=leader_split
                 variants_count=variant_count
                 retrieval=retrieval_summary
+                weights=scoring_weights
             />
 
             {(!advisor.is_empty()).then(|| view! { <ReliabilityAdvisor entries=advisor /> })}
@@ -90,6 +92,7 @@ pub fn VariantsTabBody(run: EvaluationRunDto) -> impl IntoView {
             } else {
                 view! {
                     <VariantsSection
+                        run_id=run_uuid
                         variants=variants
                         bests=bests
                         leader_key=leader_key

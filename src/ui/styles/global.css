@@ -1078,6 +1078,18 @@ header::before {
     color: var(--color-accent);
 }
 
+.variants-table .metric-good {
+    color: var(--status-ok, #22c55e);
+}
+
+.variants-table .metric-ok {
+    color: var(--color-text);
+}
+
+.variants-table .metric-poor {
+    color: var(--status-warn, #f59e0b);
+}
+
 .variants-table tbody tr.row-trick td {
     background-color: color-mix(in srgb, var(--color-surface-2) 60%, transparent);
     color: var(--color-text-muted);
@@ -1094,6 +1106,245 @@ header::before {
     max-height: 70vh;
     margin: 0 -0.25rem;
     padding: 0 0.25rem;
+}
+
+.variants-table tbody tr.variant-row-clickable {
+    cursor: pointer;
+}
+
+.variants-table tbody tr.is-expanded td {
+    background-color: var(--color-surface-2);
+}
+
+.variants-table .variant-row-chevron {
+    display: inline-block;
+    width: 0.9rem;
+    color: var(--color-text-muted);
+    margin-right: 0.25rem;
+}
+
+.variants-table tbody tr.variant-drilldown-row td {
+    padding: 0;
+    background-color: var(--color-surface-2);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.variant-card-footer {
+    margin-top: 0.75rem;
+    padding-top: 0.5rem;
+    border-top: 1px dashed var(--color-border);
+}
+
+.variant-questions-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    background: transparent;
+    border: none;
+    padding: 0.25rem 0;
+    cursor: pointer;
+}
+
+.variant-questions-toggle:hover {
+    color: var(--color-text);
+}
+
+.variant-card-drilldown {
+    margin-top: 0.5rem;
+    border-top: 1px solid var(--color-border);
+    padding-top: 0.5rem;
+}
+
+.question-drilldown {
+    padding: 0.5rem 1rem 1rem;
+    background-color: var(--color-surface-2);
+}
+
+.question-drilldown-loading {
+    padding: 0.75rem;
+}
+
+.question-drilldown-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.625rem;
+}
+
+.question-card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.question-card {
+    background-color: var(--color-surface-1);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-1);
+    overflow: hidden;
+}
+
+.question-card.is-open {
+    border-color: var(--color-accent);
+}
+
+.question-card-head {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    align-items: start;
+    gap: 0.5rem 0.75rem;
+    width: 100%;
+    padding: 0.625rem 0.75rem;
+    background: transparent;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    color: var(--color-text);
+}
+
+.question-card-head:hover {
+    background-color: var(--color-surface-2);
+}
+
+.question-card-seq {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 0.6875rem;
+    color: var(--color-text-muted);
+    padding-top: 0.125rem;
+}
+
+.question-card-text {
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    min-width: 0;
+}
+
+.question-card-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.question-card-counts {
+    font-size: 0.6875rem;
+    color: var(--color-text-muted);
+    font-family: ui-monospace, SFMono-Regular, monospace;
+}
+
+.question-card-chevron {
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+    padding-top: 0.125rem;
+}
+
+.question-card-body {
+    border-top: 1px solid var(--color-border);
+    padding: 0.625rem 0.875rem 0.875rem;
+    background-color: var(--color-surface-2);
+}
+
+.question-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 0.875rem;
+}
+
+.question-detail-section {
+}
+
+.metric-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.25rem;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 0.6875rem;
+    padding: 0.125rem 0.375rem;
+    border-radius: var(--radius-1);
+    background-color: var(--color-surface-2);
+}
+
+.metric-chip-label {
+    color: var(--color-text-muted);
+}
+
+.metric-chip.metric-good .metric-chip-value {
+    color: var(--status-ok, #22c55e);
+}
+
+.metric-chip.metric-poor .metric-chip-value {
+    color: var(--status-warn, #f59e0b);
+}
+
+.reference-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.reference-row {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    align-items: start;
+    gap: 0.5rem;
+}
+
+.reference-range {
+    white-space: nowrap;
+}
+
+.reference-content {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.4;
+}
+
+.retrieved-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.retrieved-row {
+    background-color: var(--color-surface-1);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-1);
+    padding: 0.5rem 0.625rem;
+}
+
+.retrieved-row-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.25rem;
+}
+
+.retrieved-rank {
+    color: var(--color-text-muted);
+}
+
+.retrieved-score {
+    color: var(--color-text);
+}
+
+.retrieved-text {
+    margin: 0.25rem 0 0;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    color: var(--color-text-muted);
 }
 
 /* ── Reliability advisor banners ─────────────────────────────────────── */
