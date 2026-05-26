@@ -14,7 +14,7 @@ use crate::ui::pages::{
         catalog::CatalogPage, chunking::ChunkingPage, connectors::ConnectorsPage,
         profiles::ProfilesPage,
     },
-    document_detail::DocumentDetailPage,
+    document_detail::{DocumentDetailPage, DocumentMapPage},
     documents::{DocumentByIdRedirect, DocumentsPage},
     evaluate::{EvaluateByIdRedirect, EvaluatePage},
     evaluations::{DatasetDetailPage, DatasetsPage, EvaluationsPage, RunPage},
@@ -162,6 +162,15 @@ pub fn App() -> impl IntoView {
                             ParamSegment("source_ref"),
                         )
                         view=DocumentDetailPage
+                    />
+                    <Route
+                        path=(
+                            StaticSegment("documents"),
+                            ParamSegment("doc_type"),
+                            ParamSegment("source_ref"),
+                            StaticSegment("map"),
+                        )
+                        view=DocumentMapPage
                     />
                     <Route
                         path=(

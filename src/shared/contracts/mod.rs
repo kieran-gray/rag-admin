@@ -2,6 +2,7 @@ pub mod activity;
 pub mod aggregate_types;
 pub mod chat;
 pub mod chunk_set;
+pub mod comprehension;
 pub mod configuration;
 pub mod connector;
 pub mod error;
@@ -21,6 +22,10 @@ pub use chunk_set::{
     ChunkSetListPageDto, ChunkSetListQueryDto, ChunkSetStatusFacetDto, ChunkSetStatusFilterDto,
     ChunkSetSummaryDto, DeleteChunkSetRequestDto, DeleteUnusedChunkSetsRequestDto,
     DeleteUnusedChunkSetsResponseDto, SetChunkSetPinnedRequestDto,
+};
+pub use comprehension::{
+    DocumentMapDetailDto, DocumentMapSummaryDto, InsightDto, MapItemRefDto, ObservationDto,
+    RequestMapBuildRequestDto, RequestMapBuildResponseDto, SpanDto, SuggestedRoleDto, ThreadDto,
 };
 pub use configuration::{
     AddEmbeddingModelDto, AddGenerationModelDto, AddRerankerModelDto, AddVectorIndexDto,
@@ -44,13 +49,13 @@ pub use connector::{
 };
 pub use error::{ApiError, ApiErrorKind};
 pub use evaluation::{
-    BestVariantDto, DatasetListItemDto, DatasetListPageDto, DatasetListQueryDto,
+    AxisWeightDto, BestVariantDto, DatasetListItemDto, DatasetListPageDto, DatasetListQueryDto,
     DatasetStatusFacetDto, DatasetStatusFilterDto, EvaluationDatasetDto,
     EvaluationDatasetSummaryDto, EvaluationJobInfo, EvaluationQuestionDto, EvaluationReferenceDto,
-    EvaluationRunDto, EvaluationRunSummaryDto, RecentEvaluationRunDto, ReferenceExcerptDto,
-    RetrievedChunkDto, RunEvaluationRequestDto, RunKindDto, RunKindFacetDto, RunListPageDto,
-    RunListQueryDto, RunOptimizationRequestDto, RunQuestionResultDto, RunQuestionResultsDto,
-    RunQuestionVariantOptionDto, RunStatusFacetDto, RunStatusFilterDto,
+    EvaluationRunDto, EvaluationRunSummaryDto, QuestionDimensionsDto, RecentEvaluationRunDto,
+    ReferenceExcerptDto, RetrievedChunkDto, RunEvaluationRequestDto, RunKindDto, RunKindFacetDto,
+    RunListPageDto, RunListQueryDto, RunOptimizationRequestDto, RunQuestionResultDto,
+    RunQuestionResultsDto, RunQuestionVariantOptionDto, RunStatusFacetDto, RunStatusFilterDto,
 };
 pub use events::PublishedEvent;
 pub use ingest::{IngestOptions, LogEvent, LogLevel};

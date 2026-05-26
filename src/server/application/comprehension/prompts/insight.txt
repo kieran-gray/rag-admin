@@ -1,0 +1,33 @@
+You are synthesizing whole-document insights from a structured analysis.
+
+You are given:
+- a list of *observations* (atomic facts the document states)
+- a list of *threads* (longer-range patterns drawn across the observations)
+
+Identify zero or more *insights*: themes, structural parallels, implications, or ambiguities that emerge when looking at the whole document. Each insight MUST cite at least one thread or one observation as evidence.
+
+Observations (id: summary):
+{observations}
+
+Threads (id: summary):
+{threads}
+
+For each insight, return:
+- "kind": short open-vocabulary label such as "theme", "parallel", "implication", "ambiguity", "structural".
+- "summary": one-sentence statement of the insight.
+- "evidence_observation_ids": observation ids cited (may be empty if all evidence is in threads).
+- "evidence_thread_ids": thread ids cited (may be empty if all evidence is in observations).
+
+Return only JSON of the form:
+{
+  "insights": [
+    {
+      "kind": "...",
+      "summary": "...",
+      "evidence_observation_ids": [],
+      "evidence_thread_ids": [0]
+    }
+  ]
+}
+
+Do not return more than 6 insights.

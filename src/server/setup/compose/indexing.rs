@@ -48,7 +48,7 @@ pub struct IndexingDeps<'a> {
     pub vector_index_resolver: Arc<VectorIndexResolver>,
     pub index_profile_resolver: Arc<IndexProfileResolver>,
     pub kv_store: Arc<dyn KvStore>,
-    pub wakeups: &'a mut HashMap<String, Arc<Notify>>,
+    pub wakeups: &'a mut HashMap<String, Vec<Arc<Notify>>>,
 }
 
 impl IndexingServices {

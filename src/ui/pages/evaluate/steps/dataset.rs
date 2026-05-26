@@ -8,8 +8,31 @@ use crate::server_functions::evaluation::{
     get_datasets_for_document, start_generate_synthetic_dataset,
 };
 use crate::shared::contracts::{
-    aggregate_type, EmbeddingModelDto, EvaluationDatasetSummaryDto, GenerationModelDto,
+    aggregate_type, AxisWeightDto, EmbeddingModelDto, EvaluationDatasetSummaryDto,
+    GenerationModelDto,
 };
+
+fn default_weight_matrix() -> Vec<AxisWeightDto> {
+    let entries: &[(&str, &str, u32)] = &[
+        ("recall", "observation", 25),
+        ("comprehend", "observation", 15),
+        ("comprehend", "thread", 10),
+        ("analyse", "thread", 10),
+        ("apply", "thread", 10),
+        ("analyse", "insight", 5),
+        ("synthesise", "insight", 10),
+        ("evaluate", "insight", 5),
+        ("adversarial", "observation", 10),
+    ];
+    entries
+        .iter()
+        .map(|(op, ev, w)| AxisWeightDto {
+            operation: (*op).to_string(),
+            evidence: (*ev).to_string(),
+            weight: *w,
+        })
+        .collect()
+}
 use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{EmptyState, Help, Status, StatusPill, Surface};
 use crate::ui::pages::evaluate::state::EvaluateSelection;
@@ -41,7 +64,7 @@ pub fn DatasetStep(
     let (error, set_error) = signal::<Option<String>>(None);
     let (dataset_label, set_dataset_label) = signal("synthetic-default".to_string());
     let (question_count, set_question_count) = signal(30u32);
-    let (excerpt_threshold, set_excerpt_threshold) = signal(360u32);
+    // excerpt threshold removed — references come from comprehension map seeds.
     let (duplicate_threshold, set_duplicate_threshold) = signal(820u32);
     let (generation_model_id, set_generation_model_id) = signal::<Option<Uuid>>(None);
     let (embedding_model_id, set_embedding_model_id) = signal::<Option<Uuid>>(None);
@@ -97,10 +120,10 @@ pub fn DatasetStep(
             return;
         }
         let target = question_count.get();
-        let excerpt = excerpt_threshold.get();
         let duplicate = duplicate_threshold.get();
         set_busy.set(true);
         set_error.set(None);
+        let weight_matrix = default_weight_matrix();
         spawn_local(async move {
             match start_generate_synthetic_dataset(
                 document_id,
@@ -108,8 +131,8 @@ pub fn DatasetStep(
                 emb_id,
                 label,
                 target,
-                excerpt,
                 duplicate,
+                weight_matrix,
             )
             .await
             {
@@ -199,7 +222,7 @@ pub fn DatasetStep(
                             on:input=move |ev| set_dataset_label.set(event_target_value(&ev))
                         />
                     </label>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <NumOption
                             label="Question count".to_string()
                             hint="Target questions per dataset".to_string()
@@ -207,14 +230,6 @@ pub fn DatasetStep(
                             set_value=set_question_count
                             min=1
                             max=10_000
-                        />
-                        <NumOption
-                            label="Excerpt threshold (milli)".to_string()
-                            hint="0–1000 · filters weak query/reference pairs".to_string()
-                            value=excerpt_threshold
-                            set_value=set_excerpt_threshold
-                            min=0
-                            max=1000
                         />
                         <NumOption
                             label="Duplicate threshold (milli)".to_string()

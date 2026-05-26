@@ -2,12 +2,14 @@ use leptos::prelude::*;
 use uuid::Uuid;
 
 #[cfg(feature = "ssr")]
+use crate::server::domain::evaluation::dataset::events::AxisWeight;
+#[cfg(feature = "ssr")]
 use crate::shared::contracts::BestVariantDto;
 use crate::shared::contracts::{
-    DatasetListPageDto, DatasetListQueryDto, EvaluationDatasetDto, EvaluationDatasetSummaryDto,
-    EvaluationJobInfo, EvaluationRunDto, EvaluationRunSummaryDto, RecentEvaluationRunDto,
-    RunEvaluationRequestDto, RunListPageDto, RunListQueryDto, RunOptimizationRequestDto,
-    RunQuestionResultsDto,
+    AxisWeightDto, DatasetListPageDto, DatasetListQueryDto, EvaluationDatasetDto,
+    EvaluationDatasetSummaryDto, EvaluationJobInfo, EvaluationRunDto, EvaluationRunSummaryDto,
+    RecentEvaluationRunDto, RunEvaluationRequestDto, RunListPageDto, RunListQueryDto,
+    RunOptimizationRequestDto, RunQuestionResultsDto,
 };
 #[cfg(feature = "ssr")]
 use crate::shared::contracts::{
@@ -132,9 +134,17 @@ pub async fn start_generate_synthetic_dataset(
     embedding_model_id: Uuid,
     label: String,
     question_count: u32,
-    excerpt_similarity_threshold_milli: u32,
     duplicate_similarity_threshold_milli: u32,
+    weight_matrix: Vec<AxisWeightDto>,
 ) -> Result<EvaluationJobInfo, ServerFnError> {
+    let weight_matrix: Vec<AxisWeight> = weight_matrix
+        .into_iter()
+        .map(|w| AxisWeight {
+            operation: w.operation,
+            evidence: w.evidence,
+            weight: w.weight,
+        })
+        .collect();
     ctx::<Arc<EvaluationServices>>()?
         .evaluation_dataset_command_handler
         .start_generation(StartDatasetGenerationRequest {
@@ -143,8 +153,8 @@ pub async fn start_generate_synthetic_dataset(
             embedding_model_id,
             label,
             question_count,
-            excerpt_similarity_threshold_milli,
             duplicate_similarity_threshold_milli,
+            weight_matrix,
         })
         .await
         .map_err(|e| map_app_error(&e))

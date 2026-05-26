@@ -1,9 +1,17 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::server::domain::comprehension::map_item::MapItemRef;
 use crate::server::domain::shared::Timestamp;
 
-use super::super::question::{EvaluationReference, GrammarVariant, QuestionCategory};
+use super::super::question::{EvaluationReference, QuestionDimensions};
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AxisWeight {
+    pub operation: String,
+    pub evidence: String,
+    pub weight: u32,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DatasetGenerationRequested {
@@ -15,13 +23,19 @@ pub struct DatasetGenerationRequested {
     pub target_question_count: u32,
     pub generation_model_id: Uuid,
     pub generation_model: String,
-    pub excerpt_similarity_threshold_milli: u32,
     pub duplicate_similarity_threshold_milli: u32,
     pub embedding_model_id: Uuid,
-    #[serde(default)]
     pub max_attempts: u32,
-    #[serde(default)]
-    pub grammar_variants_enabled: bool,
+    pub weight_matrix: Vec<AxisWeight>,
+    pub occurred_at: Timestamp,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct MapDependencyResolved {
+    pub dataset_id: Uuid,
+    pub map_id: Uuid,
+    pub ready: bool,
+    pub failure_reason: Option<String>,
     pub occurred_at: Timestamp,
 }
 
@@ -32,9 +46,8 @@ pub struct QuestionAccepted {
     pub question: String,
     pub references: Vec<EvaluationReference>,
     pub embedding: Option<Vec<f32>>,
-    pub category: QuestionCategory,
-    pub grammar_variant: GrammarVariant,
-    pub paraphrase_of: Option<u32>,
+    pub dimensions: QuestionDimensions,
+    pub evidence_refs: Vec<MapItemRef>,
     pub occurred_at: Timestamp,
 }
 
@@ -82,6 +95,7 @@ pub struct DatasetDeleted {
 #[serde(tag = "type", content = "data")]
 pub enum EvaluationDatasetEvent {
     DatasetGenerationRequested(DatasetGenerationRequested),
+    MapDependencyResolved(MapDependencyResolved),
     QuestionAccepted(QuestionAccepted),
     QuestionRejected(QuestionRejected),
     DatasetGenerationCompleted(DatasetGenerationCompleted),

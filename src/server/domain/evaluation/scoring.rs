@@ -228,12 +228,16 @@ mod tests {
     }
 
     fn question(refs: &[(u32, u32)]) -> EvaluationQuestion {
+        use crate::server::domain::evaluation::question::{
+            CognitiveOperation, EvidenceKind, QuestionDimensions,
+        };
         EvaluationQuestion {
             sequence: 0,
             question: "q".into(),
             references: refs
                 .iter()
                 .map(|&(s, e)| EvaluationReference {
+                    document_id: uuid::Uuid::nil(),
                     content: String::new(),
                     char_start: s,
                     char_end: e,
@@ -241,9 +245,12 @@ mod tests {
                 })
                 .collect(),
             embedding: None,
-            category: Default::default(),
-            grammar_variant: Default::default(),
-            paraphrase_of: None,
+            dimensions: QuestionDimensions {
+                operation: CognitiveOperation::Recall,
+                evidence: EvidenceKind::Observation,
+                role: "test".into(),
+            },
+            evidence_refs: Vec::new(),
         }
     }
 

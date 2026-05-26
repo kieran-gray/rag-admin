@@ -281,7 +281,9 @@ fn build_question_results_dto(load: RunQuestionResultsLoad) -> RunQuestionResult
             RunQuestionResultDto {
                 sequence: q.sequence,
                 question: q.question.clone(),
-                category: q.category.clone(),
+                operation: q.operation.clone(),
+                evidence_kind: q.evidence_kind.clone(),
+                role: q.role.clone(),
                 recall: q.recall,
                 precision: q.precision,
                 iou: q.iou,

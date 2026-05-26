@@ -49,7 +49,7 @@ pub struct IngestionDeps<'a> {
     pub connector_query_service: Arc<ConnectorQueryService>,
     pub source_document_command_handler: Arc<SourceDocumentCommandHandler>,
     pub indexing_command_handler: Arc<IndexingCommandHandler>,
-    pub wakeups: &'a mut HashMap<String, Arc<Notify>>,
+    pub wakeups: &'a mut HashMap<String, Vec<Arc<Notify>>>,
 }
 
 impl IngestionServices {

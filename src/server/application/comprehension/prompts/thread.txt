@@ -1,0 +1,26 @@
+You are stitching together longer-range patterns inside a document.
+
+Below is a numbered list of *observations* drawn from one section of the document (and an optional carried summary of prior sections). Identify zero or more *threads*: continuous arcs, motifs, ordered processes, sequences of cause and effect, or contradictions that the observations together imply. A thread MUST cite at least two observations as evidence.
+
+Reminder of prior sections:
+{carried_summary}
+
+Observations in this section (one per line, prefixed by their evidence id):
+{observations}
+
+For each thread, return:
+- "kind": short open-vocabulary label such as "arc", "motif", "sequence", "contradiction", "tension", "parallel".
+- "summary": one-sentence description of the thread.
+- "evidence_ids": the integer ids of the observations cited (subset of the list above).
+
+Also return an updated short carried summary (1-3 sentences, focused on what later sections may need to remember).
+
+Return only JSON of the form:
+{
+  "threads": [
+    { "kind": "...", "summary": "...", "evidence_ids": [0, 2] }
+  ],
+  "updated_carried_summary": "..."
+}
+
+Do not return more than 8 threads.

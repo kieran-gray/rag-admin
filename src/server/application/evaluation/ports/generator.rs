@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use uuid::Uuid;
 
 use crate::server::application::AppError;
-use crate::server::domain::evaluation::question::QuestionCategory;
+use crate::server::domain::evaluation::question::QuestionDimensions;
 
 #[derive(Debug, Clone)]
 pub struct EvaluationPrompt {
@@ -13,8 +13,6 @@ pub struct EvaluationPrompt {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GeneratedEvaluationQuestion {
     pub question: String,
-    pub references: Vec<String>,
-    pub category: QuestionCategory,
 }
 
 #[async_trait]
@@ -23,12 +21,6 @@ pub trait EvaluationGenerator: Send + Sync {
         &self,
         generation_model_id: Uuid,
         prompt: EvaluationPrompt,
-        category: QuestionCategory,
+        dimensions: QuestionDimensions,
     ) -> Result<GeneratedEvaluationQuestion, AppError>;
-
-    async fn paraphrase_question(
-        &self,
-        generation_model_id: Uuid,
-        prompt: EvaluationPrompt,
-    ) -> Result<String, AppError>;
 }

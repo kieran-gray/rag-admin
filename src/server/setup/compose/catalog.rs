@@ -82,7 +82,7 @@ pub struct CatalogDeps<'a> {
     pub generation_service: Arc<GenerationService>,
     pub rerank_service: Arc<RerankService>,
     pub event_bus: Arc<EventBus>,
-    pub wakeups: &'a mut HashMap<String, Arc<Notify>>,
+    pub wakeups: &'a mut HashMap<String, Vec<Arc<Notify>>>,
 }
 
 impl CatalogServices {
@@ -218,7 +218,7 @@ fn spawn_drivers(
     repos: &Repositories,
     wirings: &AggregateWirings,
     event_bus: &Arc<EventBus>,
-    wakeups: &mut HashMap<String, Arc<Notify>>,
+    wakeups: &mut HashMap<String, Vec<Arc<Notify>>>,
 ) {
     spawn_driver::<EmbeddingModelCatalog, ()>(
         Arc::clone(&wirings.embedding_model.event_store),

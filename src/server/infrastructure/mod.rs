@@ -1,4 +1,5 @@
 pub mod chunk_set;
+pub mod comprehension;
 pub mod configuration;
 pub mod connector;
 pub mod connector_sync;

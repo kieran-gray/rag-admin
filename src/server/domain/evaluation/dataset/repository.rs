@@ -94,6 +94,13 @@ pub trait EvaluationDatasetRepository: Send + Sync {
         dataset_id: Uuid,
     ) -> Result<(), EvaluationDatasetRepositoryError>;
 
+    async fn set_map_status(
+        &self,
+        dataset_id: Uuid,
+        ready: bool,
+        failure_reason: Option<String>,
+    ) -> Result<(), EvaluationDatasetRepositoryError>;
+
     async fn mark_failed(
         &self,
         dataset_id: Uuid,
@@ -117,6 +124,11 @@ pub trait EvaluationDatasetRepository: Send + Sync {
         &self,
         dataset_id: Uuid,
     ) -> Result<(), EvaluationDatasetRepositoryError>;
+
+    async fn find_awaiting_for_map(
+        &self,
+        map_id: Uuid,
+    ) -> Result<Vec<Uuid>, EvaluationDatasetRepositoryError>;
 }
 
 impl From<EvaluationDatasetRepositoryError> for ProjectionError {

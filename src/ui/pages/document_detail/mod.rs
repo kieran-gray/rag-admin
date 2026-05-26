@@ -3,8 +3,10 @@ use leptos::task::spawn_local;
 use leptos_router::hooks::{use_navigate, use_params_map, use_query_map};
 use leptos_router::NavigateOptions;
 
+pub mod map;
 mod steps;
 
+pub use map::DocumentMapPage;
 use steps::{ChunkStep, ConfigSelection, DocumentStep, EmbedStep, IndexStep};
 
 use super::shared::{document_type_label, indexing_milestone, indexing_summary, short_hash};
@@ -253,8 +255,22 @@ fn DocumentWorkspace(
         );
     });
 
+    let document_type = detail.document.document_type.clone();
+    let map_link_source_ref = source_ref_for_step.get_value();
+    let open_map = Callback::new(move |_| {
+        use_navigate()(
+            &format!(
+                "/documents/{}/{}/map",
+                document_type,
+                urlencoding::encode(&map_link_source_ref),
+            ),
+            NavigateOptions::default(),
+        );
+    });
+
     let actions = vec![
         ActionItem::new("Evaluate", open_evaluate),
+        ActionItem::new("View map", open_map),
         ActionItem::new(
             "Delete document",
             Callback::new(move |_| open_confirm_delete.run(())),

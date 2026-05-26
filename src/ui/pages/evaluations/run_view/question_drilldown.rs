@@ -127,7 +127,7 @@ fn QuestionCard(
     on_toggle: Callback<()>,
 ) -> impl IntoView {
     let seq = q.sequence;
-    let category = q.category.clone();
+    let category = format!("{} · {}", q.operation, q.evidence_kind);
     let question = q.question.clone();
     let recall = q.recall;
     let precision = q.precision;

@@ -334,9 +334,9 @@ fn QuestionCard(index: u32, question: EvaluationQuestionDto) -> impl IntoView {
     let references = question.references;
     let ref_count = references.len();
     let question_text = question.question;
-    let category = question.category.clone();
-    let grammar_variant = question.grammar_variant.clone();
-    let paraphrase_of = question.paraphrase_of;
+    let operation = question.dimensions.operation.clone();
+    let evidence = question.dimensions.evidence.clone();
+    let role = question.dimensions.role.clone();
 
     view! {
         <div class="surface-raised rounded p-4 space-y-3">
@@ -344,17 +344,9 @@ fn QuestionCard(index: u32, question: EvaluationQuestionDto) -> impl IntoView {
                 <span class="font-mono text-xs muted shrink-0 pt-0.5">{format!("Q{index:02}")}</span>
                 <p class="text-text leading-relaxed flex-1">{question_text}</p>
                 <div class="flex items-center gap-1 shrink-0">
-                    <span class="pill text-xs" title="Question category">{category}</span>
-                    {(grammar_variant != "clean").then(|| view! {
-                        <span class="pill pill-warn text-xs" title="Grammar-degraded paraphrase">
-                            {grammar_variant.clone()}
-                        </span>
-                    })}
-                    {paraphrase_of.map(|p| view! {
-                        <span class="text-xs muted font-mono" title="Derived from this question's sequence">
-                            {format!("↳ Q{:02}", p + 1)}
-                        </span>
-                    })}
+                    <span class="pill text-xs" title="Cognitive operation">{operation}</span>
+                    <span class="pill text-xs" title="Evidence tier">{evidence}</span>
+                    <span class="pill text-xs" title="Reader role">{role}</span>
                 </div>
             </div>
             <div class="pl-8 space-y-2">

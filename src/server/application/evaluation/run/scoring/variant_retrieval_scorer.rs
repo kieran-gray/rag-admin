@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::server::application::evaluation::ports::{RetrievalQuery, RetrievedChunk, Retriever};
 use crate::server::application::AppError;
 use crate::server::domain::chunk_set::chunk::Chunk;
-use crate::server::domain::evaluation::question::QuestionCategory;
+use crate::server::domain::evaluation::question::CognitiveOperation;
 use crate::server::domain::evaluation::run::events::RetrievalTraceEntry;
 use crate::server::domain::evaluation::scoring::{
     bootstrap_ci, mean, precision_omega, score_question, score_trick_question, std_dev,
@@ -91,13 +91,14 @@ impl VariantRetrievalScorer {
                 }
             }
 
-            let (recall, precision, iou, omega) = if question.category == QuestionCategory::Trick {
-                score_trick_question(retrieved_refs.len())
-            } else {
-                let (r, p, i) = score_question(question, &retrieved_refs);
-                let o = precision_omega(question, &variant.chunks);
-                (r, p, i, o)
-            };
+            let (recall, precision, iou, omega) =
+                if question.dimensions.operation == CognitiveOperation::Adversarial {
+                    score_trick_question(retrieved_refs.len())
+                } else {
+                    let (r, p, i) = score_question(question, &retrieved_refs);
+                    let o = precision_omega(question, &variant.chunks);
+                    (r, p, i, o)
+                };
 
             recall_scores.push(recall);
             precision_scores.push(precision);
@@ -111,7 +112,8 @@ impl VariantRetrievalScorer {
                 recall,
                 precision,
                 iou,
-                category: question.category.as_str().to_string(),
+                operation: question.dimensions.operation.as_str().to_string(),
+                evidence_kind: question.dimensions.evidence.as_str().to_string(),
             });
         }
 

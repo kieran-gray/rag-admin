@@ -266,7 +266,8 @@ pub struct EvaluationQuestionResult {
     pub retrieved_chunk_ids: Vec<u32>,
     pub missed_reference_count: u32,
     pub reference_results: Vec<EvaluationReferenceResult>,
-    pub category: String,
+    pub operation: String,
+    pub evidence_kind: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

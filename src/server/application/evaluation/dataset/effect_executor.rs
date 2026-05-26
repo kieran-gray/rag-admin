@@ -1,49 +1,54 @@
-use std::slice;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use uuid::Uuid;
 
+use crate::server::application::comprehension::DocumentMapCommandHandler;
 use crate::server::application::embedding::EmbeddingService;
+use crate::server::application::evaluation::dataset::question_filter::{
+    GeneratedQuestionGate, QuestionFilterDecision,
+};
+use crate::server::application::evaluation::dataset::question_prompt::build_question_prompt;
+use crate::server::application::evaluation::dataset::seed_planner::{
+    pick_axes, pick_role, plan_seed, rebind_seed_to_map, QuestionPlanTarget, QuestionSeed,
+    UsedSeedRegistry,
+};
 use crate::server::application::evaluation::ports::EvaluationGenerator;
+use crate::server::application::source_document::ports::BlobStore;
+use crate::server::application::{ActivityRegistry, AppError, Job, JobRegistry};
+use crate::server::domain::comprehension::map::aggregate::MapStatus;
+use crate::server::domain::comprehension::map::repository::DocumentMapRepository;
+use crate::server::domain::comprehension::role::SuggestedRole;
+use crate::server::domain::evaluation::dataset::aggregate::{
+    DatasetGenerationStatus, EvaluationDataset,
+};
+use crate::server::domain::evaluation::dataset::commands::{
+    AcceptQuestion, CompleteDatasetGeneration, EvaluationDatasetCommand, FailDatasetGeneration,
+    RejectQuestion, ResolveMapDependency,
+};
+use crate::server::domain::evaluation::dataset::effects::{
+    EnsureMapBuildEffect, EvaluationDatasetEffect, GenerateQuestionEffect, NotifyMapReadyEffect,
+    PollMapStatusEffect,
+};
+use crate::server::domain::evaluation::dataset::repository::EvaluationDatasetRepository;
+use crate::server::domain::evaluation::question::{
+    EvaluationQuestion, EvaluationReference, QuestionDimensions,
+};
+use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::shared::contracts::EvaluationQuestionDto;
 use crate::shared::plain_f32_vec;
 use event_sourcing::aggregate_repository::AggregateRepository;
 use event_sourcing::command_processor::CommandProcessor;
 use event_sourcing::process_manager::{EffectError, EffectExecutor};
 
-use super::generator::{
-    build_paraphrase_prompt, build_question_prompt_for, GenerationPlan, PARAPHRASE_MIN_COSINE,
-};
-use super::question_filter::{GeneratedQuestionGate, QuestionFilterDecision};
-use super::reference_locator::ReferenceLocator;
-use crate::server::application::source_document::ports::BlobStore;
-use crate::server::application::{ActivityRegistry, AppError, Job, JobRegistry};
-use crate::server::domain::evaluation::dataset::aggregate::{
-    DatasetGenerationStatus, EvaluationDataset,
-};
-use crate::server::domain::evaluation::dataset::commands::{
-    AcceptQuestion, CompleteDatasetGeneration, EvaluationDatasetCommand, FailDatasetGeneration,
-    RejectQuestion,
-};
-use crate::server::domain::evaluation::dataset::repository::EvaluationDatasetRepository;
-use crate::server::domain::evaluation::question::{
-    EvaluationQuestion, EvaluationReference, GrammarVariant, QuestionCategory,
-};
-use crate::server::domain::source_document::repository::SourceDocumentRepository;
-
 use crate::server::application::ports::Clock;
-
-use crate::server::domain::evaluation::dataset::effects::{
-    EvaluationDatasetEffect, GenerateParaphraseEffect, GenerateQuestionEffect,
-};
-
-const PREVIOUS_QUESTION_PROMPT_LIMIT: usize = 12;
 
 pub struct EvaluationDatasetEffectExecutor {
     source_document_repository: Arc<dyn SourceDocumentRepository>,
     blob_store: Arc<dyn BlobStore>,
     dataset_repository: Arc<dyn EvaluationDatasetRepository>,
+    map_repository: Arc<dyn DocumentMapRepository>,
+    map_command_handler: Arc<DocumentMapCommandHandler>,
     generator: Arc<dyn EvaluationGenerator>,
     embedding_service: Arc<EmbeddingService>,
     command_processor: Arc<CommandProcessor<EvaluationDataset>>,
@@ -59,6 +64,8 @@ impl EvaluationDatasetEffectExecutor {
         source_document_repository: Arc<dyn SourceDocumentRepository>,
         blob_store: Arc<dyn BlobStore>,
         dataset_repository: Arc<dyn EvaluationDatasetRepository>,
+        map_repository: Arc<dyn DocumentMapRepository>,
+        map_command_handler: Arc<DocumentMapCommandHandler>,
         generator: Arc<dyn EvaluationGenerator>,
         embedding_service: Arc<EmbeddingService>,
         command_processor: Arc<CommandProcessor<EvaluationDataset>>,
@@ -71,6 +78,8 @@ impl EvaluationDatasetEffectExecutor {
             source_document_repository,
             blob_store,
             dataset_repository,
+            map_repository,
+            map_command_handler,
             generator,
             embedding_service,
             command_processor,
@@ -81,11 +90,133 @@ impl EvaluationDatasetEffectExecutor {
         })
     }
 
+    async fn execute_ensure_map(&self, effect: &EnsureMapBuildEffect) -> Result<(), AppError> {
+        let Some(state) = self.load_active(effect.dataset_id).await? else {
+            return Ok(());
+        };
+        let job = self.open_job(state.dataset_id).await;
+        job.info(&format!(
+            "Requesting comprehension map for document {}",
+            state.document_id
+        ))
+        .await;
+
+        match self
+            .map_command_handler
+            .request_build_for_document(
+                state.document_id,
+                state.document_version,
+                state.generation_model_id,
+            )
+            .await
+        {
+            Ok(handle) => {
+                if matches!(handle.status, MapStatus::Ready) {
+                    self.resolve_map(state.dataset_id, handle.map_id, true, None)
+                        .await?;
+                } else {
+                    self.poll_map(state.dataset_id).await?;
+                }
+                Ok(())
+            }
+            Err(e) => {
+                job.error(&format!("Map build request failed: {e}")).await;
+                self.resolve_map(state.dataset_id, state.map_id, false, Some(e.to_string()))
+                    .await
+            }
+        }
+    }
+
+    async fn execute_poll_map(&self, effect: &PollMapStatusEffect) -> Result<(), AppError> {
+        let Some(state) = self.load_active(effect.dataset_id).await? else {
+            return Ok(());
+        };
+        self.poll_map(state.dataset_id).await
+    }
+
+    async fn execute_notify_map_ready(
+        &self,
+        effect: &NotifyMapReadyEffect,
+    ) -> Result<(), AppError> {
+        let awaiting = self
+            .dataset_repository
+            .find_awaiting_for_map(effect.map_id)
+            .await
+            .map_err(|e| AppError::Internal(format!("find_awaiting_for_map: {e}")))?;
+        for dataset_id in awaiting {
+            self.resolve_map(
+                dataset_id,
+                effect.map_id,
+                effect.ready,
+                effect.failure_reason.clone(),
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
+    async fn poll_map(&self, dataset_id: Uuid) -> Result<(), AppError> {
+        let Some(state) = self.load_active(dataset_id).await? else {
+            return Ok(());
+        };
+        let Some(map) = self
+            .map_repository
+            .find_for_document(state.document_id, state.document_version)
+            .await?
+        else {
+            return Ok(());
+        };
+        match map.status.as_str() {
+            "ready" => {
+                self.resolve_map(dataset_id, map.map_id, true, None).await?;
+            }
+            "failed" => {
+                self.resolve_map(dataset_id, map.map_id, false, map.failure_reason)
+                    .await?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    async fn resolve_map(
+        &self,
+        dataset_id: Uuid,
+        map_id: Uuid,
+        ready: bool,
+        failure_reason: Option<String>,
+    ) -> Result<(), AppError> {
+        self.command_processor
+            .handle(
+                dataset_id,
+                EvaluationDatasetCommand::ResolveMapDependency(ResolveMapDependency {
+                    dataset_id,
+                    map_id,
+                    ready,
+                    failure_reason,
+                    occurred_at: self.clock.now(),
+                }),
+            )
+            .await?;
+        Ok(())
+    }
+
     async fn execute_attempt(&self, effect: &GenerateQuestionEffect) -> Result<(), AppError> {
         let Some(state) = self.load_active(effect.dataset_id).await? else {
             return Ok(());
         };
         let job = self.open_job(state.dataset_id).await;
+
+        if !matches!(state.status, DatasetGenerationStatus::Generating) {
+            self.poll_map(state.dataset_id).await?;
+            return Ok(());
+        }
+
+        let Some(detail) = self.map_repository.load_detail(state.map_id).await? else {
+            job.warn("Map not ready yet; polling again").await;
+            self.poll_map(state.dataset_id).await?;
+            return Ok(());
+        };
 
         let document = self
             .source_document_repository
@@ -109,30 +240,62 @@ impl EvaluationDatasetEffectExecutor {
         let existing_dtos: Vec<EvaluationQuestionDto> =
             existing_questions.iter().cloned().map(Into::into).collect();
 
-        let category = pick_category(&state);
-        let recent_coverage = recent_coverage(&existing_questions, category);
+        let rng_seed = (state.attempt_count as u64).wrapping_add(state.dataset_id.as_u128() as u64);
+        let Some((operation, evidence)) = pick_axes(
+            &state.weight_matrix,
+            &state.accepted_by_axes,
+            state.target_question_count,
+            rng_seed,
+        ) else {
+            job.warn("No valid axis combination in weight matrix").await;
+            self.emit_reject(state.dataset_id, "no valid axis to seed from".into())
+                .await?;
+            return self.maybe_terminate(state.dataset_id, &job).await;
+        };
+        let role: SuggestedRole = pick_role(&detail.read_model.suggested_roles, rng_seed);
+
         let clean_accepted = state.clean_accepted_count();
         let target = state.target_question_count;
         let attempt_number = state.attempt_count + 1;
-
         job.info(&format!(
-            "Attempt {attempt_number} · {} · {clean_accepted}/{target} accepted",
-            category.label(),
+            "Attempt {attempt_number} · {}/{} · ({}, {})",
+            clean_accepted,
+            target,
+            operation.label(),
+            evidence.label(),
         ))
         .await;
 
-        let mut gate = GeneratedQuestionGate::with_existing(
-            self.embedding_service.as_ref(),
-            &embedding_model,
-            state.excerpt_similarity_threshold_milli as f32 / 1000.0,
-            state.duplicate_similarity_threshold_milli as f32 / 1000.0,
-            existing_dtos,
-        );
+        let used = build_used_registry(&existing_questions);
+        let seed: QuestionSeed = match plan_seed(
+            &QuestionPlanTarget {
+                operation,
+                evidence,
+                role: role.clone(),
+            },
+            &detail,
+            &used,
+            rng_seed,
+        ) {
+            Ok(s) => s,
+            Err(e) => {
+                job.info(&format!("Rejected: seed planner: {e}")).await;
+                self.emit_reject(state.dataset_id, format!("seed planner: {e}"))
+                    .await?;
+                return self.maybe_terminate(state.dataset_id, &job).await;
+            }
+        };
 
-        let prompt = build_question_prompt_for(&plain_text, &recent_coverage, category);
+        let dimensions = QuestionDimensions {
+            operation,
+            evidence,
+            role: role.name.clone(),
+        };
+        let prompt = build_question_prompt(&seed, &role);
+
         let generated = match self
             .generator
-            .generate_question(state.generation_model_id, prompt, category)
+            .generate_question(state.generation_model_id, prompt, dimensions.clone())
             .await
         {
             Ok(g) => g,
@@ -144,51 +307,31 @@ impl EvaluationDatasetEffectExecutor {
             }
         };
 
-        let shared = match ReferenceLocator::generated_to_question(&generated, &plain_text) {
-            Ok(q) => q,
-            Err(e) => {
-                job.info(&format!("Rejected: reference locator: {e}")).await;
-                self.emit_reject(state.dataset_id, format!("reference locator: {e}"))
-                    .await?;
-                return self.maybe_terminate(state.dataset_id, &job).await;
-            }
-        };
-
-        let decision = gate.try_accept(shared).await?;
+        let mut gate = GeneratedQuestionGate::with_existing(
+            self.embedding_service.as_ref(),
+            &embedding_model,
+            state.duplicate_similarity_threshold_milli as f32 / 1000.0,
+            existing_dtos,
+        );
+        let decision = gate.try_accept(&generated.question).await?;
         match decision {
-            QuestionFilterDecision::Accepted { .. } => {
-                let Some(q) = gate.latest_question() else {
-                    job.info("Rejected: filter accepted candidate but produced no question")
-                        .await;
-                    return self.maybe_terminate(state.dataset_id, &job).await;
-                };
-                let references: Vec<EvaluationReference> = q
-                    .references
-                    .iter()
-                    .map(|r| EvaluationReference {
-                        content: r.content.clone(),
-                        char_start: r.char_start,
-                        char_end: r.char_end,
-                        embedding: r.embedding.as_ref().map(|e| plain_f32_vec(e)),
-                    })
-                    .collect();
-                let embedding = q.embedding.as_ref().map(|e| plain_f32_vec(e));
-
+            QuestionFilterDecision::Accepted { embedding } => {
+                let references = build_references(&plain_text, state.document_id, &seed);
                 let next_sequence = state.next_sequence();
                 let display_number = next_sequence + 1;
-                let question_preview = truncate_str(&q.question, 160);
+                let question_preview = truncate_str(&generated.question, 160);
+                let evidence_refs = rebind_seed_to_map(&seed, state.map_id);
                 self.command_processor
                     .handle(
                         state.dataset_id,
                         EvaluationDatasetCommand::AcceptQuestion(AcceptQuestion {
                             dataset_id: state.dataset_id,
                             sequence: next_sequence,
-                            question: q.question.clone(),
+                            question: generated.question.clone(),
                             references,
-                            embedding,
-                            category,
-                            grammar_variant: GrammarVariant::Clean,
-                            paraphrase_of: None,
+                            embedding: Some(embedding),
+                            dimensions: dimensions.clone(),
+                            evidence_refs,
                             occurred_at: self.clock.now(),
                         }),
                     )
@@ -199,18 +342,6 @@ impl EvaluationDatasetEffectExecutor {
                     target,
                 ))
                 .await;
-            }
-            QuestionFilterDecision::RejectedLowExcerptSimilarity { similarity } => {
-                job.info(&format!(
-                    "Rejected: weak source match ({:.0}%)",
-                    similarity * 100.0,
-                ))
-                .await;
-                self.emit_reject(
-                    state.dataset_id,
-                    format!("low excerpt similarity {:.1}%", similarity * 100.0),
-                )
-                .await?;
             }
             QuestionFilterDecision::RejectedDuplicate { similarity } => {
                 job.info(&format!(
@@ -225,109 +356,9 @@ impl EvaluationDatasetEffectExecutor {
                 .await?;
             }
         }
+        let _ = plain_f32_vec; // ensure import stays even when unused
 
         self.maybe_terminate(state.dataset_id, &job).await
-    }
-
-    async fn execute_paraphrase(&self, effect: &GenerateParaphraseEffect) -> Result<(), AppError> {
-        let Some(state) = self.load_active(effect.dataset_id).await? else {
-            return Ok(());
-        };
-        let job = self.open_job(state.dataset_id).await;
-
-        if !state.grammar_variants_enabled {
-            return Ok(());
-        }
-
-        let existing_questions = self
-            .dataset_repository
-            .load_questions(state.dataset_id)
-            .await
-            .map_err(|e| AppError::Internal(format!("load questions: {e}")))?;
-        let clean_display = effect.clean_sequence + 1;
-        let Some(clean) = existing_questions
-            .iter()
-            .find(|q| q.sequence == effect.clean_sequence)
-        else {
-            job.warn(&format!("Paraphrase skipped: Q{clean_display} not found"))
-                .await;
-            return Ok(());
-        };
-
-        let embedding_model = self
-            .embedding_service
-            .resolve(state.embedding_model_id)
-            .await?;
-        let prompt = build_paraphrase_prompt(&clean.question);
-        let paraphrase = match self
-            .generator
-            .paraphrase_question(state.generation_model_id, prompt)
-            .await
-        {
-            Ok(p) => p,
-            Err(e) => {
-                job.warn(&format!("Paraphrase failed for Q{clean_display}: {e}"))
-                    .await;
-                return Ok(());
-            }
-        };
-
-        let mut embeddings = self
-            .embedding_service
-            .embed_with_resolved(&embedding_model, slice::from_ref(&paraphrase))
-            .await?;
-        let Some(paraphrase_embedding) = embeddings.pop() else {
-            return Ok(());
-        };
-
-        if let Some(original) = clean.embedding.as_ref() {
-            let cosine = cosine_similarity(original, &paraphrase_embedding);
-            if cosine < PARAPHRASE_MIN_COSINE {
-                job.info(&format!(
-                    "Paraphrase of Q{clean_display} rejected (drifted too far, {:.0}% match)",
-                    cosine * 100.0,
-                ))
-                .await;
-                return Ok(());
-            }
-        }
-
-        let references: Vec<EvaluationReference> = clean
-            .references
-            .iter()
-            .map(|r| EvaluationReference {
-                content: r.content.clone(),
-                char_start: r.char_start,
-                char_end: r.char_end,
-                embedding: r.embedding.clone(),
-            })
-            .collect();
-
-        let next_sequence = state.next_sequence();
-        let display_number = next_sequence + 1;
-        let preview = truncate_str(&paraphrase, 160);
-        self.command_processor
-            .handle(
-                state.dataset_id,
-                EvaluationDatasetCommand::AcceptQuestion(AcceptQuestion {
-                    dataset_id: state.dataset_id,
-                    sequence: next_sequence,
-                    question: paraphrase,
-                    references,
-                    embedding: Some(paraphrase_embedding),
-                    category: effect.category,
-                    grammar_variant: GrammarVariant::Broken,
-                    paraphrase_of: Some(effect.clean_sequence),
-                    occurred_at: self.clock.now(),
-                }),
-            )
-            .await?;
-        job.info(&format!(
-            "Q{display_number} (paraphrase of Q{clean_display}): {preview}"
-        ))
-        .await;
-
-        Ok(())
     }
 
     async fn open_job(&self, dataset_id: Uuid) -> Arc<Job> {
@@ -346,7 +377,14 @@ impl EvaluationDatasetEffectExecutor {
         let loaded = self.aggregate_repository.load(dataset_id).await?;
         match loaded {
             None => Ok(None),
-            Some(l) if !matches!(l.aggregate.status, DatasetGenerationStatus::Generating) => {
+            Some(l)
+                if matches!(
+                    l.aggregate.status,
+                    DatasetGenerationStatus::Completed
+                        | DatasetGenerationStatus::Cancelled
+                        | DatasetGenerationStatus::Failed { .. }
+                ) =>
+            {
                 Ok(None)
             }
             Some(l) => Ok(Some(l.aggregate)),
@@ -441,69 +479,48 @@ impl EvaluationDatasetEffectExecutor {
     }
 }
 
-#[async_trait]
-impl EffectExecutor<EvaluationDatasetEffect> for EvaluationDatasetEffectExecutor {
-    async fn execute(&self, effect: &EvaluationDatasetEffect) -> Result<(), EffectError> {
-        let result = match effect {
-            EvaluationDatasetEffect::AttemptQuestionGeneration(e) => self.execute_attempt(e).await,
-            EvaluationDatasetEffect::GenerateParaphrase(e) => self.execute_paraphrase(e).await,
-        };
-        result.map_err(|e| Box::new(e) as EffectError)
-    }
-}
-
-fn pick_category(state: &EvaluationDataset) -> QuestionCategory {
-    let plan = GenerationPlan::default_for_count(state.target_question_count);
-    let mut best: Option<(QuestionCategory, i64)> = None;
-    for category in QuestionCategory::all() {
-        let target = *plan.by_category.get(&category).unwrap_or(&0) as i64;
-        let accepted = *state.accepted_by_category.get(&category).unwrap_or(&0) as i64;
-        let remaining = target - accepted;
-        match best {
-            None => best = Some((category, remaining)),
-            Some((_, current)) if remaining > current => best = Some((category, remaining)),
-            _ => {}
+fn build_used_registry(existing: &[EvaluationQuestion]) -> UsedSeedRegistry<'static> {
+    use crate::server::domain::comprehension::map_item::MapItemRef;
+    let mut reg = UsedSeedRegistry::empty();
+    for q in existing {
+        for r in &q.evidence_refs {
+            match r {
+                MapItemRef::Observation { observation_id, .. } => {
+                    reg.seen_observation_ids.push(*observation_id);
+                }
+                MapItemRef::Thread { thread_id, .. } => reg.seen_thread_ids.push(*thread_id),
+                MapItemRef::Insight { insight_id, .. } => reg.seen_insight_ids.push(*insight_id),
+                MapItemRef::Connection { .. } => {}
+            }
         }
     }
-    best.map(|(c, _)| c)
-        .unwrap_or(QuestionCategory::FactRetrieval)
+    reg
 }
 
-fn recent_coverage(questions: &[EvaluationQuestion], category: QuestionCategory) -> Vec<String> {
-    let same_category: Vec<&EvaluationQuestion> = questions
+fn build_references(
+    plain_text: &str,
+    document_id: Uuid,
+    seed: &QuestionSeed,
+) -> Vec<EvaluationReference> {
+    seed.spans
         .iter()
-        .filter(|q| q.paraphrase_of.is_none() && q.category == category)
-        .collect();
-    let start = same_category
-        .len()
-        .saturating_sub(PREVIOUS_QUESTION_PROMPT_LIMIT);
-    same_category
-        .get(start..)
-        .unwrap_or_default()
-        .iter()
-        .map(|q| truncate_str(&q.question, 200))
+        .map(|s| EvaluationReference {
+            document_id,
+            content: slice_text(plain_text, s.char_start, s.char_end),
+            char_start: s.char_start,
+            char_end: s.char_end,
+            embedding: None,
+        })
         .collect()
 }
 
-fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-    let n = a.len().min(b.len());
-    if n == 0 {
-        return 0.0;
-    }
-    let mut dot = 0.0f32;
-    let mut na = 0.0f32;
-    let mut nb = 0.0f32;
-    for (av, bv) in a.iter().zip(b.iter()).take(n) {
-        dot += av * bv;
-        na += av * av;
-        nb += bv * bv;
-    }
-    let denom = na.sqrt() * nb.sqrt();
-    if denom <= 1e-9 {
-        0.0
-    } else {
-        dot / denom
-    }
+fn slice_text(text: &str, start: u32, end: u32) -> String {
+    let start = start as usize;
+    let end = end as usize;
+    text.chars()
+        .skip(start)
+        .take(end.saturating_sub(start))
+        .collect()
 }
 
 fn truncate_str(s: &str, max: usize) -> String {
@@ -513,5 +530,18 @@ fn truncate_str(s: &str, max: usize) -> String {
         format!("{out}...")
     } else {
         out
+    }
+}
+
+#[async_trait]
+impl EffectExecutor<EvaluationDatasetEffect> for EvaluationDatasetEffectExecutor {
+    async fn execute(&self, effect: &EvaluationDatasetEffect) -> Result<(), EffectError> {
+        let result: Result<(), AppError> = match effect {
+            EvaluationDatasetEffect::EnsureMapBuild(e) => self.execute_ensure_map(e).await,
+            EvaluationDatasetEffect::PollMapStatus(e) => self.execute_poll_map(e).await,
+            EvaluationDatasetEffect::AttemptQuestionGeneration(e) => self.execute_attempt(e).await,
+            EvaluationDatasetEffect::NotifyMapReady(e) => self.execute_notify_map_ready(e).await,
+        };
+        result.map_err(|e| Box::new(e) as EffectError)
     }
 }

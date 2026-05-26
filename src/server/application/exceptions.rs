@@ -6,6 +6,8 @@ use event_sourcing::error::{CommandError, EsError, ProjectionError};
 
 use crate::server::domain::chunk_set::exceptions::ChunkSetError;
 use crate::server::domain::chunk_set::repository::ChunkSetRepositoryError;
+use crate::server::domain::comprehension::map::exceptions::DocumentMapError;
+use crate::server::domain::comprehension::map::repository::DocumentMapRepositoryError;
 use crate::server::domain::configuration::catalog::CatalogError;
 use crate::server::domain::configuration::defaults::{
     ConfigurationDefaultsError, ConfigurationDefaultsRepositoryError,
@@ -259,6 +261,25 @@ impl From<ChunkSetError> for AppError {
             | ChunkSetError::PinnedCannotDelete
             | ChunkSetError::ValidationError(_) => AppError::Validation(value.to_string()),
         }
+    }
+}
+
+impl From<DocumentMapError> for AppError {
+    fn from(value: DocumentMapError) -> Self {
+        match value {
+            DocumentMapError::NotFound => AppError::NotFound(value.to_string()),
+            DocumentMapError::AlreadyExists
+            | DocumentMapError::AlreadyReady
+            | DocumentMapError::AlreadyFailed
+            | DocumentMapError::InvalidTransition(_)
+            | DocumentMapError::ValidationError(_) => AppError::Validation(value.to_string()),
+        }
+    }
+}
+
+impl From<DocumentMapRepositoryError> for AppError {
+    fn from(value: DocumentMapRepositoryError) -> Self {
+        AppError::Internal(value.to_string())
     }
 }
 

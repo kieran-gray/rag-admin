@@ -8,7 +8,7 @@ use tokio::sync::Notify;
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
 
-pub fn spawn_postgres_event_listener(pool: PgPool, wakeups: HashMap<String, Arc<Notify>>) {
+pub fn spawn_postgres_event_listener(pool: PgPool, wakeups: HashMap<String, Vec<Arc<Notify>>>) {
     tokio::spawn(async move {
         loop {
             match PgListener::connect_with(&pool).await {
@@ -24,8 +24,10 @@ pub fn spawn_postgres_event_listener(pool: PgPool, wakeups: HashMap<String, Arc<
                             Ok(notification) => {
                                 let aggregate_type = notification.payload();
                                 debug!(aggregate_type, "postgres listener: events_appended notify");
-                                if let Some(notify) = wakeups.get(aggregate_type) {
-                                    notify.notify_one();
+                                if let Some(notifies) = wakeups.get(aggregate_type) {
+                                    for notify in notifies {
+                                        notify.notify_one();
+                                    }
                                 } else {
                                     debug!(
                                         aggregate_type,

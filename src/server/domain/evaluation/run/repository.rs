@@ -59,7 +59,9 @@ pub struct RunListPage {
 pub struct QuestionResultRow {
     pub sequence: u32,
     pub question: String,
-    pub category: String,
+    pub operation: String,
+    pub evidence_kind: String,
+    pub role: String,
     pub recall: f32,
     pub precision: f32,
     pub iou: f32,

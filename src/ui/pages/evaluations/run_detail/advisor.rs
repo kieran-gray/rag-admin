@@ -208,16 +208,16 @@ pub(crate) fn reliability_advisor(
 
     if let Some(leader) = primary_leader(variants) {
         if !leader.question_results.is_empty() {
-            let mut categories: HashSet<String> = HashSet::new();
+            let mut operations: HashSet<String> = HashSet::new();
             for q in &leader.question_results {
-                categories.insert(q.category.clone());
+                operations.insert(q.operation.clone());
             }
-            let only_fact = categories.len() == 1
-                && categories.iter().next().map(String::as_str) == Some("fact_retrieval");
-            if only_fact {
+            let only_recall = operations.len() == 1
+                && operations.iter().next().map(String::as_str) == Some("recall");
+            if only_recall {
                 out.push(AdvisorEntry {
                     flag: ReliabilityFlag::FlatLandscape,
-                    detail: "Synthetic dataset is fact-retrieval only. Generator-shaped, extractive benchmarks reward lexical overlap; results will overstate retrieval quality on broader user queries. Add Architecture, Reasoning, or Trick category questions for a more honest signal.".to_string(),
+                    detail: "Synthetic dataset uses only recall-type questions. Generator-shaped, extractive benchmarks reward lexical overlap; results will overstate retrieval quality on broader user queries. Add comprehend, analyse, or adversarial operations for a more honest signal.".to_string(),
                 });
             }
         }

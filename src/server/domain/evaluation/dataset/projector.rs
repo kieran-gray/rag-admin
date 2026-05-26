@@ -45,13 +45,16 @@ impl Projector<EvaluationDatasetEvent> for EvaluationDatasetProjector {
                             target_question_count: e.target_question_count,
                             generation_model_id: e.generation_model_id,
                             generation_model: e.generation_model.clone(),
-                            excerpt_similarity_threshold_milli: e
-                                .excerpt_similarity_threshold_milli,
                             duplicate_similarity_threshold_milli: e
                                 .duplicate_similarity_threshold_milli,
                             embedding_model_id: e.embedding_model_id,
                             created_at: e.occurred_at.clone(),
                         })
+                        .await?;
+                }
+                EvaluationDatasetEvent::MapDependencyResolved(e) => {
+                    self.repository
+                        .set_map_status(e.dataset_id, e.ready, e.failure_reason.clone())
                         .await?;
                 }
                 EvaluationDatasetEvent::QuestionAccepted(e) => {
@@ -63,9 +66,8 @@ impl Projector<EvaluationDatasetEvent> for EvaluationDatasetProjector {
                                 question: e.question.clone(),
                                 references: e.references.clone(),
                                 embedding: e.embedding.clone(),
-                                category: e.category,
-                                grammar_variant: e.grammar_variant,
-                                paraphrase_of: e.paraphrase_of,
+                                dimensions: e.dimensions.clone(),
+                                evidence_refs: e.evidence_refs.clone(),
                             },
                         )
                         .await?;

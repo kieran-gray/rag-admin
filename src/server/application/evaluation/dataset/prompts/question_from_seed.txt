@@ -1,0 +1,17 @@
+You are a {role_name}. {role_focus}
+
+You are writing one {operation_label} question for a reading-comprehension test.
+
+Definition of {operation_label}: {operation_definition}
+
+Evidence available to ground the question:
+{seed_items}
+
+Rules:
+- The question must require {operation_label} of the supplied evidence.
+- Do not introduce facts that are not represented in the evidence above.
+- The question must be a single sentence ending in a question mark.
+{adversarial_clause}
+
+Return only JSON of the form:
+{"question": "..."}

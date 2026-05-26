@@ -18,9 +18,8 @@ pub(crate) fn category_breakdown(leader: &EvaluationVariantResult) -> Vec<Catego
     }
     let mut by_cat: BTreeMap<String, (usize, f32, f32, f32)> = BTreeMap::new();
     for q in &leader.question_results {
-        let entry = by_cat
-            .entry(q.category.clone())
-            .or_insert((0, 0.0, 0.0, 0.0));
+        let key = format!("{} · {}", q.operation, q.evidence_kind);
+        let entry = by_cat.entry(key).or_insert((0, 0.0, 0.0, 0.0));
         entry.0 += 1;
         entry.1 += q.recall;
         entry.2 += q.precision;
