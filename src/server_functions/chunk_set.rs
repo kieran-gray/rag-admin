@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::shared::contracts::{
     ChunkSetListPageDto, ChunkSetListQueryDto, ChunkSetSummaryDto, DeleteChunkSetRequestDto,
-    GcChunkSetsRequestDto, GcChunkSetsResponseDto, SetChunkSetPinnedRequestDto,
+    DeleteUnusedChunkSetsRequestDto, DeleteUnusedChunkSetsResponseDto, SetChunkSetPinnedRequestDto,
 };
 
 #[cfg(feature = "ssr")]
@@ -12,19 +12,6 @@ use crate::server::setup::compose::indexing::IndexingServices;
 use crate::server_functions::error::{ctx, map_app_error};
 #[cfg(feature = "ssr")]
 use std::sync::Arc;
-
-#[server(
-    name = GetChunkSets,
-    prefix = "/api",
-    endpoint = "get_chunk_sets"
-)]
-pub async fn get_chunk_sets() -> Result<Vec<ChunkSetSummaryDto>, ServerFnError> {
-    ctx::<Arc<IndexingServices>>()?
-        .chunk_set_query_service
-        .list_all()
-        .await
-        .map_err(|e| map_app_error(&e))
-}
 
 #[server(
     name = GetChunkSetsPage,
@@ -85,17 +72,17 @@ pub async fn delete_chunk_set(request: DeleteChunkSetRequestDto) -> Result<(), S
 }
 
 #[server(
-    name = GcChunkSets,
+    name = DeleteUnusedChunkSets,
     prefix = "/api",
-    endpoint = "gc_chunk_sets"
+    endpoint = "delete_unused_chunk_sets"
 )]
-pub async fn gc_chunk_sets(
-    request: GcChunkSetsRequestDto,
-) -> Result<GcChunkSetsResponseDto, ServerFnError> {
+pub async fn delete_unused_chunk_sets(
+    request: DeleteUnusedChunkSetsRequestDto,
+) -> Result<DeleteUnusedChunkSetsResponseDto, ServerFnError> {
     let deleted = ctx::<Arc<IndexingServices>>()?
         .chunk_set_command_handler
-        .gc_unused(request.older_than_seconds)
+        .delete_unused(request.older_than_seconds)
         .await
         .map_err(|e| map_app_error(&e))?;
-    Ok(GcChunkSetsResponseDto { deleted })
+    Ok(DeleteUnusedChunkSetsResponseDto { deleted })
 }

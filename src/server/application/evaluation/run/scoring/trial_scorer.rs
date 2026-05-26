@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
+use crate::server::application::chunk_set::ChunkSetCommandHandler;
 use crate::server::application::chunking::ChunkerRegistry;
 use crate::server::application::configuration::IndexProfileResolver;
 use crate::server::application::embedding::EmbeddingService;
@@ -39,6 +40,7 @@ impl TrialScorer {
         blob_store: Arc<dyn BlobStore>,
         chunker_registry: Arc<ChunkerRegistry>,
         chunk_set_repository: Arc<dyn ChunkSetRepository>,
+        chunk_set_command_handler: Arc<ChunkSetCommandHandler>,
         embedding_service: Arc<EmbeddingService>,
         embedding_set_repository: Arc<dyn EmbeddingSetRepository>,
         dataset_repository: Arc<dyn EvaluationDatasetRepository>,
@@ -51,6 +53,7 @@ impl TrialScorer {
         let indexer = VariantIndexer::new(
             chunker_registry,
             chunk_set_repository,
+            chunk_set_command_handler,
             Arc::clone(&embedding_service),
             embedding_set_repository,
             clock,

@@ -7,6 +7,7 @@ use sqlx::PgPool;
 use tokio::sync::Notify;
 
 use crate::server::application::AppError;
+use crate::server::domain::chunk_set::aggregate::ChunkSet;
 use crate::server::domain::configuration::chunking_configuration::ChunkingConfigurationCatalog;
 use crate::server::domain::configuration::defaults::ConfigurationDefaults;
 use crate::server::domain::configuration::embedding_model::EmbeddingModelCatalog;
@@ -57,6 +58,7 @@ pub struct AggregateWirings {
     pub connector_sync: AggregateWiring<ConnectorSync>,
     pub source_document: AggregateWiring<SourceDocument>,
     pub indexing: AggregateWiring<Indexing>,
+    pub chunk_set: AggregateWiring<ChunkSet>,
     pub dataset: AggregateWiring<EvaluationDataset>,
     pub run: AggregateWiring<EvaluationRun>,
 }
@@ -76,6 +78,7 @@ pub fn build_aggregate_wirings(pool: &PgPool) -> AggregateWirings {
         connector_sync: build_aggregate_wiring::<ConnectorSync>(pool),
         source_document: build_aggregate_wiring::<SourceDocument>(pool),
         indexing: build_aggregate_wiring::<Indexing>(pool),
+        chunk_set: build_aggregate_wiring::<ChunkSet>(pool),
         dataset: build_aggregate_wiring::<EvaluationDataset>(pool),
         run: build_aggregate_wiring::<EvaluationRun>(pool),
     }

@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row};
 use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::server::domain::evaluation::{
@@ -139,20 +140,16 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
                 d.excerpt_similarity_threshold_milli, d.duplicate_similarity_threshold_milli,
                 d.embedding_model_id, d.status, d.question_count, d.rejection_count,
                 d.failure_reason, d.created_at,
-                (SELECT latest_metadata->>'title' FROM source_documents sd WHERE sd.document_id = d.document_id) AS document_title,
-                (SELECT COUNT(*)::BIGINT FROM evaluation_runs r WHERE r.dataset_id = d.dataset_id) AS run_count
+                d.document_title,
+                d.run_count
             FROM evaluation_datasets d
             WHERE d.deleted_at IS NULL",
         );
         push_dataset_status_filter(&mut qb, &query.statuses);
 
         if let Some(cursor) = &query.cursor {
-            let parsed =
-                time::OffsetDateTime::parse(&cursor.created_at, &Rfc3339).map_err(|e| {
-                    EvaluationDatasetRepositoryError::Internal(format!("cursor timestamp: {e}"))
-                })?;
             qb.push(" AND (d.created_at, d.dataset_id) < (");
-            qb.push_bind(parsed);
+            qb.push_bind(cursor.created_at);
             qb.push(", ");
             qb.push_bind(cursor.dataset_id);
             qb.push(")");
@@ -203,7 +200,7 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
             };
             let document_title: Option<String> =
                 row.try_get("document_title").map_err(|e| map_row_err(&e))?;
-            let run_count: i64 = row.try_get("run_count").map_err(|e| map_row_err(&e))?;
+            let run_count: i32 = row.try_get("run_count").map_err(|e| map_row_err(&e))?;
             items.push(DatasetListPageItem {
                 dataset: EvaluationDatasetReadModel::from(dataset_row),
                 document_title,
@@ -213,10 +210,24 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
 
         let next_cursor = if items.len() as i64 > limit {
             items.pop();
-            items.last().map(|m| DatasetListCursor {
-                created_at: m.dataset.created_at.to_string(),
-                dataset_id: m.dataset.dataset_id,
-            })
+            items
+                .last()
+                .map(
+                    |m| -> Result<DatasetListCursor, EvaluationDatasetRepositoryError> {
+                        let parsed =
+                            OffsetDateTime::parse(&m.dataset.created_at.to_string(), &Rfc3339)
+                                .map_err(|e| {
+                                    EvaluationDatasetRepositoryError::Internal(format!(
+                                        "cursor timestamp: {e}"
+                                    ))
+                                })?;
+                        Ok(DatasetListCursor {
+                            created_at: parsed,
+                            dataset_id: m.dataset.dataset_id,
+                        })
+                    },
+                )
+                .transpose()?
         } else {
             None
         };
@@ -285,9 +296,15 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
                 target_question_count, generation_model_id, generation_model,
                 excerpt_similarity_threshold_milli, duplicate_similarity_threshold_milli,
                 embedding_model_id, status, question_count, rejection_count,
-                failure_reason, created_at, updated_at
+                failure_reason, document_title, run_count, created_at, updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'generating', 0, 0, NULL, $12, NOW())
+            VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+                'generating', 0, 0, NULL,
+                (SELECT latest_metadata->>'title' FROM source_documents WHERE document_id = $2),
+                0,
+                $12, NOW()
+            )
             ON CONFLICT (dataset_id) DO NOTHING
             ",
         )
@@ -485,6 +502,24 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         .execute(&self.pool)
         .await
         .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("mark_deleted: {e}")))?;
+        Ok(())
+    }
+
+    async fn increment_run_count(
+        &self,
+        dataset_id: Uuid,
+    ) -> Result<(), EvaluationDatasetRepositoryError> {
+        sqlx::query(
+            "UPDATE evaluation_datasets \
+             SET run_count = run_count + 1, updated_at = NOW() \
+             WHERE dataset_id = $1",
+        )
+        .bind(dataset_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| {
+            EvaluationDatasetRepositoryError::Internal(format!("increment_run_count: {e}"))
+        })?;
         Ok(())
     }
 }

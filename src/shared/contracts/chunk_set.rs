@@ -34,12 +34,12 @@ pub struct DeleteChunkSetRequestDto {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GcChunkSetsRequestDto {
+pub struct DeleteUnusedChunkSetsRequestDto {
     pub older_than_seconds: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GcChunkSetsResponseDto {
+pub struct DeleteUnusedChunkSetsResponseDto {
     pub deleted: u64,
 }
 

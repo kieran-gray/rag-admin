@@ -459,10 +459,14 @@ pub async fn get_evaluation_runs_page(
         })
         .collect();
 
-    let next_cursor = page
-        .next_cursor
-        .as_ref()
-        .map(|c: &RunListCursor| format!("{}|{}", c.created_at, c.run_id));
+    let next_cursor = page.next_cursor.as_ref().map(|c: &RunListCursor| {
+        use time::format_description::well_known::Rfc3339;
+        let created_at = c
+            .created_at
+            .format(&Rfc3339)
+            .unwrap_or_else(|_| String::new());
+        format!("{}|{}", created_at, c.run_id)
+    });
 
     Ok(RunListPageDto {
         items,
@@ -477,16 +481,17 @@ pub async fn get_evaluation_runs_page(
 #[cfg(feature = "ssr")]
 fn decode_run_cursor(value: &str) -> Result<RunListCursor, ServerFnError> {
     use crate::server::application::AppError;
+    use time::format_description::well_known::Rfc3339;
+    use time::OffsetDateTime;
 
     let (created_at, run_id_str) = value
         .rsplit_once('|')
         .ok_or_else(|| map_app_error(&AppError::Validation("invalid run cursor".into())))?;
     let run_id = Uuid::parse_str(run_id_str)
         .map_err(|e| map_app_error(&AppError::Validation(format!("cursor uuid: {e}"))))?;
-    Ok(RunListCursor {
-        created_at: created_at.to_string(),
-        run_id,
-    })
+    let created_at = OffsetDateTime::parse(created_at, &Rfc3339)
+        .map_err(|e| map_app_error(&AppError::Validation(format!("cursor timestamp: {e}"))))?;
+    Ok(RunListCursor { created_at, run_id })
 }
 
 #[cfg(feature = "ssr")]
@@ -525,23 +530,32 @@ fn map_run_to_dto(
     run: &EvaluationRunReadModel,
     doc_index: &HashMap<Uuid, String>,
 ) -> RecentEvaluationRunDto {
-    let policy = run.scoring_policy;
-    let best = run
-        .variant_results
-        .iter()
-        .max_by(|a, b| {
-            policy
-                .score(&a.metrics())
-                .partial_cmp(&policy.score(&b.metrics()))
-                .unwrap_or(Ordering::Equal)
+    let best = if let Some(snap) = run.best_variant.clone() {
+        Some(BestVariantDto {
+            label: snap.label,
+            config: snap.config.into(),
+            options: snap.options.into(),
+            score: snap.score,
+            metrics: snap.metrics.into(),
         })
-        .map(|v| BestVariantDto {
-            label: v.variant_label.clone(),
-            config: v.variant_config.into(),
-            options: v.options.clone().into(),
-            score: policy.score(&v.metrics()),
-            metrics: v.metrics().into(),
-        });
+    } else {
+        let policy = run.scoring_policy;
+        run.variant_results
+            .iter()
+            .max_by(|a, b| {
+                policy
+                    .score(&a.metrics())
+                    .partial_cmp(&policy.score(&b.metrics()))
+                    .unwrap_or(Ordering::Equal)
+            })
+            .map(|v| BestVariantDto {
+                label: v.variant_label.clone(),
+                config: v.variant_config.into(),
+                options: v.options.clone().into(),
+                score: policy.score(&v.metrics()),
+                metrics: v.metrics().into(),
+            })
+    };
 
     let failure_reason = match &run.status {
         EvaluationRunStatus::Failed { reason } if !reason.is_empty() => Some(reason.clone()),

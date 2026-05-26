@@ -1,8 +1,12 @@
 use async_trait::async_trait;
 use thiserror::Error;
+use time::OffsetDateTime;
 use uuid::Uuid;
 
-use super::entity::{Chunk, ChunkSet};
+use event_sourcing::error::ProjectionError;
+
+use super::chunk::Chunk;
+use super::events::ChunkSetCreated;
 use super::read_model::ChunkSetReadModel;
 
 #[derive(Debug, Error)]
@@ -24,7 +28,7 @@ pub enum ChunkSetStatusFilter {
 
 #[derive(Debug, Clone)]
 pub struct ChunkSetListCursor {
-    pub created_at: String,
+    pub created_at: OffsetDateTime,
     pub chunk_set_id: Uuid,
 }
 
@@ -46,42 +50,56 @@ pub struct ChunkSetListPage {
 
 #[async_trait]
 pub trait ChunkSetRepository: Send + Sync {
-    async fn save(
+    async fn load_summary(
         &self,
-        chunk_set: ChunkSet,
-        chunks: Vec<Chunk>,
-    ) -> Result<(), ChunkSetRepositoryError>;
-
-    async fn load(&self, chunk_set_id: Uuid) -> Result<Option<ChunkSet>, ChunkSetRepositoryError>;
+        chunk_set_id: Uuid,
+    ) -> Result<Option<ChunkSetReadModel>, ChunkSetRepositoryError>;
 
     async fn load_chunks(&self, chunk_set_id: Uuid) -> Result<Vec<Chunk>, ChunkSetRepositoryError>;
 
     async fn list_for_document(
         &self,
         document_id: Uuid,
-    ) -> Result<Vec<ChunkSet>, ChunkSetRepositoryError>;
+    ) -> Result<Vec<ChunkSetReadModel>, ChunkSetRepositoryError>;
 
-    async fn delete(&self, chunk_set_id: Uuid) -> Result<(), ChunkSetRepositoryError>;
+    async fn list_page(
+        &self,
+        query: &ChunkSetListQuery,
+    ) -> Result<ChunkSetListPage, ChunkSetRepositoryError>;
 
-    async fn set_pinned(
+    async fn project_created(&self, event: &ChunkSetCreated)
+        -> Result<(), ChunkSetRepositoryError>;
+
+    async fn project_pinned(
         &self,
         chunk_set_id: Uuid,
         pinned: bool,
     ) -> Result<(), ChunkSetRepositoryError>;
 
-    async fn delete_unused(&self, older_than_seconds: u64) -> Result<u64, ChunkSetRepositoryError>;
+    async fn project_deleted(&self, chunk_set_id: Uuid) -> Result<(), ChunkSetRepositoryError>;
 
-    async fn list_all_with_referrers(
+    async fn bump_indexing_refs(
         &self,
-    ) -> Result<Vec<ChunkSetReadModel>, ChunkSetRepositoryError>;
+        chunk_set_id: Uuid,
+        delta: i32,
+    ) -> Result<(), ChunkSetRepositoryError>;
 
-    async fn list_for_document_with_referrers(
+    async fn bump_variant_result_refs(
         &self,
-        document_id: Uuid,
-    ) -> Result<Vec<ChunkSetReadModel>, ChunkSetRepositoryError>;
+        chunk_set_id: Uuid,
+        delta: i32,
+    ) -> Result<(), ChunkSetRepositoryError>;
 
-    async fn list_page_with_referrers(
+    async fn reconcile_referrer_counts(&self) -> Result<(), ChunkSetRepositoryError>;
+
+    async fn list_unused_older_than(
         &self,
-        query: &ChunkSetListQuery,
-    ) -> Result<ChunkSetListPage, ChunkSetRepositoryError>;
+        older_than_seconds: u64,
+    ) -> Result<Vec<Uuid>, ChunkSetRepositoryError>;
+}
+
+impl From<ChunkSetRepositoryError> for ProjectionError {
+    fn from(value: ChunkSetRepositoryError) -> Self {
+        Self::Storage(value.to_string())
+    }
 }

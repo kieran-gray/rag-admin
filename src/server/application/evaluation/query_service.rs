@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::server::application::AppError;
@@ -15,7 +17,7 @@ use crate::server::domain::evaluation::{
         },
     },
     run::{
-        read_model::{EvaluationRunReadModel, EvaluationVariantResultDto},
+        read_model::{EvaluationRunReadModel, EvaluationVariantResultRow},
         repository::{
             ChunkExcerpt, EvaluationRunRepository, ReferenceExcerpt, RunListPage, RunListQuery,
             RunQuestionResultsLoad,
@@ -170,35 +172,23 @@ impl EvaluationQueryService {
         &self,
         limit: u32,
     ) -> Result<Vec<EvaluationRunReadModel>, AppError> {
-        let mut runs = self
-            .run_repository
+        self.run_repository
             .list_recent(limit)
             .await
-            .map_err(|e| AppError::Internal(format!("failed to list recent runs: {e}")))?;
-
-        for run in &mut runs {
-            run.variant_results = self.load_variant_results(run.run_id).await?;
-        }
-        Ok(runs)
+            .map_err(|e| AppError::Internal(format!("failed to list recent runs: {e}")))
     }
 
     pub async fn list_runs_page(&self, query: RunListQuery) -> Result<RunListPage, AppError> {
-        let mut page = self
-            .run_repository
+        self.run_repository
             .list_page(&query)
             .await
-            .map_err(|e| AppError::Internal(format!("failed to list runs page: {e}")))?;
-
-        for run in &mut page.items {
-            run.variant_results = self.load_variant_results(run.run_id).await?;
-        }
-        Ok(page)
+            .map_err(|e| AppError::Internal(format!("failed to list runs page: {e}")))
     }
 
     async fn load_variant_results(
         &self,
         run_id: Uuid,
-    ) -> Result<Vec<EvaluationVariantResultDto>, AppError> {
+    ) -> Result<Vec<EvaluationVariantResultRow>, AppError> {
         self.run_repository
             .load_variant_results(run_id)
             .await
@@ -342,7 +332,11 @@ fn dataset_filter_domain_to_dto(status: DatasetStatusFilter) -> DatasetStatusFil
 }
 
 fn encode_dataset_cursor(cursor: &DatasetListCursor) -> String {
-    format!("{}|{}", cursor.created_at, cursor.dataset_id)
+    let created_at = cursor
+        .created_at
+        .format(&Rfc3339)
+        .unwrap_or_else(|_| String::new());
+    format!("{}|{}", created_at, cursor.dataset_id)
 }
 
 fn parse_dataset_cursor(raw: &str) -> Result<DatasetListCursor, AppError> {
@@ -351,8 +345,10 @@ fn parse_dataset_cursor(raw: &str) -> Result<DatasetListCursor, AppError> {
         .ok_or_else(|| AppError::Validation(format!("invalid dataset cursor: {raw}")))?;
     let dataset_id = Uuid::parse_str(id)
         .map_err(|e| AppError::Validation(format!("invalid dataset cursor uuid: {e}")))?;
+    let created_at = OffsetDateTime::parse(created_at, &Rfc3339)
+        .map_err(|e| AppError::Validation(format!("invalid dataset cursor timestamp: {e}")))?;
     Ok(DatasetListCursor {
-        created_at: created_at.to_string(),
+        created_at,
         dataset_id,
     })
 }

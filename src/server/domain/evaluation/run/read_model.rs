@@ -16,7 +16,7 @@ use super::{
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EvaluationVariantResultDto {
+pub struct EvaluationVariantResultRow {
     pub run_id: Uuid,
     pub variant_label: String,
     pub variant_config: ChunkingConfig,
@@ -50,7 +50,7 @@ pub struct EvaluationVariantResultDto {
     pub judge_score: Option<f32>,
 }
 
-impl EvaluationVariantResultDto {
+impl EvaluationVariantResultRow {
     pub fn metrics(&self) -> EvaluationMetrics {
         EvaluationMetrics {
             recall_mean: self.recall_mean,
@@ -98,7 +98,17 @@ pub struct EvaluationRunReadModel {
     pub scoring_policy: ScoringPolicy,
     pub fingerprint: RunFingerprint,
     pub created_at: Timestamp,
-    pub variant_results: Vec<EvaluationVariantResultDto>,
+    pub variant_results: Vec<EvaluationVariantResultRow>,
+    pub best_variant: Option<BestVariantSnapshot>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BestVariantSnapshot {
+    pub label: String,
+    pub config: ChunkingConfig,
+    pub options: EvaluationRunOptions,
+    pub score: f32,
+    pub metrics: EvaluationMetrics,
 }
 
 #[derive(Debug, Clone)]
@@ -118,8 +128,8 @@ pub struct NewRunSummary {
     pub created_at: Timestamp,
 }
 
-impl From<EvaluationVariantResultDto> for EvaluationVariantResult {
-    fn from(v: EvaluationVariantResultDto) -> Self {
+impl From<EvaluationVariantResultRow> for EvaluationVariantResult {
+    fn from(v: EvaluationVariantResultRow) -> Self {
         let question_results: Vec<EvaluationQuestionResult> = v
             .retrieval_traces
             .iter()

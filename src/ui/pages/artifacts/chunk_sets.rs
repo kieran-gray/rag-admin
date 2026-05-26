@@ -4,11 +4,11 @@ use leptos::task::spawn_local;
 use leptos_router::hooks::query_signal;
 
 use crate::server_functions::chunk_set::{
-    delete_chunk_set, gc_chunk_sets, get_chunk_sets_page, set_chunk_set_pinned,
+    delete_chunk_set, delete_unused_chunk_sets, get_chunk_sets_page, set_chunk_set_pinned,
 };
 use crate::shared::contracts::{
     aggregate_type, ChunkSetListPageDto, ChunkSetListQueryDto, ChunkSetStatusFilterDto,
-    ChunkSetSummaryDto, DeleteChunkSetRequestDto, GcChunkSetsRequestDto,
+    ChunkSetSummaryDto, DeleteChunkSetRequestDto, DeleteUnusedChunkSetsRequestDto,
     SetChunkSetPinnedRequestDto,
 };
 use crate::ui::components::app::event_bus::use_invalidator;
@@ -90,7 +90,7 @@ pub fn ChunkSetsPage() -> impl IntoView {
 
     let (busy, set_busy) = signal(false);
     let (status, set_status) = signal::<Option<InlineStatusMessage>>(None);
-    let (gc_days, set_gc_days) = signal::<u32>(7);
+    let (prune_days, set_prune_days) = signal::<u32>(7);
 
     let toggle_status = Callback::<ChunkSetStatusFilterDto>::new(move |status| {
         let mut current = filter_state.get_untracked().statuses;
@@ -169,13 +169,13 @@ pub fn ChunkSetsPage() -> impl IntoView {
         });
     });
 
-    let on_gc = move |_| {
-        let days = gc_days.get_untracked();
+    let on_prune = move |_| {
+        let days = prune_days.get_untracked();
         let secs = (days as u64).saturating_mul(86_400);
         set_busy.set(true);
         set_status.set(None);
         spawn_local(async move {
-            match gc_chunk_sets(GcChunkSetsRequestDto {
+            match delete_unused_chunk_sets(DeleteUnusedChunkSetsRequestDto {
                 older_than_seconds: secs,
             })
             .await
@@ -198,22 +198,22 @@ pub fn ChunkSetsPage() -> impl IntoView {
         <div>
             <PageHeader
                 title="Chunk sets"
-                subtitle="Cached chunkings of documents, reused across indexing and evaluation runs. Pin to protect from cleanup; in-use chunk sets cannot be deleted directly.".to_string()
+                subtitle="Cached chunkings of documents, reused across indexing and evaluation runs. Pin to protect from deletion; in-use chunk sets cannot be deleted directly.".to_string()
             />
 
             <InlineStatus status=status />
 
-            <Surface title="Clean up".to_string() class="mb-2">
+            <Surface title="Delete unused".to_string() class="mb-2">
                 <div class="flex items-center gap-3">
                     <label class="text-sm muted">"Delete unused chunk sets older than"</label>
                     <input
                         type="number"
                         min="0"
                         class="input w-20"
-                        prop:value=move || gc_days.get().to_string()
+                        prop:value=move || prune_days.get().to_string()
                         on:input=move |ev| {
                             if let Ok(v) = event_target_value(&ev).parse::<u32>() {
-                                set_gc_days.set(v);
+                                set_prune_days.set(v);
                             }
                         }
                     />
@@ -222,13 +222,13 @@ pub fn ChunkSetsPage() -> impl IntoView {
                         type="button"
                         class="btn btn-primary text-nowrap"
                         prop:disabled=move || busy.get()
-                        on:click=on_gc
+                        on:click=on_prune
                     >
-                        "Run cleanup"
+                        "Delete now"
                     </button>
                 </div>
                 <p class="text-xs muted mt-2">
-                    "Skips pinned chunk sets and any referenced by an active indexing or evaluation run."
+                    "Skips pinned chunk sets and any referenced by an active indexing or evaluation run. The historical record of each chunk set is retained in the event log."
                 </p>
             </Surface>
 

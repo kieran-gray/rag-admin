@@ -180,6 +180,7 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         job_registry: Arc::clone(&platform.job_registry),
         activity_registry: Arc::clone(&platform.activity_registry),
         chunker_registry: Arc::clone(&platform.chunker_registry),
+        chunk_set_command_handler: Arc::clone(&indexing.chunk_set_command_handler),
         embedding_service: Arc::clone(&platform.embedding_service),
         generation_service: Arc::clone(&platform.generation_service),
         index_profile_resolver: Arc::clone(&catalog.index_profile_resolver),

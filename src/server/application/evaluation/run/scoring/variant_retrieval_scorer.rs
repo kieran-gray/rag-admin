@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::server::application::evaluation::ports::{RetrievalQuery, RetrievedChunk, Retriever};
 use crate::server::application::AppError;
-use crate::server::domain::chunk_set::entity::Chunk;
+use crate::server::domain::chunk_set::chunk::Chunk;
 use crate::server::domain::evaluation::question::QuestionCategory;
 use crate::server::domain::evaluation::run::events::RetrievalTraceEntry;
 use crate::server::domain::evaluation::scoring::{

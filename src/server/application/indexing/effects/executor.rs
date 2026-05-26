@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use serde_json::json;
 use uuid::Uuid;
 
+use crate::server::application::chunk_set::ChunkSetCommandHandler;
 use crate::server::application::chunking::ChunkerRegistry;
 use crate::server::application::configuration::{IndexProfileResolver, ResolvedIndexProfile};
 use crate::server::application::embedding::EmbeddingService;
@@ -16,7 +17,8 @@ use crate::server::application::source_document::ports::BlobStore;
 use crate::server::application::{
     ActivityRegistry, AppError, InternalLogEvent, Job, JobIdStrategy, JobRegistry, JobSession,
 };
-use crate::server::domain::chunk_set::entity::{Chunk, ChunkSet};
+use crate::server::domain::chunk_set::aggregate::derive_chunk_set_id;
+use crate::server::domain::chunk_set::chunk::Chunk;
 use crate::server::domain::chunk_set::repository::ChunkSetRepository;
 use crate::server::domain::configuration::embedding_model::EmbeddingModel;
 use crate::server::domain::embedding_set::entity::{ChunkEmbedding, EmbeddingSet};
@@ -50,6 +52,7 @@ pub struct IndexingEffectExecutor {
     blob_store: Arc<dyn BlobStore>,
     chunker_registry: Arc<ChunkerRegistry>,
     chunk_set_repository: Arc<dyn ChunkSetRepository>,
+    chunk_set_command_handler: Arc<ChunkSetCommandHandler>,
     embedding_service: Arc<EmbeddingService>,
     embedding_set_repository: Arc<dyn EmbeddingSetRepository>,
     vector_index_resolver: Arc<VectorIndexResolver>,
@@ -69,6 +72,7 @@ impl IndexingEffectExecutor {
         blob_store: Arc<dyn BlobStore>,
         chunker_registry: Arc<ChunkerRegistry>,
         chunk_set_repository: Arc<dyn ChunkSetRepository>,
+        chunk_set_command_handler: Arc<ChunkSetCommandHandler>,
         embedding_service: Arc<EmbeddingService>,
         embedding_set_repository: Arc<dyn EmbeddingSetRepository>,
         vector_index_resolver: Arc<VectorIndexResolver>,
@@ -92,6 +96,7 @@ impl IndexingEffectExecutor {
             blob_store,
             chunker_registry,
             chunk_set_repository,
+            chunk_set_command_handler,
             embedding_service,
             embedding_set_repository,
             vector_index_resolver,
@@ -252,14 +257,17 @@ impl IndexingEffectExecutor {
             .map_err(|e| AppError::Internal(format!("chunking failed: {e}")))?;
 
         let chunk_count = chunk_outputs.len() as u32;
-        let chunk_set_id = self.id_generator.new_uuid();
+        let chunk_set_id = derive_chunk_set_id(
+            indexing.document_id,
+            indexing.document_version,
+            &indexing.chunking_config,
+        );
         let occurred_at = self.clock.now();
         let chunks: Vec<Chunk> = chunk_outputs
             .into_iter()
             .enumerate()
             .map(|(i, co)| Chunk {
                 chunk_id: self.id_generator.new_uuid(),
-                chunk_set_id,
                 sequence: i as u32,
                 heading: co.heading,
                 text: co.text,
@@ -268,15 +276,15 @@ impl IndexingEffectExecutor {
             })
             .collect();
 
-        let chunk_set = ChunkSet {
-            chunk_set_id,
-            document_id: indexing.document_id,
-            document_version: indexing.document_version,
-            chunking_config: indexing.chunking_config,
-            created_at: occurred_at.to_string(),
-            pinned: false,
-        };
-        self.chunk_set_repository.save(chunk_set, chunks).await?;
+        self.chunk_set_command_handler
+            .create(
+                chunk_set_id,
+                indexing.document_id,
+                indexing.document_version,
+                indexing.chunking_config,
+                chunks,
+            )
+            .await?;
 
         self.command_processor
             .handle(

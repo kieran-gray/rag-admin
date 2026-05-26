@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use crate::server::domain::chunk_set::entity::Chunk;
+use crate::server::domain::chunk_set::chunk::Chunk;
 use crate::server::domain::evaluation::question::EvaluationQuestion;
 
 pub fn score_question(question: &EvaluationQuestion, retrieved: &[&Chunk]) -> (f32, f32, f32) {
@@ -219,7 +219,6 @@ mod tests {
     fn chunk(start: u32, end: u32) -> Chunk {
         Chunk {
             chunk_id: Uuid::new_v4(),
-            chunk_set_id: Uuid::nil(),
             sequence: 0,
             heading: String::new(),
             text: String::new(),

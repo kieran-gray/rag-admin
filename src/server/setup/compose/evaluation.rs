@@ -4,6 +4,7 @@ use std::sync::Arc;
 use sqlx::PgPool;
 use tokio::sync::Notify;
 
+use crate::server::application::chunk_set::ChunkSetCommandHandler;
 use crate::server::application::chunking::ChunkerRegistry;
 use crate::server::application::configuration::IndexProfileResolver;
 use crate::server::application::embedding::EmbeddingService;
@@ -21,6 +22,7 @@ use crate::server::application::llm::GenerationService;
 use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::source_document::SourceDocumentQueryService;
 use crate::server::application::{ActivityRegistry, JobRegistry};
+use crate::server::domain::chunk_set::ref_projectors::EvaluationRunChunkSetRefProjector;
 use crate::server::domain::evaluation::dataset::aggregate::EvaluationDataset;
 use crate::server::domain::evaluation::dataset::effects::EvaluationDatasetEffect;
 use crate::server::domain::evaluation::dataset::projector::EvaluationDatasetProjector;
@@ -54,6 +56,7 @@ pub struct EvaluationDeps<'a> {
     pub job_registry: Arc<JobRegistry>,
     pub activity_registry: Arc<ActivityRegistry>,
     pub chunker_registry: Arc<ChunkerRegistry>,
+    pub chunk_set_command_handler: Arc<ChunkSetCommandHandler>,
     pub embedding_service: Arc<EmbeddingService>,
     pub generation_service: Arc<GenerationService>,
     pub index_profile_resolver: Arc<IndexProfileResolver>,
@@ -73,6 +76,7 @@ impl EvaluationServices {
             job_registry,
             activity_registry,
             chunker_registry,
+            chunk_set_command_handler,
             embedding_service,
             generation_service,
             index_profile_resolver,
@@ -132,6 +136,7 @@ impl EvaluationServices {
             Arc::clone(&repos.blob_store),
             chunker_registry,
             Arc::clone(&repos.chunk_set),
+            chunk_set_command_handler,
             embedding_service,
             Arc::clone(&repos.embedding_set),
             Arc::clone(&repos.evaluation_dataset),
@@ -201,9 +206,15 @@ impl EvaluationServices {
         );
         spawn_driver::<EvaluationRun, EvaluationRunEffect>(
             Arc::clone(&wirings.run.event_store),
-            vec![Arc::new(EvaluationRunProjector::new(Arc::clone(
-                &repos.evaluation_run,
-            )))],
+            vec![
+                Arc::new(EvaluationRunProjector::new(
+                    Arc::clone(&repos.evaluation_run),
+                    Arc::clone(&repos.evaluation_dataset),
+                )),
+                Arc::new(EvaluationRunChunkSetRefProjector::new(Arc::clone(
+                    &repos.chunk_set,
+                ))),
+            ],
             Some(run_process_manager),
             Arc::clone(&repos.checkpoint),
             event_bus,

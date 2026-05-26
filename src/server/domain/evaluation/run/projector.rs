@@ -2,9 +2,10 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
+use crate::server::domain::evaluation::dataset::repository::EvaluationDatasetRepository;
 use crate::server::domain::evaluation::run::events::EvaluationRunEvent;
 use crate::server::domain::evaluation::run::read_model::{
-    EvaluationVariantResultDto, NewRunSummary,
+    EvaluationVariantResultRow, NewRunSummary,
 };
 use crate::server::domain::evaluation::run::repository::EvaluationRunRepository;
 use event_sourcing::envelope::EventEnvelope;
@@ -13,13 +14,20 @@ use event_sourcing::projector::Projector;
 
 pub struct EvaluationRunProjector {
     repository: Arc<dyn EvaluationRunRepository>,
+    dataset_repository: Arc<dyn EvaluationDatasetRepository>,
 }
 
 impl EvaluationRunProjector {
     pub const NAME: &'static str = "evaluation_run_projector";
 
-    pub fn new(repository: Arc<dyn EvaluationRunRepository>) -> Self {
-        Self { repository }
+    pub fn new(
+        repository: Arc<dyn EvaluationRunRepository>,
+        dataset_repository: Arc<dyn EvaluationDatasetRepository>,
+    ) -> Self {
+        Self {
+            repository,
+            dataset_repository,
+        }
     }
 }
 
@@ -54,13 +62,16 @@ impl Projector<EvaluationRunEvent> for EvaluationRunProjector {
                             created_at: e.occurred_at.clone(),
                         })
                         .await?;
+                    self.dataset_repository
+                        .increment_run_count(e.dataset_id)
+                        .await?;
                 }
                 EvaluationRunEvent::VariantPrepared(e) => {
                     self.repository.record_variant_prepared(e.run_id).await?;
                 }
                 EvaluationRunEvent::VariantScored(e) => {
                     self.repository
-                        .save_variant_result(EvaluationVariantResultDto {
+                        .save_variant_result(EvaluationVariantResultRow {
                             run_id: e.run_id,
                             variant_label: e.variant_label.clone(),
                             variant_config: e.variant_config,

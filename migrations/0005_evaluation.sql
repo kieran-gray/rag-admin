@@ -1,6 +1,7 @@
 CREATE TABLE evaluation_datasets (
     dataset_id UUID PRIMARY KEY,
     document_id UUID NOT NULL,
+    document_title TEXT,
     document_version INT NOT NULL,
     content_hash TEXT NOT NULL,
     label TEXT NOT NULL,
@@ -13,6 +14,7 @@ CREATE TABLE evaluation_datasets (
     status TEXT NOT NULL,
     question_count INT NOT NULL,
     rejection_count INT NOT NULL,
+    run_count INTEGER NOT NULL DEFAULT 0,
     failure_reason TEXT,
     deleted_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL,
@@ -64,7 +66,6 @@ CREATE TABLE evaluation_runs (
     document_version INT NOT NULL,
     variants JSONB NOT NULL,
     options JSONB NOT NULL,
-    autotune_request JSONB,
     optimization JSONB,
     status TEXT NOT NULL,
     variants_count INT NOT NULL,
@@ -87,7 +88,7 @@ CREATE INDEX evaluation_runs_dataset_id_idx ON evaluation_runs (dataset_id);
 CREATE TABLE evaluation_variant_results (
     run_id UUID NOT NULL REFERENCES evaluation_runs (run_id) ON DELETE CASCADE,
     variant_label TEXT NOT NULL,
-    split TEXT NOT NULL,
+    split TEXT NOT NULL CHECK (split IN ('full', 'tuning', 'validation', 'holdout')),
     top_k INTEGER NOT NULL,
     min_score_milli INTEGER NOT NULL,
     variant_config JSONB NOT NULL,
@@ -111,7 +112,7 @@ CREATE TABLE evaluation_variant_results (
     composite_ci_low REAL NOT NULL DEFAULT 0,
     composite_ci_high REAL NOT NULL DEFAULT 0,
     judge_score REAL,
-    chunk_set_id UUID NOT NULL,
+    chunk_set_id UUID NOT NULL REFERENCES chunk_sets (chunk_set_id) ON DELETE RESTRICT,
     embedding_set_id UUID NOT NULL,
     chunk_count INTEGER NOT NULL DEFAULT 0,
     average_chunk_tokens INTEGER NOT NULL DEFAULT 0,
@@ -123,7 +124,7 @@ CREATE TABLE evaluation_variant_results (
 CREATE TABLE retrieval_traces (
     run_id UUID NOT NULL,
     variant_label TEXT NOT NULL,
-    split TEXT NOT NULL,
+    split TEXT NOT NULL CHECK (split IN ('full', 'tuning', 'validation', 'holdout')),
     top_k INTEGER NOT NULL,
     min_score_milli INTEGER NOT NULL,
     question_sequence INT NOT NULL,
@@ -146,3 +147,32 @@ CREATE TABLE retrieval_traces (
         REFERENCES evaluation_variant_results (run_id, variant_label, split, top_k, min_score_milli)
         ON DELETE CASCADE
 );
+
+CREATE TABLE evaluation_run_list_view (
+    run_id UUID PRIMARY KEY,
+    dataset_id UUID NOT NULL,
+    document_id UUID NOT NULL,
+    optimization JSONB,
+    kind TEXT NOT NULL CHECK (kind IN ('optimization', 'manual')),
+    status TEXT NOT NULL,
+    failure_reason TEXT,
+    variant_count INTEGER NOT NULL,
+    variants_scored INTEGER NOT NULL,
+    best_variant JSONB,
+    created_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX evaluation_run_list_view_created_at_idx
+    ON evaluation_run_list_view (created_at DESC, run_id DESC);
+
+CREATE INDEX evaluation_run_list_view_dataset_idx
+    ON evaluation_run_list_view (dataset_id, created_at DESC);
+
+CREATE INDEX evaluation_run_list_view_document_idx
+    ON evaluation_run_list_view (document_id, created_at DESC);
+
+CREATE INDEX evaluation_run_list_view_status_idx
+    ON evaluation_run_list_view (status);
+
+CREATE INDEX evaluation_run_list_view_kind_idx
+    ON evaluation_run_list_view (kind);

@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use thiserror::Error;
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::server::domain::evaluation::question::EvaluationQuestion;
@@ -23,7 +24,7 @@ pub enum DatasetStatusFilter {
 
 #[derive(Debug, Clone)]
 pub struct DatasetListCursor {
-    pub created_at: String,
+    pub created_at: OffsetDateTime,
     pub dataset_id: Uuid,
 }
 
@@ -111,6 +112,11 @@ pub trait EvaluationDatasetRepository: Send + Sync {
     ) -> Result<(), EvaluationDatasetRepositoryError>;
 
     async fn mark_deleted(&self, dataset_id: Uuid) -> Result<(), EvaluationDatasetRepositoryError>;
+
+    async fn increment_run_count(
+        &self,
+        dataset_id: Uuid,
+    ) -> Result<(), EvaluationDatasetRepositoryError>;
 }
 
 impl From<EvaluationDatasetRepositoryError> for ProjectionError {

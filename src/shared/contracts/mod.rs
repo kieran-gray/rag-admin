@@ -19,8 +19,8 @@ pub use aggregate_types as aggregate_type;
 pub use chat::{ChatRequest, ChatResponse, MetadataFilterDto};
 pub use chunk_set::{
     ChunkSetListPageDto, ChunkSetListQueryDto, ChunkSetStatusFacetDto, ChunkSetStatusFilterDto,
-    ChunkSetSummaryDto, DeleteChunkSetRequestDto, GcChunkSetsRequestDto, GcChunkSetsResponseDto,
-    SetChunkSetPinnedRequestDto,
+    ChunkSetSummaryDto, DeleteChunkSetRequestDto, DeleteUnusedChunkSetsRequestDto,
+    DeleteUnusedChunkSetsResponseDto, SetChunkSetPinnedRequestDto,
 };
 pub use configuration::{
     AddEmbeddingModelDto, AddGenerationModelDto, AddRerankerModelDto, AddVectorIndexDto,

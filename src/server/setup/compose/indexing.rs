@@ -14,6 +14,10 @@ use crate::server::application::indexing::{
 };
 use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::{ActivityRegistry, JobRegistry};
+use crate::server::domain::chunk_set::aggregate::ChunkSet;
+use crate::server::domain::chunk_set::effects::ChunkSetEffect;
+use crate::server::domain::chunk_set::projector::ChunkSetProjector;
+use crate::server::domain::chunk_set::ref_projectors::IndexingChunkSetRefProjector;
 use crate::server::domain::indexing::aggregate::Indexing;
 use crate::server::domain::indexing::projector::IndexingProjector;
 use crate::server::infrastructure::shared::event_sourcing::PostgresJobQueue;
@@ -72,7 +76,11 @@ impl IndexingServices {
             Arc::clone(&clock),
         );
 
-        let chunk_set_command_handler = ChunkSetCommandHandler::new(Arc::clone(&repos.chunk_set));
+        let chunk_set_command_handler = ChunkSetCommandHandler::new(
+            Arc::clone(&wirings.chunk_set.command_processor),
+            Arc::clone(&repos.chunk_set),
+            Arc::clone(&clock),
+        );
         let chunk_set_query_service = ChunkSetQueryService::new(Arc::clone(&repos.chunk_set));
 
         let indexing_job_queue: Arc<dyn JobQueue<IndexingEffect>> =
@@ -84,6 +92,7 @@ impl IndexingServices {
             Arc::clone(&repos.blob_store),
             chunker_registry,
             Arc::clone(&repos.chunk_set),
+            Arc::clone(&chunk_set_command_handler),
             embedding_service,
             Arc::clone(&repos.embedding_set),
             vector_index_resolver,
@@ -92,7 +101,7 @@ impl IndexingServices {
             Arc::clone(&wirings.indexing.command_processor),
             job_registry,
             activity_registry,
-            clock,
+            Arc::clone(&clock),
             id_generator,
         );
 
@@ -104,10 +113,25 @@ impl IndexingServices {
 
         spawn_driver::<Indexing, IndexingEffect>(
             Arc::clone(&wirings.indexing.event_store),
-            vec![Arc::new(IndexingProjector::new(Arc::clone(
-                &repos.indexing,
-            )))],
+            vec![
+                Arc::new(IndexingProjector::new(Arc::clone(&repos.indexing))),
+                Arc::new(IndexingChunkSetRefProjector::new(
+                    Arc::clone(&repos.indexing),
+                    Arc::clone(&repos.chunk_set),
+                )),
+            ],
             Some(indexing_process_manager),
+            Arc::clone(&repos.checkpoint),
+            Arc::clone(&event_bus),
+            wakeups,
+        );
+
+        spawn_driver::<ChunkSet, ChunkSetEffect>(
+            Arc::clone(&wirings.chunk_set.event_store),
+            vec![Arc::new(ChunkSetProjector::new(Arc::clone(
+                &repos.chunk_set,
+            )))],
+            None,
             Arc::clone(&repos.checkpoint),
             event_bus,
             wakeups,

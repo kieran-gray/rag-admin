@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::server::application::AppError;
@@ -21,19 +23,11 @@ impl ChunkSetQueryService {
         Arc::new(Self { repository })
     }
 
-    pub async fn list_all(&self) -> Result<Vec<ChunkSetSummaryDto>, AppError> {
-        let rows = self.repository.list_all_with_referrers().await?;
-        Ok(rows.into_iter().map(read_model_to_dto).collect())
-    }
-
     pub async fn list_for_document(
         &self,
         document_id: Uuid,
     ) -> Result<Vec<ChunkSetSummaryDto>, AppError> {
-        let rows = self
-            .repository
-            .list_for_document_with_referrers(document_id)
-            .await?;
+        let rows = self.repository.list_for_document(document_id).await?;
         Ok(rows.into_iter().map(read_model_to_dto).collect())
     }
 
@@ -55,10 +49,7 @@ impl ChunkSetQueryService {
             limit: query.limit,
             statuses,
         };
-        let page = self
-            .repository
-            .list_page_with_referrers(&domain_query)
-            .await?;
+        let page = self.repository.list_page(&domain_query).await?;
 
         Ok(ChunkSetListPageDto {
             items: page.items.into_iter().map(read_model_to_dto).collect(),
@@ -110,7 +101,11 @@ fn filter_domain_to_dto(status: ChunkSetStatusFilter) -> ChunkSetStatusFilterDto
 }
 
 fn encode_cursor(cursor: &ChunkSetListCursor) -> String {
-    format!("{}|{}", cursor.created_at, cursor.chunk_set_id)
+    let created_at = cursor
+        .created_at
+        .format(&Rfc3339)
+        .unwrap_or_else(|_| String::new());
+    format!("{}|{}", created_at, cursor.chunk_set_id)
 }
 
 fn parse_cursor(raw: &str) -> Result<ChunkSetListCursor, AppError> {
@@ -119,8 +114,10 @@ fn parse_cursor(raw: &str) -> Result<ChunkSetListCursor, AppError> {
         .ok_or_else(|| AppError::Validation(format!("invalid chunk-set cursor: {raw}")))?;
     let chunk_set_id = Uuid::parse_str(id)
         .map_err(|e| AppError::Validation(format!("invalid chunk-set cursor uuid: {e}")))?;
+    let created_at = OffsetDateTime::parse(created_at, &Rfc3339)
+        .map_err(|e| AppError::Validation(format!("invalid chunk-set cursor timestamp: {e}")))?;
     Ok(ChunkSetListCursor {
-        created_at: created_at.to_string(),
+        created_at,
         chunk_set_id,
     })
 }

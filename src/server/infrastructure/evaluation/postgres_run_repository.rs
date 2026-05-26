@@ -1,14 +1,15 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use async_trait::async_trait;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row};
 use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::server::domain::evaluation::run::aggregate::EvaluationRunStatus;
 use crate::server::domain::evaluation::run::events::RetrievalTraceEntry;
 use crate::server::domain::evaluation::run::read_model::{
-    EvaluationRunReadModel, EvaluationVariantResultDto, NewRunSummary,
+    BestVariantSnapshot, EvaluationRunReadModel, EvaluationVariantResultRow, NewRunSummary,
 };
 use crate::server::domain::evaluation::run::repository::{
     ChunkExcerpt, EvaluationRunRepository, EvaluationRunRepositoryError, QuestionResultRow,
@@ -18,6 +19,7 @@ use crate::server::domain::evaluation::run::repository::{
 use crate::server::domain::evaluation::run::scoring_policy::{ScoringPolicy, ScoringWeights};
 use crate::server::domain::evaluation::value_objects::{
     ChunkingVariant, EvaluationResultSplit, EvaluationRunOptions, OptimizationConfig,
+    RunFingerprint,
 };
 use crate::server::domain::shared::Timestamp;
 use crate::server::infrastructure::shared::sql::timestamps::to_offset_datetime;
@@ -69,17 +71,16 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         &self,
         document_id: Uuid,
     ) -> Result<Vec<EvaluationRunReadModel>, EvaluationRunRepositoryError> {
-        let rows: Vec<RunRow> = sqlx::query_as(
+        let rows: Vec<RunListViewRow> = sqlx::query_as(
             "
             SELECT
-                run_id, dataset_id, index_profile_id, retrieval_profile_id, document_id, document_version,
-                variants, options, optimization,
-                status, variants_count, variants_prepared, variants_scored, failure_reason,
-                scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
-                scoring_precision_omega_weight, fingerprint, created_at
-            FROM evaluation_runs
+                run_id, dataset_id, document_id, optimization, kind,
+                status, failure_reason,
+                variant_count, variants_scored,
+                best_variant, created_at
+            FROM evaluation_run_list_view
             WHERE document_id = $1
-            ORDER BY created_at DESC
+            ORDER BY created_at DESC, run_id DESC
             ",
         )
         .bind(document_id)
@@ -96,17 +97,16 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         &self,
         dataset_id: Uuid,
     ) -> Result<Vec<EvaluationRunReadModel>, EvaluationRunRepositoryError> {
-        let rows: Vec<RunRow> = sqlx::query_as(
+        let rows: Vec<RunListViewRow> = sqlx::query_as(
             "
             SELECT
-                run_id, dataset_id, index_profile_id, retrieval_profile_id, document_id, document_version,
-                variants, options, optimization,
-                status, variants_count, variants_prepared, variants_scored, failure_reason,
-                scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
-                scoring_precision_omega_weight, fingerprint, created_at
-            FROM evaluation_runs
+                run_id, dataset_id, document_id, optimization, kind,
+                status, failure_reason,
+                variant_count, variants_scored,
+                best_variant, created_at
+            FROM evaluation_run_list_view
             WHERE dataset_id = $1
-            ORDER BY created_at DESC
+            ORDER BY created_at DESC, run_id DESC
             ",
         )
         .bind(dataset_id)
@@ -123,16 +123,15 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         &self,
         limit: u32,
     ) -> Result<Vec<EvaluationRunReadModel>, EvaluationRunRepositoryError> {
-        let rows: Vec<RunRow> = sqlx::query_as(
+        let rows: Vec<RunListViewRow> = sqlx::query_as(
             "
             SELECT
-                run_id, dataset_id, index_profile_id, retrieval_profile_id, document_id, document_version,
-                variants, options, optimization,
-                status, variants_count, variants_prepared, variants_scored, failure_reason,
-                scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
-                scoring_precision_omega_weight, fingerprint, created_at
-            FROM evaluation_runs
-            ORDER BY created_at DESC
+                run_id, dataset_id, document_id, optimization, kind,
+                status, failure_reason,
+                variant_count, variants_scored,
+                best_variant, created_at
+            FROM evaluation_run_list_view
+            ORDER BY created_at DESC, run_id DESC
             LIMIT $1
             ",
         )
@@ -154,10 +153,11 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         let fetch_limit = limit + 1;
 
         let total_matching: i64 = {
-            let mut qb: QueryBuilder<Postgres> =
-                QueryBuilder::new("SELECT COUNT(*)::BIGINT FROM evaluation_runs WHERE 1=1");
-            push_status_filter(&mut qb, &query.statuses);
-            push_kind_filter(&mut qb, &query.kinds);
+            let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
+                "SELECT COUNT(*)::BIGINT FROM evaluation_run_list_view WHERE 1=1",
+            );
+            push_view_status_filter(&mut qb, &query.statuses);
+            push_view_kind_filter(&mut qb, &query.kinds);
             qb.build_query_scalar::<i64>()
                 .fetch_one(&self.pool)
                 .await
@@ -165,13 +165,13 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         };
 
         let total_all: i64 =
-            sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::BIGINT FROM evaluation_runs")
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::BIGINT FROM evaluation_run_list_view")
                 .fetch_one(&self.pool)
                 .await
                 .map_err(|e| EvaluationRunRepositoryError::Internal(format!("count_all: {e}")))?;
 
         let count_rows = sqlx::query(
-            "SELECT status, COUNT(*)::BIGINT AS count FROM evaluation_runs GROUP BY status",
+            "SELECT status, COUNT(*)::BIGINT AS count FROM evaluation_run_list_view GROUP BY status",
         )
         .fetch_all(&self.pool)
         .await
@@ -192,8 +192,8 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         status_counts.sort_by_key(|(f, _)| status_filter_order(*f));
 
         let kind_rows = sqlx::query(
-            "SELECT (optimization IS NOT NULL) AS is_opt, COUNT(*)::BIGINT AS count
-             FROM evaluation_runs GROUP BY is_opt",
+            "SELECT kind, COUNT(*)::BIGINT AS count
+             FROM evaluation_run_list_view GROUP BY kind",
         )
         .fetch_all(&self.pool)
         .await
@@ -201,16 +201,16 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
 
         let mut kind_counts: Vec<(RunKindFilter, u64)> = Vec::new();
         for row in kind_rows {
-            let is_opt: bool = row
-                .try_get("is_opt")
+            let kind: String = row
+                .try_get("kind")
                 .map_err(|e| EvaluationRunRepositoryError::Internal(format!("kind row: {e}")))?;
             let count: i64 = row.try_get("count").map_err(|e| {
                 EvaluationRunRepositoryError::Internal(format!("kind count row: {e}"))
             })?;
-            let filter = if is_opt {
-                RunKindFilter::Optimization
-            } else {
-                RunKindFilter::Manual
+            let filter = match kind.as_str() {
+                "optimization" => RunKindFilter::Optimization,
+                "manual" => RunKindFilter::Manual,
+                _ => continue,
             };
             kind_counts.push((filter, count.max(0) as u64));
         }
@@ -221,24 +221,19 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
 
         let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
             "SELECT
-                run_id, dataset_id, index_profile_id, retrieval_profile_id, document_id, document_version,
-                variants, options, optimization,
-                status, variants_count, variants_prepared, variants_scored, failure_reason,
-                scoring_recall_weight, scoring_iou_weight, scoring_precision_weight,
-                scoring_precision_omega_weight, fingerprint, created_at
-            FROM evaluation_runs
+                run_id, dataset_id, document_id, optimization, kind,
+                status, failure_reason,
+                variant_count, variants_scored,
+                best_variant, created_at
+            FROM evaluation_run_list_view
             WHERE 1=1",
         );
-        push_status_filter(&mut qb, &query.statuses);
-        push_kind_filter(&mut qb, &query.kinds);
+        push_view_status_filter(&mut qb, &query.statuses);
+        push_view_kind_filter(&mut qb, &query.kinds);
 
         if let Some(cursor) = &query.cursor {
-            let parsed =
-                time::OffsetDateTime::parse(&cursor.created_at, &Rfc3339).map_err(|e| {
-                    EvaluationRunRepositoryError::Internal(format!("cursor timestamp: {e}"))
-                })?;
             qb.push(" AND (created_at, run_id) < (");
-            qb.push_bind(parsed);
+            qb.push_bind(cursor.created_at);
             qb.push(", ");
             qb.push_bind(cursor.run_id);
             qb.push(")");
@@ -246,7 +241,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         qb.push(" ORDER BY created_at DESC, run_id DESC LIMIT ");
         qb.push_bind(fetch_limit);
 
-        let rows: Vec<RunRow> = qb
+        let rows: Vec<RunListViewRow> = qb
             .build_query_as()
             .fetch_all(&self.pool)
             .await
@@ -259,10 +254,19 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
 
         let next_cursor = if models.len() as i64 > limit {
             models.pop();
-            models.last().map(|m| RunListCursor {
-                created_at: m.created_at.to_string(),
-                run_id: m.run_id,
-            })
+            models
+                .last()
+                .map(|m| -> Result<RunListCursor, EvaluationRunRepositoryError> {
+                    let parsed = OffsetDateTime::parse(&m.created_at.to_string(), &Rfc3339)
+                        .map_err(|e| {
+                            EvaluationRunRepositoryError::Internal(format!("cursor timestamp: {e}"))
+                        })?;
+                    Ok(RunListCursor {
+                        created_at: parsed,
+                        run_id: m.run_id,
+                    })
+                })
+                .transpose()?
         } else {
             None
         };
@@ -280,7 +284,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
     async fn load_variant_results(
         &self,
         run_id: Uuid,
-    ) -> Result<Vec<EvaluationVariantResultDto>, EvaluationRunRepositoryError> {
+    ) -> Result<Vec<EvaluationVariantResultRow>, EvaluationRunRepositoryError> {
         let rows: Vec<VariantResultRow> = sqlx::query_as(
             "
             SELECT
@@ -310,28 +314,54 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             EvaluationRunRepositoryError::Internal(format!("load_variant_results: {e}"))
         })?;
 
-        let mut results = Vec::new();
+        let trace_rows: Vec<RetrievalTraceRowFull> = sqlx::query_as(
+            "
+            SELECT
+                variant_label, split, top_k, min_score_milli,
+                question_sequence, retrieved_chunk_ids, scores, recall, precision, iou, category
+            FROM retrieval_traces
+            WHERE run_id = $1
+            ORDER BY variant_label, split, top_k, min_score_milli, question_sequence
+            ",
+        )
+        .bind(run_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| {
+            EvaluationRunRepositoryError::Internal(format!("load_retrieval_traces: {e}"))
+        })?;
+
+        let mut traces_by_variant: HashMap<(String, String, i32, i32), Vec<RetrievalTraceRow>> =
+            HashMap::new();
+        for tr in trace_rows {
+            traces_by_variant
+                .entry((
+                    tr.variant_label.clone(),
+                    tr.split.clone(),
+                    tr.top_k,
+                    tr.min_score_milli,
+                ))
+                .or_default()
+                .push(RetrievalTraceRow {
+                    question_sequence: tr.question_sequence,
+                    retrieved_chunk_ids: tr.retrieved_chunk_ids,
+                    scores: tr.scores,
+                    recall: tr.recall,
+                    precision: tr.precision,
+                    iou: tr.iou,
+                    category: tr.category,
+                });
+        }
+
+        let mut results = Vec::with_capacity(rows.len());
         for row in rows {
-            let trace_rows: Vec<RetrievalTraceRow> = sqlx::query_as(
-                "
-                SELECT
-                    question_sequence, retrieved_chunk_ids, scores, recall, precision, iou, category
-                FROM retrieval_traces
-                WHERE run_id = $1 AND variant_label = $2 AND split = $3
-                  AND top_k = $4 AND min_score_milli = $5
-                ORDER BY question_sequence ASC
-                ",
-            )
-            .bind(run_id)
-            .bind(&row.variant_label)
-            .bind(&row.split)
-            .bind(row.top_k)
-            .bind(row.min_score_milli)
-            .fetch_all(&self.pool)
-            .await
-            .map_err(|e| {
-                EvaluationRunRepositoryError::Internal(format!("load_retrieval_traces: {e}"))
-            })?;
+            let key = (
+                row.variant_label.clone(),
+                row.split.clone(),
+                row.top_k,
+                row.min_score_milli,
+            );
+            let trace_rows = traces_by_variant.remove(&key).unwrap_or_default();
 
             let variant_config = serde_json::from_value(row.variant_config).map_err(|e| {
                 EvaluationRunRepositoryError::Internal(format!("deserialize variant_config: {e}"))
@@ -340,13 +370,14 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
                 EvaluationRunRepositoryError::Internal(format!("deserialize options: {e}"))
             })?;
 
-            results.push(EvaluationVariantResultDto {
+            results.push(EvaluationVariantResultRow {
                 run_id: row.run_id,
                 variant_label: row.variant_label,
                 variant_config,
                 options,
-                split: EvaluationResultSplit::parse(&row.split)
-                    .unwrap_or(EvaluationResultSplit::Full),
+                split: EvaluationResultSplit::parse(&row.split).map_err(|e| {
+                    EvaluationRunRepositoryError::Internal(format!("parse split: {e}"))
+                })?,
                 recall_mean: row.recall_mean,
                 recall_std: row.recall_std,
                 precision_mean: row.precision_mean,
@@ -391,26 +422,14 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         variant_label: &str,
         split: Option<EvaluationResultSplit>,
     ) -> Result<Option<RunQuestionResultsLoad>, EvaluationRunRepositoryError> {
-        let dataset_id: Option<(Uuid,)> =
-            sqlx::query_as("SELECT dataset_id FROM evaluation_runs WHERE run_id = $1")
-                .bind(run_id)
-                .fetch_optional(&self.pool)
-                .await
-                .map_err(|e| {
-                    EvaluationRunRepositoryError::Internal(format!(
-                        "load_question_results dataset_id: {e}"
-                    ))
-                })?;
-        let Some((dataset_id,)) = dataset_id else {
-            return Ok(None);
-        };
-
-        let variant_rows: Vec<VariantSplitRow> = sqlx::query_as(
+        let joined_rows: Vec<VariantSplitRowWithDataset> = sqlx::query_as(
             "
-            SELECT variant_label, split, top_k, min_score_milli, chunk_set_id, options
-            FROM evaluation_variant_results
-            WHERE run_id = $1
-            ORDER BY variant_label, split, top_k, min_score_milli
+            SELECT vr.variant_label, vr.split, vr.top_k, vr.min_score_milli,
+                   vr.options, r.dataset_id
+            FROM evaluation_variant_results vr
+            JOIN evaluation_runs r ON r.run_id = vr.run_id
+            WHERE vr.run_id = $1
+            ORDER BY vr.variant_label, vr.split, vr.top_k, vr.min_score_milli
             ",
         )
         .bind(run_id)
@@ -420,13 +439,25 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             EvaluationRunRepositoryError::Internal(format!("load_question_results variants: {e}"))
         })?;
 
-        if variant_rows.is_empty() {
+        let Some(dataset_id) = joined_rows.first().map(|r| r.dataset_id) else {
             return Ok(None);
-        }
+        };
+
+        let variant_rows: Vec<VariantSplitRow> = joined_rows
+            .into_iter()
+            .map(|r| VariantSplitRow {
+                variant_label: r.variant_label,
+                split: r.split,
+                top_k: r.top_k,
+                min_score_milli: r.min_score_milli,
+                options: r.options,
+            })
+            .collect();
 
         let mut variants_by_label: BTreeMap<String, Vec<EvaluationResultSplit>> = BTreeMap::new();
         for row in &variant_rows {
-            let s = EvaluationResultSplit::parse(&row.split).unwrap_or(EvaluationResultSplit::Full);
+            let s = EvaluationResultSplit::parse(&row.split)
+                .map_err(|e| EvaluationRunRepositoryError::Internal(format!("parse split: {e}")))?;
             let entry = variants_by_label
                 .entry(row.variant_label.clone())
                 .or_default();
@@ -456,8 +487,8 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         let Some(chosen) = pick_variant_row(&candidates, split) else {
             return Ok(None);
         };
-        let chosen_split =
-            EvaluationResultSplit::parse(&chosen.split).unwrap_or(EvaluationResultSplit::Full);
+        let chosen_split = EvaluationResultSplit::parse(&chosen.split)
+            .map_err(|e| EvaluationRunRepositoryError::Internal(format!("parse split: {e}")))?;
         let options: EvaluationRunOptions = serde_json::from_value(chosen.options.clone())
             .map_err(|e| {
                 EvaluationRunRepositoryError::Internal(format!("deserialize variant options: {e}"))
@@ -484,34 +515,52 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             EvaluationRunRepositoryError::Internal(format!("load_question_results traces: {e}"))
         })?;
 
-        let question_rows: Vec<(i32, String, String)> = sqlx::query_as(
-            "SELECT sequence, question, category FROM evaluation_questions WHERE dataset_id = $1",
-        )
-        .bind(dataset_id)
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| {
-            EvaluationRunRepositoryError::Internal(format!("load_question_results questions: {e}"))
-        })?;
+        let mut question_sequences: Vec<i32> =
+            trace_rows.iter().map(|r| r.question_sequence).collect();
+        question_sequences.sort_unstable();
+        question_sequences.dedup();
+
+        let question_rows: Vec<(i32, String, String)> = if question_sequences.is_empty() {
+            Vec::new()
+        } else {
+            sqlx::query_as(
+                "SELECT sequence, question, category FROM evaluation_questions \
+                 WHERE dataset_id = $1 AND sequence = ANY($2)",
+            )
+            .bind(dataset_id)
+            .bind(&question_sequences)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| {
+                EvaluationRunRepositoryError::Internal(format!(
+                    "load_question_results questions: {e}"
+                ))
+            })?
+        };
         let question_text: HashMap<u32, (String, String)> = question_rows
             .into_iter()
             .map(|(seq, q, cat)| (seq as u32, (q, cat)))
             .collect();
 
-        let reference_rows: Vec<(i32, i32, String, i32, i32)> = sqlx::query_as(
-            "
-            SELECT question_sequence, sequence, content, char_start, char_end
-            FROM evaluation_references
-            WHERE dataset_id = $1
-            ORDER BY question_sequence, sequence
-            ",
-        )
-        .bind(dataset_id)
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| {
-            EvaluationRunRepositoryError::Internal(format!("load_question_results refs: {e}"))
-        })?;
+        let reference_rows: Vec<(i32, i32, String, i32, i32)> = if question_sequences.is_empty() {
+            Vec::new()
+        } else {
+            sqlx::query_as(
+                "
+                SELECT question_sequence, sequence, content, char_start, char_end
+                FROM evaluation_references
+                WHERE dataset_id = $1 AND question_sequence = ANY($2)
+                ORDER BY question_sequence, sequence
+                ",
+            )
+            .bind(dataset_id)
+            .bind(&question_sequences)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| {
+                EvaluationRunRepositoryError::Internal(format!("load_question_results refs: {e}"))
+            })?
+        };
         let references: Vec<ReferenceExcerpt> = reference_rows
             .into_iter()
             .map(|(qs, seq, content, cs, ce)| ReferenceExcerpt {
@@ -523,19 +572,51 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             })
             .collect();
 
-        let chunk_rows: Vec<(Uuid, i32, String, String, i32, i32)> = sqlx::query_as(
-            "
-            SELECT chunk_id, sequence, heading, text, char_start, char_end
-            FROM chunks
-            WHERE chunk_set_id = $1
-            ",
-        )
-        .bind(chosen.chunk_set_id)
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| {
-            EvaluationRunRepositoryError::Internal(format!("load_question_results chunks: {e}"))
-        })?;
+        let mut parsed_traces: Vec<(u32, String, f32, f32, f32, Vec<Uuid>, Vec<f32>)> =
+            Vec::with_capacity(trace_rows.len());
+        let mut chunk_id_set: HashSet<Uuid> = HashSet::new();
+        for row in trace_rows {
+            let retrieved_chunk_ids: Vec<Uuid> = serde_json::from_value(row.retrieved_chunk_ids)
+                .map_err(|e| {
+                    EvaluationRunRepositoryError::Internal(format!(
+                        "deserialize retrieved_chunk_ids: {e}"
+                    ))
+                })?;
+            let scores: Vec<f32> = serde_json::from_value(row.scores).map_err(|e| {
+                EvaluationRunRepositoryError::Internal(format!("deserialize scores: {e}"))
+            })?;
+            for id in &retrieved_chunk_ids {
+                chunk_id_set.insert(*id);
+            }
+            parsed_traces.push((
+                row.question_sequence as u32,
+                row.category,
+                row.recall,
+                row.precision,
+                row.iou,
+                retrieved_chunk_ids,
+                scores,
+            ));
+        }
+        let chunk_ids: Vec<Uuid> = chunk_id_set.into_iter().collect();
+
+        let chunk_rows: Vec<(Uuid, i32, String, String, i32, i32)> = if chunk_ids.is_empty() {
+            Vec::new()
+        } else {
+            sqlx::query_as(
+                "
+                SELECT chunk_id, sequence, heading, text, char_start, char_end
+                FROM chunks
+                WHERE chunk_id = ANY($1)
+                ",
+            )
+            .bind(&chunk_ids)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| {
+                EvaluationRunRepositoryError::Internal(format!("load_question_results chunks: {e}"))
+            })?
+        };
         let chunks: HashMap<Uuid, ChunkExcerpt> = chunk_rows
             .into_iter()
             .map(|(id, seq, heading, text, cs, ce)| {
@@ -553,18 +634,8 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             })
             .collect();
 
-        let mut questions: Vec<QuestionResultRow> = Vec::with_capacity(trace_rows.len());
-        for row in trace_rows {
-            let retrieved_chunk_ids: Vec<Uuid> = serde_json::from_value(row.retrieved_chunk_ids)
-                .map_err(|e| {
-                    EvaluationRunRepositoryError::Internal(format!(
-                        "deserialize retrieved_chunk_ids: {e}"
-                    ))
-                })?;
-            let scores: Vec<f32> = serde_json::from_value(row.scores).map_err(|e| {
-                EvaluationRunRepositoryError::Internal(format!("deserialize scores: {e}"))
-            })?;
-            let seq = row.question_sequence as u32;
+        let mut questions: Vec<QuestionResultRow> = Vec::with_capacity(parsed_traces.len());
+        for (seq, category, recall, precision, iou, retrieved_chunk_ids, scores) in parsed_traces {
             let (question, _) = question_text
                 .get(&seq)
                 .cloned()
@@ -572,10 +643,10 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             questions.push(QuestionResultRow {
                 sequence: seq,
                 question,
-                category: row.category,
-                recall: row.recall,
-                precision: row.precision,
-                iou: row.iou,
+                category,
+                recall,
+                precision,
+                iou,
                 retrieved_chunk_ids,
                 scores,
             });
@@ -614,6 +685,10 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             EvaluationRunRepositoryError::Internal(format!("serialize fingerprint: {e}"))
         })?;
 
+        let mut tx = self.pool.begin().await.map_err(|e| {
+            EvaluationRunRepositoryError::Internal(format!("begin transaction: {e}"))
+        })?;
+
         sqlx::query(
             "
             INSERT INTO evaluation_runs (
@@ -644,9 +719,39 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         .bind(summary.scoring_policy.weights.precision_omega)
         .bind(&fingerprint)
         .bind(created_at)
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .map_err(|e| EvaluationRunRepositoryError::Internal(format!("insert_summary: {e}")))?;
+
+        let kind = if summary.optimization.is_some() {
+            "optimization"
+        } else {
+            "manual"
+        };
+        sqlx::query(
+            "
+            INSERT INTO evaluation_run_list_view (
+                run_id, dataset_id, document_id, optimization, kind, status, failure_reason,
+                variant_count, variants_scored, best_variant, created_at
+            )
+            VALUES ($1, $2, $3, $4, $5, 'pending', NULL, $6, 0, NULL, $7)
+            ON CONFLICT (run_id) DO NOTHING
+            ",
+        )
+        .bind(summary.run_id)
+        .bind(summary.dataset_id)
+        .bind(summary.document_id)
+        .bind(&optimization)
+        .bind(kind)
+        .bind(summary.variants_count as i32)
+        .bind(created_at)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| EvaluationRunRepositoryError::Internal(format!("insert_summary view: {e}")))?;
+
+        tx.commit().await.map_err(|e| {
+            EvaluationRunRepositoryError::Internal(format!("commit insert_summary: {e}"))
+        })?;
 
         Ok(())
     }
@@ -667,7 +772,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
 
     async fn save_variant_result(
         &self,
-        result: EvaluationVariantResultDto,
+        result: EvaluationVariantResultRow,
     ) -> Result<(), EvaluationRunRepositoryError> {
         let variant_config = serde_json::to_value(result.variant_config).map_err(|e| {
             EvaluationRunRepositoryError::Internal(format!("serialize variant_config: {e}"))
@@ -821,6 +926,14 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             .map_err(|e| EvaluationRunRepositoryError::Internal(format!("bump variants_scored: {e}")))?;
         }
 
+        sqlx::query(BEST_VARIANT_VIEW_UPDATE_SQL)
+            .bind(result.run_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| {
+                EvaluationRunRepositoryError::Internal(format!("recompute view best_variant: {e}"))
+            })?;
+
         tx.commit().await.map_err(|e| {
             EvaluationRunRepositoryError::Internal(format!("commit transaction: {e}"))
         })?;
@@ -829,13 +942,26 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
     }
 
     async fn mark_completed(&self, run_id: Uuid) -> Result<(), EvaluationRunRepositoryError> {
+        let mut tx = self.pool.begin().await.map_err(|e| {
+            EvaluationRunRepositoryError::Internal(format!("begin transaction: {e}"))
+        })?;
         sqlx::query(
             "UPDATE evaluation_runs SET status = 'completed', failure_reason = NULL, updated_at = NOW() WHERE run_id = $1",
         )
         .bind(run_id)
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .map_err(|e| EvaluationRunRepositoryError::Internal(format!("mark_completed: {e}")))?;
+        sqlx::query(
+            "UPDATE evaluation_run_list_view SET status = 'completed', failure_reason = NULL WHERE run_id = $1",
+        )
+        .bind(run_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| EvaluationRunRepositoryError::Internal(format!("mark_completed view: {e}")))?;
+        tx.commit().await.map_err(|e| {
+            EvaluationRunRepositoryError::Internal(format!("commit mark_completed: {e}"))
+        })?;
         Ok(())
     }
 
@@ -844,19 +970,98 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         run_id: Uuid,
         reason: String,
     ) -> Result<(), EvaluationRunRepositoryError> {
+        let mut tx = self.pool.begin().await.map_err(|e| {
+            EvaluationRunRepositoryError::Internal(format!("begin transaction: {e}"))
+        })?;
         sqlx::query(
             "UPDATE evaluation_runs SET status = 'failed', failure_reason = $2, updated_at = NOW() WHERE run_id = $1",
         )
         .bind(run_id)
-        .bind(reason)
-        .execute(&self.pool)
+        .bind(&reason)
+        .execute(&mut *tx)
         .await
         .map_err(|e| EvaluationRunRepositoryError::Internal(format!("mark_failed: {e}")))?;
+        sqlx::query(
+            "UPDATE evaluation_run_list_view SET status = 'failed', failure_reason = $2 WHERE run_id = $1",
+        )
+        .bind(run_id)
+        .bind(&reason)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| EvaluationRunRepositoryError::Internal(format!("mark_failed view: {e}")))?;
+        tx.commit().await.map_err(|e| {
+            EvaluationRunRepositoryError::Internal(format!("commit mark_failed: {e}"))
+        })?;
         Ok(())
     }
 }
 
-fn push_status_filter(qb: &mut QueryBuilder<'_, Postgres>, statuses: &[RunStatusFilter]) {
+const BEST_VARIANT_VIEW_UPDATE_SQL: &str = "
+WITH r AS (
+    SELECT scoring_recall_weight AS w_r,
+           scoring_iou_weight AS w_i,
+           scoring_precision_weight AS w_p,
+           scoring_precision_omega_weight AS w_po
+    FROM evaluation_runs WHERE run_id = $1
+),
+scored AS (
+    SELECT v.*, (
+        v.recall_mean * r.w_r +
+        v.iou_mean * r.w_i +
+        v.precision_mean * r.w_p +
+        v.precision_omega_mean * r.w_po
+    ) AS score
+    FROM evaluation_variant_results v, r
+    WHERE v.run_id = $1
+),
+best AS (
+    SELECT * FROM scored ORDER BY score DESC LIMIT 1
+)
+UPDATE evaluation_run_list_view lv
+SET variants_scored = (
+        SELECT COUNT(*)::INT FROM evaluation_variant_results WHERE run_id = $1
+    ),
+    status = CASE
+        WHEN lv.status IN ('completed', 'failed') THEN lv.status
+        ELSE 'running'
+    END,
+    best_variant = (
+        SELECT jsonb_build_object(
+            'label', best.variant_label,
+            'config', best.variant_config,
+            'options', best.options,
+            'score', best.score,
+            'metrics', jsonb_build_object(
+                'recall_mean', best.recall_mean,
+                'recall_std', best.recall_std,
+                'precision_mean', best.precision_mean,
+                'precision_std', best.precision_std,
+                'iou_mean', best.iou_mean,
+                'iou_std', best.iou_std,
+                'precision_omega_mean', best.precision_omega_mean,
+                'precision_omega_std', best.precision_omega_std,
+                'recall_ci_low', best.recall_ci_low,
+                'recall_ci_high', best.recall_ci_high,
+                'precision_ci_low', best.precision_ci_low,
+                'precision_ci_high', best.precision_ci_high,
+                'iou_ci_low', best.iou_ci_low,
+                'iou_ci_high', best.iou_ci_high,
+                'precision_omega_ci_low', best.precision_omega_ci_low,
+                'precision_omega_ci_high', best.precision_omega_ci_high,
+                'composite_ci_low', best.composite_ci_low,
+                'composite_ci_high', best.composite_ci_high,
+                'chunk_count', best.chunk_count,
+                'average_chunk_tokens', best.average_chunk_tokens,
+                'average_retrieved_tokens', best.average_retrieved_tokens,
+                'judge_score', best.judge_score
+            )
+        )
+        FROM best
+    )
+WHERE lv.run_id = $1
+";
+
+fn push_view_status_filter(qb: &mut QueryBuilder<'_, Postgres>, statuses: &[RunStatusFilter]) {
     if statuses.is_empty() {
         return;
     }
@@ -868,17 +1073,20 @@ fn push_status_filter(qb: &mut QueryBuilder<'_, Postgres>, statuses: &[RunStatus
     sep.push_unseparated(")");
 }
 
-fn push_kind_filter(qb: &mut QueryBuilder<'_, Postgres>, kinds: &[RunKindFilter]) {
+fn push_view_kind_filter(qb: &mut QueryBuilder<'_, Postgres>, kinds: &[RunKindFilter]) {
     if kinds.is_empty() {
         return;
     }
-    let optimization = kinds.contains(&RunKindFilter::Optimization);
-    let manual = kinds.contains(&RunKindFilter::Manual);
-    if optimization && !manual {
-        qb.push(" AND optimization IS NOT NULL");
-    } else if manual && !optimization {
-        qb.push(" AND optimization IS NULL");
+    qb.push(" AND kind IN (");
+    let mut sep = qb.separated(", ");
+    for kind in kinds {
+        let label = match kind {
+            RunKindFilter::Optimization => "optimization",
+            RunKindFilter::Manual => "manual",
+        };
+        sep.push_bind(label);
     }
+    sep.push_unseparated(")");
 }
 
 fn status_filter_as_str(status: RunStatusFilter) -> &'static str {
@@ -982,6 +1190,68 @@ impl TryFrom<RunRow> for EvaluationRunReadModel {
             fingerprint,
             created_at: Timestamp::from(row.created_at.format(&Rfc3339).unwrap_or_default()),
             variant_results: Vec::new(),
+            best_variant: None,
+        })
+    }
+}
+
+#[derive(sqlx::FromRow)]
+struct RunListViewRow {
+    run_id: Uuid,
+    dataset_id: Uuid,
+    document_id: Uuid,
+    optimization: Option<serde_json::Value>,
+    kind: String,
+    status: String,
+    failure_reason: Option<String>,
+    variant_count: i32,
+    variants_scored: i32,
+    best_variant: Option<serde_json::Value>,
+    created_at: time::OffsetDateTime,
+}
+
+impl TryFrom<RunListViewRow> for EvaluationRunReadModel {
+    type Error = EvaluationRunRepositoryError;
+
+    fn try_from(row: RunListViewRow) -> Result<Self, Self::Error> {
+        let _ = row.kind;
+        let optimization: Option<OptimizationConfig> = row
+            .optimization
+            .and_then(|v| serde_json::from_value(v).ok());
+        let status = EvaluationRunStatus::from_parts(
+            &row.status,
+            row.variants_scored.max(0) as u32,
+            row.failure_reason.clone(),
+        )
+        .unwrap_or(EvaluationRunStatus::Pending);
+        let best_variant: Option<BestVariantSnapshot> = row
+            .best_variant
+            .and_then(|v| serde_json::from_value(v).ok());
+
+        Ok(Self {
+            run_id: row.run_id,
+            dataset_id: row.dataset_id,
+            index_profile_id: Uuid::nil(),
+            retrieval_profile_id: None,
+            document_id: row.document_id,
+            document_version: 0,
+            variants: Vec::new(),
+            options: Vec::new(),
+            optimization,
+            status,
+            variants_count: row.variant_count.max(0) as u32,
+            variants_prepared: 0,
+            variants_scored: row.variants_scored.max(0) as u32,
+            failure_reason: row.failure_reason,
+            scoring_policy: ScoringPolicy::default(),
+            fingerprint: RunFingerprint {
+                document_content_hash: String::new(),
+                dataset_content_hash: String::new(),
+                embedding_model_snapshot: serde_json::Value::Null,
+            },
+            created_at: Timestamp::from(row.created_at.format(&Rfc3339).unwrap_or_default()),
+            variant_results: Vec::new(),
+            best_variant,
         })
     }
 }
@@ -1028,8 +1298,17 @@ struct VariantSplitRow {
     split: String,
     top_k: i32,
     min_score_milli: i32,
-    chunk_set_id: Uuid,
     options: serde_json::Value,
+}
+
+#[derive(sqlx::FromRow)]
+struct VariantSplitRowWithDataset {
+    variant_label: String,
+    split: String,
+    top_k: i32,
+    min_score_milli: i32,
+    options: serde_json::Value,
+    dataset_id: Uuid,
 }
 
 fn pick_variant_row<'a>(
@@ -1063,6 +1342,21 @@ fn pick_variant_row<'a>(
 
 #[derive(sqlx::FromRow)]
 struct RetrievalTraceRow {
+    question_sequence: i32,
+    retrieved_chunk_ids: serde_json::Value,
+    scores: serde_json::Value,
+    recall: f32,
+    precision: f32,
+    iou: f32,
+    category: String,
+}
+
+#[derive(sqlx::FromRow)]
+struct RetrievalTraceRowFull {
+    variant_label: String,
+    split: String,
+    top_k: i32,
+    min_score_milli: i32,
     question_sequence: i32,
     retrieved_chunk_ids: serde_json::Value,
     scores: serde_json::Value,

@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::server::application::embedding::ResolvedEmbeddingModel;
 use crate::server::application::llm::ResolvedGenerationModel;
-use crate::server::domain::chunk_set::entity::Chunk;
+use crate::server::domain::chunk_set::chunk::Chunk;
 use crate::server::domain::evaluation::question::EvaluationQuestion;
 use crate::shared::ChunkingConfig;
 

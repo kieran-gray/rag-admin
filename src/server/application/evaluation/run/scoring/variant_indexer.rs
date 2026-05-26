@@ -3,11 +3,13 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
+use crate::server::application::chunk_set::ChunkSetCommandHandler;
 use crate::server::application::chunking::ChunkerRegistry;
 use crate::server::application::embedding::{EmbeddingService, ResolvedEmbeddingModel};
 use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::AppError;
-use crate::server::domain::chunk_set::entity::{Chunk, ChunkSet};
+use crate::server::domain::chunk_set::aggregate::derive_chunk_set_id;
+use crate::server::domain::chunk_set::chunk::Chunk;
 use crate::server::domain::chunk_set::repository::ChunkSetRepository;
 use crate::server::domain::configuration::embedding_model::EmbeddingModel;
 use crate::server::domain::embedding_set::entity::{ChunkEmbedding, EmbeddingSet};
@@ -20,6 +22,7 @@ use super::run_context::{PreparedVariant, RunContext};
 pub struct VariantIndexer {
     chunker_registry: Arc<ChunkerRegistry>,
     chunk_set_repository: Arc<dyn ChunkSetRepository>,
+    chunk_set_command_handler: Arc<ChunkSetCommandHandler>,
     embedding_service: Arc<EmbeddingService>,
     embedding_set_repository: Arc<dyn EmbeddingSetRepository>,
     clock: Arc<dyn Clock>,
@@ -30,6 +33,7 @@ impl VariantIndexer {
     pub fn new(
         chunker_registry: Arc<ChunkerRegistry>,
         chunk_set_repository: Arc<dyn ChunkSetRepository>,
+        chunk_set_command_handler: Arc<ChunkSetCommandHandler>,
         embedding_service: Arc<EmbeddingService>,
         embedding_set_repository: Arc<dyn EmbeddingSetRepository>,
         clock: Arc<dyn Clock>,
@@ -38,6 +42,7 @@ impl VariantIndexer {
         Arc::new(Self {
             chunker_registry,
             chunk_set_repository,
+            chunk_set_command_handler,
             embedding_service,
             embedding_set_repository,
             clock,
@@ -92,19 +97,13 @@ impl VariantIndexer {
         config: &ChunkingConfig,
     ) -> Result<(Uuid, Vec<Chunk>), AppError> {
         let domain_config: DomainChunkingConfig = (*config).into();
-        let existing = self
-            .chunk_set_repository
-            .list_for_document(document_id)
-            .await?;
+        let chunk_set_id = derive_chunk_set_id(document_id, document_version, &domain_config);
 
-        if let Some(cs) = existing.iter().find(|cs| {
-            cs.document_version == document_version && cs.chunking_config == domain_config
-        }) {
-            let chunks = self
-                .chunk_set_repository
-                .load_chunks(cs.chunk_set_id)
-                .await?;
-            return Ok((cs.chunk_set_id, chunks));
+        if let Some(summary) = self.chunk_set_repository.load_summary(chunk_set_id).await? {
+            if summary.chunk_count > 0 {
+                let chunks = self.chunk_set_repository.load_chunks(chunk_set_id).await?;
+                return Ok((chunk_set_id, chunks));
+            }
         }
 
         let chunk_outputs = self
@@ -113,14 +112,11 @@ impl VariantIndexer {
             .await
             .map_err(|e| AppError::Internal(format!("chunking failed: {e}")))?;
 
-        let chunk_set_id = self.id_generator.new_uuid();
-        let occurred_at = self.clock.now();
         let chunks: Vec<Chunk> = chunk_outputs
             .into_iter()
             .enumerate()
             .map(|(i, co)| Chunk {
                 chunk_id: self.id_generator.new_uuid(),
-                chunk_set_id,
                 sequence: i as u32,
                 heading: co.heading,
                 text: co.text,
@@ -129,16 +125,14 @@ impl VariantIndexer {
             })
             .collect();
 
-        let chunk_set = ChunkSet {
-            chunk_set_id,
-            document_id,
-            document_version,
-            chunking_config: domain_config,
-            created_at: occurred_at.to_string(),
-            pinned: false,
-        };
-        self.chunk_set_repository
-            .save(chunk_set, chunks.clone())
+        self.chunk_set_command_handler
+            .create(
+                chunk_set_id,
+                document_id,
+                document_version,
+                domain_config,
+                chunks.clone(),
+            )
             .await?;
 
         Ok((chunk_set_id, chunks))

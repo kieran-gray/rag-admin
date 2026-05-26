@@ -2,9 +2,10 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 use thiserror::Error;
+use time::OffsetDateTime;
 use uuid::Uuid;
 
-use super::read_model::{EvaluationRunReadModel, EvaluationVariantResultDto, NewRunSummary};
+use super::read_model::{EvaluationRunReadModel, EvaluationVariantResultRow, NewRunSummary};
 use crate::server::domain::evaluation::value_objects::{
     EvaluationResultSplit, EvaluationRunOptions,
 };
@@ -32,7 +33,7 @@ pub enum RunKindFilter {
 
 #[derive(Debug, Clone)]
 pub struct RunListCursor {
-    pub created_at: String,
+    pub created_at: OffsetDateTime,
     pub run_id: Uuid,
 }
 
@@ -134,7 +135,7 @@ pub trait EvaluationRunRepository: Send + Sync {
     async fn load_variant_results(
         &self,
         run_id: Uuid,
-    ) -> Result<Vec<EvaluationVariantResultDto>, EvaluationRunRepositoryError>;
+    ) -> Result<Vec<EvaluationVariantResultRow>, EvaluationRunRepositoryError>;
 
     async fn load_question_results(
         &self,
@@ -155,7 +156,7 @@ pub trait EvaluationRunRepository: Send + Sync {
 
     async fn save_variant_result(
         &self,
-        result: EvaluationVariantResultDto,
+        result: EvaluationVariantResultRow,
     ) -> Result<(), EvaluationRunRepositoryError>;
 
     async fn mark_completed(&self, run_id: Uuid) -> Result<(), EvaluationRunRepositoryError>;

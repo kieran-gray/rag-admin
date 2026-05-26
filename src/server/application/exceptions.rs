@@ -4,6 +4,7 @@ use thiserror::Error;
 
 use event_sourcing::error::{CommandError, EsError, ProjectionError};
 
+use crate::server::domain::chunk_set::exceptions::ChunkSetError;
 use crate::server::domain::chunk_set::repository::ChunkSetRepositoryError;
 use crate::server::domain::configuration::catalog::CatalogError;
 use crate::server::domain::configuration::defaults::{
@@ -245,6 +246,18 @@ impl From<ChunkSetRepositoryError> for AppError {
         match value {
             ChunkSetRepositoryError::InUse(_) => AppError::Validation(value.to_string()),
             ChunkSetRepositoryError::Internal(_) => AppError::Internal(value.to_string()),
+        }
+    }
+}
+
+impl From<ChunkSetError> for AppError {
+    fn from(value: ChunkSetError) -> Self {
+        match value {
+            ChunkSetError::NotFound => AppError::NotFound(value.to_string()),
+            ChunkSetError::AlreadyExists
+            | ChunkSetError::AlreadyDeleted
+            | ChunkSetError::PinnedCannotDelete
+            | ChunkSetError::ValidationError(_) => AppError::Validation(value.to_string()),
         }
     }
 }
