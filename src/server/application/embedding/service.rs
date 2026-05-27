@@ -1,10 +1,12 @@
 use std::sync::Arc;
+use std::time::Instant;
 
 use uuid::Uuid;
 
 use crate::server::application::embedding::EmbedderRegistry;
 use crate::server::application::AppError;
 use crate::server::domain::configuration::embedding_model::EmbeddingModelRepository;
+use crate::shared::contracts::Timings;
 use crate::shared::reference_data::AiProviderKind;
 use crate::shared::EmbedResult;
 
@@ -86,8 +88,11 @@ impl EmbeddingService {
         text_a: &str,
         text_b: &str,
     ) -> Result<EmbedResult, AppError> {
+        let started = Instant::now();
+        let embed_start = Instant::now();
         let texts = vec![text_a.to_string(), text_b.to_string()];
         let vecs = self.embed_batch(embedding_model_id, &texts).await?;
+        let embed_ms = u32::try_from(embed_start.elapsed().as_millis()).unwrap_or(u32::MAX);
 
         let (Some(a), Some(b)) = (vecs.first(), vecs.get(1)) else {
             return Err(AppError::Internal(
@@ -109,11 +114,18 @@ impl EmbeddingService {
             0.0
         };
 
+        let total_ms = u32::try_from(started.elapsed().as_millis()).unwrap_or(u32::MAX);
+
         Ok(EmbedResult {
             dims: a.len(),
             norm_a,
             norm_b,
             similarity,
+            timings: Timings {
+                embed_ms,
+                total_ms,
+                ..Timings::default()
+            },
         })
     }
 }

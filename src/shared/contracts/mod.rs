@@ -11,13 +11,17 @@ pub mod events;
 pub mod ingest;
 pub mod query;
 pub mod source_document;
+pub mod timings;
 
 pub use activity::{
     classify, classify_event, ActivityDelta, ActivityJobDto, ActivityKind, ActivityStart,
     ActivityStatus,
 };
 pub use aggregate_types as aggregate_type;
-pub use chat::{ChatRequest, ChatResponse, MetadataFilterDto};
+pub use chat::{
+    ChatRequest, ChatResponse, ChatStreamDelta, ChatStreamDone, ChatStreamError, ChatStreamMeta,
+    MetadataFilterDto,
+};
 pub use chunk_set::{
     ChunkSetListPageDto, ChunkSetListQueryDto, ChunkSetStatusFacetDto, ChunkSetStatusFilterDto,
     ChunkSetSummaryDto, DeleteChunkSetRequestDto, DeleteUnusedChunkSetsRequestDto,
@@ -67,3 +71,4 @@ pub use source_document::{
     MarkdownBlockKindDto, SourceDescriptorDto, SourceDocumentDetailDto, SourceDocumentDto,
     SourceDocumentMarkdownDto, SourceFacetDto, SourceFilterDto,
 };
+pub use timings::Timings;

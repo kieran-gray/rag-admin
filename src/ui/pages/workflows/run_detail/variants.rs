@@ -246,9 +246,9 @@ pub(crate) fn VariantsSection(
         let n = visible_count.get();
         let f = filter.get();
         match f {
-            VariantFilter::Highlights => format!(
-                "Showing {n} of {total}: leader + ties + Pareto frontier"
-            ),
+            VariantFilter::Highlights => {
+                format!("Showing {n} of {total}: leader + ties + Pareto frontier")
+            }
             VariantFilter::All => format!("Showing all {total} variants"),
             VariantFilter::ByFamily => format!("Showing all {total} variants grouped by chunker"),
         }
@@ -582,10 +582,7 @@ fn build_csv(variants: &[EvaluationVariantResult]) -> String {
     for v in variants {
         let m = &v.metrics;
         let score = evaluation_score(m);
-        let judge = m
-            .judge_score
-            .map(|j| format!("{j:.4}"))
-            .unwrap_or_default();
+        let judge = m.judge_score.map(|j| format!("{j:.4}")).unwrap_or_default();
         let label = csv_escape(&v.variant.label);
         let split = v.split.as_str();
         _ = writeln!(

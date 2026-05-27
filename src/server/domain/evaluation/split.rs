@@ -183,9 +183,11 @@ pub fn rung_question_sample(
     let take = sample_size.min(tuning.len());
     let mut indices: Vec<usize> = tuning.to_vec();
     let base = (run_id.as_u128() as u64) ^ ((run_id.as_u128() >> 64) as u64);
-    let mixed = base
-        .wrapping_mul(0x9E37_79B9_7F4A_7C15)
-        .wrapping_add((rung_idx as u64).wrapping_add(1).wrapping_mul(0x100000001B3));
+    let mixed = base.wrapping_mul(0x9E37_79B9_7F4A_7C15).wrapping_add(
+        (rung_idx as u64)
+            .wrapping_add(1)
+            .wrapping_mul(0x100000001B3),
+    );
     shuffle_in_place(&mut indices, normalise_seed(mixed));
     indices.truncate(take);
     indices.sort_unstable();

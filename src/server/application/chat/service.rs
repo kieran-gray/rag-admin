@@ -1,8 +1,12 @@
 use std::slice;
 use std::sync::Arc;
+use std::time::Instant;
 
+use async_stream::stream;
+use futures_util::stream::{BoxStream, StreamExt};
 use uuid::Uuid;
 
+use crate::server::application::chat::ChatSseEvent;
 use crate::server::application::configuration::RetrievalProfileResolver;
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::indexing::ports::vector_index::{
@@ -15,15 +19,30 @@ use crate::server::application::llm::GenerationService;
 use crate::server::application::rerank::{rerank_fetch_k, RerankService};
 use crate::server::application::AppError;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
-use crate::shared::contracts::{ChatRequest, ChatResponse, QueryHit};
+use crate::shared::contracts::{
+    ChatRequest, ChatResponse, ChatStreamDelta, ChatStreamDone, ChatStreamError, ChatStreamMeta,
+    QueryHit, Timings,
+};
 
 const SYSTEM_PROMPT: &str = include_str!("prompts/chat_system_prompt.txt");
 const SNIPPET_MAX_CHARS: usize = 320;
 const GENERATION_TEMPERATURE: f32 = 0.2;
+const NO_CONTEXT_ANSWER: &str = "I don't see that in the indexed documents.";
 
 struct RetrievedChunk {
     hit: QueryHit,
     text: String,
+}
+
+struct PreparedChat {
+    retrieval_profile_id: Uuid,
+    generation_model_id: Uuid,
+    generation_model_name: String,
+    query: String,
+    retrieved: Vec<RetrievedChunk>,
+    system_prompt: String,
+    user_prompt: String,
+    timings: Timings,
 }
 
 pub struct ChatService {
@@ -55,11 +74,124 @@ impl ChatService {
     }
 
     pub async fn chat(&self, req: ChatRequest) -> Result<ChatResponse, AppError> {
+        let started = Instant::now();
+        let mut prepared = self.prepare(req).await?;
+
+        let answer = if prepared.retrieved.is_empty() {
+            NO_CONTEXT_ANSWER.to_string()
+        } else {
+            let generate_start = Instant::now();
+            let response = self
+                .generation_service
+                .generate(
+                    prepared.generation_model_id,
+                    GenerationPrompt {
+                        system: prepared.system_prompt.clone(),
+                        user: prepared.user_prompt.clone(),
+                        temperature: GENERATION_TEMPERATURE,
+                        response_format: GenerationResponseFormat::Text,
+                    },
+                )
+                .await?;
+            prepared.timings.generate_ms = Some(elapsed_ms(generate_start));
+            response.content
+        };
+
+        prepared.timings.total_ms = elapsed_ms(started);
+
+        Ok(ChatResponse {
+            retrieval_profile_id: prepared.retrieval_profile_id,
+            query: prepared.query,
+            answer,
+            model: prepared.generation_model_name,
+            hits: prepared.retrieved.into_iter().map(|r| r.hit).collect(),
+            timings: prepared.timings,
+        })
+    }
+
+    pub async fn chat_stream(
+        &self,
+        req: ChatRequest,
+    ) -> Result<BoxStream<'static, ChatSseEvent>, AppError> {
+        let started = Instant::now();
+        let prepared = self.prepare(req).await?;
+        let generation_service = self.generation_service.clone();
+
+        let s = stream! {
+            let hits: Vec<QueryHit> = prepared
+                .retrieved
+                .iter()
+                .map(|r| r.hit.clone())
+                .collect();
+
+            yield ChatSseEvent::Meta(ChatStreamMeta {
+                retrieval_profile_id: prepared.retrieval_profile_id,
+                hits,
+                model: prepared.generation_model_name.clone(),
+                prompt: prepared.user_prompt.clone(),
+                timings: prepared.timings,
+            });
+
+            let mut timings = prepared.timings;
+
+            if prepared.retrieved.is_empty() {
+                yield ChatSseEvent::Delta(ChatStreamDelta {
+                    text: NO_CONTEXT_ANSWER.to_string(),
+                });
+                timings.total_ms = elapsed_ms(started);
+                yield ChatSseEvent::Done(ChatStreamDone { timings });
+                return;
+            }
+
+            let generate_start = Instant::now();
+            let stream_result = generation_service
+                .generate_stream(
+                    prepared.generation_model_id,
+                    GenerationPrompt {
+                        system: prepared.system_prompt,
+                        user: prepared.user_prompt,
+                        temperature: GENERATION_TEMPERATURE,
+                        response_format: GenerationResponseFormat::Text,
+                    },
+                )
+                .await;
+
+            let mut token_stream = match stream_result {
+                Ok(s) => s,
+                Err(e) => {
+                    yield ChatSseEvent::Error(ChatStreamError { message: e.to_string() });
+                    return;
+                }
+            };
+
+            while let Some(item) = token_stream.next().await {
+                match item {
+                    Ok(token) => {
+                        yield ChatSseEvent::Delta(ChatStreamDelta { text: token });
+                    }
+                    Err(e) => {
+                        yield ChatSseEvent::Error(ChatStreamError { message: e.to_string() });
+                        return;
+                    }
+                }
+            }
+
+            timings.generate_ms = Some(elapsed_ms(generate_start));
+            timings.total_ms = elapsed_ms(started);
+            yield ChatSseEvent::Done(ChatStreamDone { timings });
+        };
+
+        Ok(s.boxed())
+    }
+
+    async fn prepare(&self, req: ChatRequest) -> Result<PreparedChat, AppError> {
         if req.query.trim().is_empty() {
             return Err(AppError::Validation("query text is empty".into()));
         }
         let top_k = req.top_k.clamp(1, 50);
         let min_score = req.min_score.clamp(0.0, 1.0);
+
+        let mut timings = Timings::default();
 
         let profile = self
             .retrieval_profile_resolver
@@ -72,6 +204,7 @@ impl ChatService {
             top_k
         };
 
+        let embed_start = Instant::now();
         let embeddings = self
             .embedding_service
             .embed_with_resolved(
@@ -79,6 +212,7 @@ impl ChatService {
                 slice::from_ref(&req.query),
             )
             .await?;
+        timings.embed_ms = elapsed_ms(embed_start);
         let query_vector = embeddings
             .into_iter()
             .next()
@@ -97,6 +231,7 @@ impl ChatService {
                 value: f.value.trim().to_string(),
             })
             .collect();
+        let retrieve_start = Instant::now();
         let matches = vector_index
             .query(&VectorQuery {
                 vector: query_vector,
@@ -104,12 +239,17 @@ impl ChatService {
                 filter,
             })
             .await?;
+        timings.retrieve_ms = elapsed_ms(retrieve_start);
 
         let matches = match profile.reranker_model.as_ref() {
             Some(reranker) => {
-                self.rerank_service
+                let rerank_start = Instant::now();
+                let matches = self
+                    .rerank_service
                     .rerank_matches(reranker.reranker_model_id, &req.query, matches)
-                    .await?
+                    .await?;
+                timings.rerank_ms = Some(elapsed_ms(rerank_start));
+                matches
             }
             None => matches,
         };
@@ -178,33 +318,23 @@ impl ChatService {
             });
         }
 
-        let answer = if retrieved.is_empty() {
-            "I don't see that in the indexed documents.".to_string()
-        } else {
-            let prompt = build_prompt(&req.query, &retrieved);
-            let response = self
-                .generation_service
-                .generate(
-                    profile.generation_model.generation_model_id,
-                    GenerationPrompt {
-                        system: SYSTEM_PROMPT.to_string(),
-                        user: prompt,
-                        temperature: GENERATION_TEMPERATURE,
-                        response_format: GenerationResponseFormat::Text,
-                    },
-                )
-                .await?;
-            response.content
-        };
+        let user_prompt = build_prompt(&req.query, &retrieved);
 
-        Ok(ChatResponse {
+        Ok(PreparedChat {
             retrieval_profile_id: req.retrieval_profile_id,
+            generation_model_id: profile.generation_model.generation_model_id,
+            generation_model_name: profile.generation_model.model.clone(),
             query: req.query,
-            answer,
-            model: profile.generation_model.model,
-            hits: retrieved.into_iter().map(|r| r.hit).collect(),
+            retrieved,
+            system_prompt: SYSTEM_PROMPT.to_string(),
+            user_prompt,
+            timings,
         })
     }
+}
+
+fn elapsed_ms(start: Instant) -> u32 {
+    u32::try_from(start.elapsed().as_millis()).unwrap_or(u32::MAX)
 }
 
 fn build_prompt(question: &str, chunks: &[RetrievedChunk]) -> String {

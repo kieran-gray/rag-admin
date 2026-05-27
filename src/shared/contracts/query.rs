@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::shared::contracts::MetadataFilterDto;
+use crate::shared::contracts::{MetadataFilterDto, Timings};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryRequest {
@@ -34,4 +34,6 @@ pub struct QueryResult {
     pub retrieval_profile_id: Uuid,
     pub query: String,
     pub hits: Vec<QueryHit>,
+    #[serde(default)]
+    pub timings: Timings,
 }

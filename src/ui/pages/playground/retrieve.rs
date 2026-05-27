@@ -5,7 +5,11 @@ use uuid::Uuid;
 use crate::server_functions::configuration::get_retrieval_profiles;
 use crate::server_functions::query::query_documents;
 use crate::shared::contracts::{
-    MetadataFilterDto, QueryHit, QueryRequest, QueryResult, RetrievalProfileDto,
+    MetadataFilterDto, QueryHit, QueryRequest, QueryResult, RetrievalProfileDto, Timings,
+};
+use crate::ui::components::playground::metadata_filters::metadata_filters_from_signal;
+use crate::ui::components::playground::{
+    LatencyBadge, QueryInput, RequestInspector, RetrievalControls,
 };
 use crate::ui::components::primitives::{EmptyState, PageHeader, Surface};
 
@@ -15,8 +19,7 @@ struct HistoryEntry {
     retrieval_profile_id: Uuid,
     top_k: u32,
     min_score: f32,
-    source_slug: String,
-    source_version: String,
+    filters: Vec<MetadataFilterDto>,
     result: Option<QueryResult>,
     error: Option<String>,
 }
@@ -68,114 +71,108 @@ fn PlaygroundBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView
         .map(|p| p.retrieval_profile_id)
         .unwrap_or_default();
 
-    let (query, set_query) = signal(String::new());
+    let query = RwSignal::new(String::new());
     let (retrieval_profile_id, set_retrieval_profile_id) = signal(initial_retrieval_profile);
-    let (top_k, set_top_k) = signal::<u32>(8);
-    let (min_score, set_min_score) = signal::<f32>(0.4);
-    let (source_slug, set_source_slug) = signal(String::new());
-    let (source_version, set_source_version) = signal(String::new());
-    let (busy, set_busy) = signal(false);
+    let top_k = RwSignal::new(8u32);
+    let min_score = RwSignal::new(0.4f32);
+    let filters = RwSignal::new(Vec::<MetadataFilterDto>::new());
+    let busy = RwSignal::new(false);
     let (error, set_error) = signal::<Option<String>>(None);
-    let (result, set_result) = signal::<Option<QueryResult>>(None);
-    let (history, set_history) = signal::<Vec<HistoryEntry>>(Vec::new());
-    let (marked, set_marked) = signal::<Vec<MarkedRelevant>>(Vec::new());
+    let result = RwSignal::new(None::<QueryResult>);
+    let history = RwSignal::new(Vec::<HistoryEntry>::new());
+    let marked = RwSignal::new(Vec::<MarkedRelevant>::new());
+    let last_request_json = RwSignal::new(String::new());
 
-    let run_query = move |q: String, pid: Uuid, k: u32, m: f32, slug: String, version: String| {
-        if busy.get_untracked() || q.trim().is_empty() {
-            return;
-        }
-        set_busy.set(true);
-        set_error.set(None);
-        let filters = build_metadata_filters(&slug, &version);
-        let slug_for_history = slug.clone();
-        let version_for_history = version.clone();
-        spawn_local(async move {
+    let run_query =
+        move |q: String, pid: Uuid, k: u32, m: f32, active_filters: Vec<MetadataFilterDto>| {
+            if busy.get_untracked() || q.trim().is_empty() {
+                return;
+            }
+            busy.set(true);
+            set_error.set(None);
             let req = QueryRequest {
                 retrieval_profile_id: pid,
                 query: q.clone(),
                 top_k: k,
                 min_score: m,
                 document_id: None,
-                metadata_filters: filters,
+                metadata_filters: active_filters.clone(),
             };
-            match query_documents(req).await {
-                Ok(res) => {
-                    let entry = HistoryEntry {
-                        query: q.clone(),
-                        retrieval_profile_id: pid,
-                        top_k: k,
-                        min_score: m,
-                        source_slug: slug_for_history,
-                        source_version: version_for_history,
-                        result: Some(res.clone()),
-                        error: None,
-                    };
-                    set_history.update(|h| {
-                        h.retain(|e| {
-                            !(e.query == entry.query
-                                && e.retrieval_profile_id == entry.retrieval_profile_id)
+            last_request_json.set(serde_json::to_string_pretty(&req).unwrap_or_default());
+            spawn_local(async move {
+                match query_documents(req).await {
+                    Ok(res) => {
+                        let entry = HistoryEntry {
+                            query: q.clone(),
+                            retrieval_profile_id: pid,
+                            top_k: k,
+                            min_score: m,
+                            filters: active_filters.clone(),
+                            result: Some(res.clone()),
+                            error: None,
+                        };
+                        history.update(|h| {
+                            h.retain(|e| {
+                                !(e.query == entry.query
+                                    && e.retrieval_profile_id == entry.retrieval_profile_id)
+                            });
+                            h.insert(0, entry);
+                            h.truncate(20);
                         });
-                        h.insert(0, entry);
-                        h.truncate(20);
-                    });
-                    set_result.set(Some(res));
+                        result.set(Some(res));
+                    }
+                    Err(e) => {
+                        history.update(|h| {
+                            h.insert(
+                                0,
+                                HistoryEntry {
+                                    query: q,
+                                    retrieval_profile_id: pid,
+                                    top_k: k,
+                                    min_score: m,
+                                    filters: active_filters,
+                                    result: None,
+                                    error: Some(e.to_string()),
+                                },
+                            );
+                            h.truncate(20);
+                        });
+                        set_error.set(Some(e.to_string()));
+                    }
                 }
-                Err(e) => {
-                    set_history.update(|h| {
-                        h.insert(
-                            0,
-                            HistoryEntry {
-                                query: q.clone(),
-                                retrieval_profile_id: pid,
-                                top_k: k,
-                                min_score: m,
-                                source_slug: slug_for_history,
-                                source_version: version_for_history,
-                                result: None,
-                                error: Some(e.to_string()),
-                            },
-                        );
-                        h.truncate(20);
-                    });
-                    set_error.set(Some(e.to_string()));
-                }
-            }
-            set_busy.set(false);
-        });
-    };
+                busy.set(false);
+            });
+        };
 
-    let submit = move |_| {
+    let submit = Callback::new(move |()| {
         run_query(
-            query.get(),
-            retrieval_profile_id.get(),
-            top_k.get(),
-            min_score.get(),
-            source_slug.get(),
-            source_version.get(),
+            query.get_untracked(),
+            retrieval_profile_id.get_untracked(),
+            top_k.get_untracked(),
+            min_score.get_untracked(),
+            metadata_filters_from_signal(filters),
         );
-    };
+    });
 
     let on_history_click = move |entry: HistoryEntry| {
-        set_query.set(entry.query.clone());
+        query.set(entry.query.clone());
         set_retrieval_profile_id.set(entry.retrieval_profile_id);
-        set_top_k.set(entry.top_k);
-        set_min_score.set(entry.min_score);
-        set_source_slug.set(entry.source_slug.clone());
-        set_source_version.set(entry.source_version.clone());
+        top_k.set(entry.top_k);
+        min_score.set(entry.min_score);
+        filters.set(entry.filters.clone());
         run_query(
             entry.query,
             entry.retrieval_profile_id,
             entry.top_k,
             entry.min_score,
-            entry.source_slug,
-            entry.source_version,
+            entry.filters,
         );
     };
 
     let toggle_mark = move |query_text: String, chunk_id: Uuid| {
-        set_marked.update(|m| {
+        marked.update(|m| {
             let key = MarkedRelevant {
-                query: query_text.clone(),
+                query: query_text,
                 chunk_id,
             };
             if let Some(idx) = m.iter().position(|e| *e == key) {
@@ -192,6 +189,9 @@ fn PlaygroundBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView
         })
     };
 
+    let request_body_signal = Signal::derive(move || last_request_json.get());
+    let has_request = Signal::derive(move || last_request_json.with(|s| !s.is_empty()));
+
     view! {
         <div class="playground-grid">
             <div class="playground-main">
@@ -202,78 +202,26 @@ fn PlaygroundBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView
                         set_value=set_retrieval_profile_id
                     />
                 }.into_any())>
-                    <textarea
-                        class="playground-query-input"
-                        placeholder="Ask a question…"
-                        prop:value=move || query.get()
-                        on:input=move |ev| set_query.set(event_target_value(&ev))
-                        rows="8"
-                    ></textarea>
+                    <div class="playground-body">
+                        <QueryInput
+                            value=query
+                            busy=Signal::from(busy)
+                            on_submit=submit
+                            placeholder="Ask a question…".to_string()
+                            submit_label="Run query".to_string()
+                            busy_label="Querying…".to_string()
+                        />
 
-                    <div class="playground-filters">
-                        <label class="playground-control">
-                            <span>"source_slug"</span>
-                            <input
-                                type="text"
-                                placeholder="any"
-                                prop:value=move || source_slug.get()
-                                on:input=move |ev| set_source_slug.set(event_target_value(&ev))
-                            />
-                        </label>
-                        <label class="playground-control">
-                            <span>"source_version"</span>
-                            <input
-                                type="text"
-                                placeholder="any"
-                                prop:value=move || source_version.get()
-                                on:input=move |ev| set_source_version.set(event_target_value(&ev))
-                            />
-                        </label>
-                    </div>
-                    <div class="playground-controls">
-                        <label class="playground-control">
-                            <span>"Top-K"</span>
-                            <input
-                                type="number"
-                                min="1"
-                                max="50"
-                                prop:value=move || top_k.get().to_string()
-                                on:input=move |ev| {
-                                    if let Ok(v) = event_target_value(&ev).parse::<u32>() {
-                                        set_top_k.set(v.clamp(1, 50));
-                                    }
-                                }
-                            />
-                        </label>
-                        <label class="playground-control">
-                            <span>"Min score"</span>
-                            <input
-                                type="number"
-                                min="0"
-                                max="1"
-                                step="0.05"
-                                prop:value=move || format!("{:.2}", min_score.get())
-                                on:input=move |ev| {
-                                    if let Ok(v) = event_target_value(&ev).parse::<f32>() {
-                                        set_min_score.set(v.clamp(0.0, 1.0));
-                                    }
-                                }
-                            />
-                        </label>
-                        <div class="playground-control-spacer"></div>
-                        <button
-                            type="button"
-                            class="btn btn-primary"
-                            disabled=move || busy.get() || query.with(|q| q.trim().is_empty())
-                            on:click=submit
-                        >
-                            {move || if busy.get() { "Querying…" } else { "Run query" }}
-                        </button>
-                    </div>
+                        <RetrievalControls top_k=top_k min_score=min_score filters=filters />
 
-                    {move || error.get().map(|e| view! {
-                        <div class="log-line-error mt-3">{e}</div>
-                    })}
+                        {move || error.get().map(|e| view! {
+                            <div class="log-line-error">{e}</div>
+                        })}
+
+                        {move || has_request.get().then(|| view! {
+                            <RequestInspector body=request_body_signal label="Inspect last request".to_string() />
+                        })}
+                    </div>
                 </Surface>
 
                 {move || result.get().map(|r| {
@@ -331,9 +279,6 @@ fn PlaygroundBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView
                     } else {
                         view! {
                             <Surface title=format!("Marked relevant · {}", m.len())>
-                                <p class="muted text-sm">
-                                    "Session-scoped. Export to a synthetic dataset lands in a follow-up."
-                                </p>
                                 <ul class="playground-marked-list">
                                     {m.into_iter().map(|entry| view! {
                                         <li>
@@ -351,25 +296,6 @@ fn PlaygroundBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView
             </aside>
         </div>
     }
-}
-
-fn build_metadata_filters(source_slug: &str, source_version: &str) -> Vec<MetadataFilterDto> {
-    let mut out = Vec::new();
-    let slug = source_slug.trim();
-    if !slug.is_empty() {
-        out.push(MetadataFilterDto {
-            field: "source_slug".to_string(),
-            value: slug.to_string(),
-        });
-    }
-    let version = source_version.trim();
-    if !version.is_empty() {
-        out.push(MetadataFilterDto {
-            field: "source_version".to_string(),
-            value: version.to_string(),
-        });
-    }
-    out
 }
 
 #[component]
@@ -411,6 +337,7 @@ fn ResultsList(
     toggle_mark: impl Fn(String, Uuid) + Clone + Send + Sync + 'static,
 ) -> impl IntoView {
     let hits = result.hits;
+    let timings = result.timings;
     if hits.is_empty() {
         return view! {
             <Surface title="Results".to_string()>
@@ -424,7 +351,12 @@ fn ResultsList(
     }
     let count = hits.len();
     view! {
-        <Surface title=format!("Results · {count}")>
+        <Surface
+            title=format!("Results · {count}")
+            actions=Box::new(move || view! {
+                <ResultsLatency timings=timings />
+            }.into_any())
+        >
             <div class="playground-hits">
                 {hits.into_iter().enumerate().map(|(i, hit)| {
                     let query_for_mark = query_text.clone();
@@ -443,6 +375,11 @@ fn ResultsList(
         </Surface>
     }
     .into_any()
+}
+
+#[component]
+fn ResultsLatency(timings: Timings) -> impl IntoView {
+    view! { <LatencyBadge timings=timings /> }
 }
 
 #[component]

@@ -1,11 +1,15 @@
 use serde::{Deserialize, Serialize};
 
+use crate::shared::contracts::Timings;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmbedResult {
     pub dims: usize,
     pub norm_a: f32,
     pub norm_b: f32,
     pub similarity: f32,
+    #[serde(default)]
+    pub timings: Timings,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]

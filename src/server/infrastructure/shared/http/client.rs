@@ -1,10 +1,12 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
+use futures_util::stream::StreamExt;
 use reqwest::{header::HeaderMap, Client, Method};
 
 use crate::server::application::ports::HttpClient;
 use crate::server::application::AppError;
+use crate::server::infrastructure::shared::sse::ByteStream;
 
 pub struct ReqwestHttpClient {
     client: Client,
@@ -52,5 +54,34 @@ impl ReqwestHttpClient {
             .await
             .map_err(|e| AppError::Upstream(format!("read body from {url}: {e}")))?;
         Ok((status, body))
+    }
+
+    pub async fn request_stream(
+        &self,
+        method: Method,
+        url: &str,
+        headers: HeaderMap,
+        body: Option<Vec<u8>>,
+    ) -> Result<(u16, ByteStream), AppError> {
+        let mut builder = self.client.request(method, url).headers(headers);
+        if let Some(b) = body {
+            builder = builder.body(b);
+        }
+        let response = builder
+            .send()
+            .await
+            .map_err(|e| AppError::Upstream(format!("send to {url}: {e}")))?;
+        let status = response.status().as_u16();
+        if !(200..300).contains(&status) {
+            let text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "<unreadable body>".to_string());
+            return Err(AppError::Upstream(format!(
+                "stream request to {url}: {status} — {text}"
+            )));
+        }
+        let stream: ByteStream = response.bytes_stream().boxed();
+        Ok((status, stream))
     }
 }

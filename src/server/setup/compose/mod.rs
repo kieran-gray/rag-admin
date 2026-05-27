@@ -245,6 +245,7 @@ impl App {
             .layer(Extension(Arc::clone(
                 &self.ingestion.source_document_ingest_service,
             )))
+            .layer(Extension(Arc::clone(&self.chat)))
     }
 
     async fn seed_if_empty(&self) {

@@ -6,6 +6,7 @@ use crate::server_functions::configuration::get_configuration;
 use crate::server_functions::embed::embed_texts;
 use crate::shared::contracts::EmbeddingModelDto;
 use crate::shared::EmbedResult;
+use crate::ui::components::playground::{LatencyBadge, RequestInspector};
 use crate::ui::components::primitives::{EmptyState, MetricBar, MetricKind, PageHeader, Surface};
 
 #[component]
@@ -61,6 +62,7 @@ fn EmbedBody(models: Vec<EmbeddingModelDto>) -> impl IntoView {
     let (result, set_result) = signal::<Option<EmbedResult>>(None);
     let (error, set_error) = signal::<Option<String>>(None);
     let (busy, set_busy) = signal(false);
+    let last_request_json = RwSignal::new(String::new());
 
     let compute = move |_| {
         let m = model.get_untracked();
@@ -71,6 +73,13 @@ fn EmbedBody(models: Vec<EmbeddingModelDto>) -> impl IntoView {
             set_error.set(Some("Both text fields are required.".to_string()));
             return;
         }
+
+        let request_preview = serde_json::json!({
+            "model": m.clone(),
+            "text_a_chars": a.chars().count(),
+            "text_b_chars": b.chars().count(),
+        });
+        last_request_json.set(serde_json::to_string_pretty(&request_preview).unwrap_or_default());
 
         set_busy.set(true);
         set_error.set(None);
@@ -84,6 +93,9 @@ fn EmbedBody(models: Vec<EmbeddingModelDto>) -> impl IntoView {
             set_busy.set(false);
         });
     };
+
+    let request_body_signal = Signal::derive(move || last_request_json.get());
+    let has_request = Signal::derive(move || last_request_json.with(|s| !s.is_empty()));
 
     let inputs_disabled = move || busy.get();
 
@@ -100,49 +112,54 @@ fn EmbedBody(models: Vec<EmbeddingModelDto>) -> impl IntoView {
                     />
                 }.into_any())
             >
-                <div class="embed-sources">
-                    <label class="block space-y-1.5">
-                        <span class="eyebrow">"Text A"</span>
-                        <textarea
-                            class="playground-query-input"
-                            placeholder="First text segment…"
-                            rows="8"
-                            disabled=inputs_disabled
-                            prop:value=move || text_a.get()
-                            on:input=move |e| set_text_a.set(event_target_value(&e))
-                        ></textarea>
-                    </label>
-                    <label class="block space-y-1.5">
-                        <span class="eyebrow">"Text B"</span>
-                        <textarea
-                            class="playground-query-input"
-                            placeholder="Second text segment…"
-                            rows="8"
-                            disabled=inputs_disabled
-                            prop:value=move || text_b.get()
-                            on:input=move |e| set_text_b.set(event_target_value(&e))
-                        ></textarea>
-                    </label>
-                </div>
+                <div class="playground-body">
+                    <div class="embed-sources">
+                        <label class="embed-source-field">
+                            <span class="eyebrow">"Text A"</span>
+                            <textarea
+                                class="playground-query-input"
+                                placeholder="First text segment…"
+                                rows="8"
+                                disabled=inputs_disabled
+                                prop:value=move || text_a.get()
+                                on:input=move |e| set_text_a.set(event_target_value(&e))
+                            ></textarea>
+                        </label>
+                        <label class="embed-source-field">
+                            <span class="eyebrow">"Text B"</span>
+                            <textarea
+                                class="playground-query-input"
+                                placeholder="Second text segment…"
+                                rows="8"
+                                disabled=inputs_disabled
+                                prop:value=move || text_b.get()
+                                on:input=move |e| set_text_b.set(event_target_value(&e))
+                            ></textarea>
+                        </label>
+                    </div>
 
-                <div class="playground-controls">
-                    <div class="playground-control-spacer"></div>
-                    <button
-                        type="button"
-                        class="btn btn-primary"
-                        disabled=move || busy.get()
-                            || text_a.with(|t| t.trim().is_empty())
-                            || text_b.with(|t| t.trim().is_empty())
-                            || model.with(String::is_empty)
-                        on:click=compute
-                    >
-                        {move || if busy.get() { "Embedding…" } else { "Run" }}
-                    </button>
-                </div>
+                    <div class="embed-actions">
+                        <button
+                            type="button"
+                            class="btn btn-primary"
+                            disabled=move || busy.get()
+                                || text_a.with(|t| t.trim().is_empty())
+                                || text_b.with(|t| t.trim().is_empty())
+                                || model.with(String::is_empty)
+                            on:click=compute
+                        >
+                            {move || if busy.get() { "Embedding…" } else { "Run" }}
+                        </button>
+                    </div>
 
-                {move || error.get().map(|e| view! {
-                    <div class="log-line-error mt-3">{e}</div>
-                })}
+                    {move || error.get().map(|e| view! {
+                        <div class="log-line-error">{e}</div>
+                    })}
+
+                    {move || has_request.get().then(|| view! {
+                        <RequestInspector body=request_body_signal label="Inspect last request".to_string() />
+                    })}
+                </div>
             </Surface>
 
             {move || result.get().map(|r| view! { <ResultPanel result=r /> })}
@@ -190,13 +207,17 @@ fn ResultPanel(result: EmbedResult) -> impl IntoView {
         norm_a,
         norm_b,
         similarity,
+        timings,
     } = result;
 
     let similarity_clamped = similarity.clamp(0.0, 1.0);
     let bucket = similarity_bucket(similarity);
 
     view! {
-        <Surface title=format!("Similarity · {similarity:.3}")>
+        <Surface
+            title=format!("Similarity · {similarity:.3}")
+            actions=Box::new(move || view! { <LatencyBadge timings=timings /> }.into_any())
+        >
             <MetricBar
                 label="Cosine similarity".to_string()
                 short=bucket.label.to_string()
