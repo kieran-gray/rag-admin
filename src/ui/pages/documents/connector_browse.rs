@@ -14,12 +14,12 @@ use crate::shared::contracts::{
     aggregate_type, ChunkingConfigurationDto, ConnectorDiscoveredItemViewDto, ConnectorDto,
     ConnectorItemStatusDto, ConnectorSyncSummaryDto, IndexProfileDto,
 };
-use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{
     ActionItem, ActionsMenu, Dialog, Help, InlineStatus, InlineStatusMessage, Status, StatusPill,
     Surface, TitleCell,
 };
 use crate::ui::pages::shared::format_when;
+use crate::ui::state::event_bus::use_invalidator;
 
 #[component]
 pub fn ConnectorBrowseView(connector_id: Signal<Uuid>) -> impl IntoView {

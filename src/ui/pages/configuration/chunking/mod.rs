@@ -12,9 +12,9 @@ use crate::shared::contracts::{
     aggregate_type, ChunkingConfigurationDto, CreateSweepTemplateDto, SetDefaultSweepTemplateDto,
     SweepTemplateCommandDto, SweepTemplateDto,
 };
-use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{InlineStatusMessage, PageHeader, Surface};
 use crate::ui::pages::configuration::commands::run_sweep_template_command;
+use crate::ui::state::event_bus::use_invalidator;
 
 use self::form_dialog::ChunkingFormDialog;
 use self::list::{ChunkingList, DeleteConfirmDialog};

@@ -4,8 +4,8 @@ use uuid::Uuid;
 
 use crate::server_functions::evaluation::get_run;
 use crate::shared::contracts::aggregate_type;
-use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{EmptyState, Surface};
+use crate::ui::state::event_bus::use_invalidator;
 
 use super::compare_tab::CompareTabBody;
 use super::header::RunHeader;

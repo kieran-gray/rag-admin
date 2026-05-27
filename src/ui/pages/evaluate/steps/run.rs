@@ -12,13 +12,13 @@ use crate::shared::contracts::{
     aggregate_type, ChunkingConfigurationDto, EvaluationRunSummaryDto, IndexProfileDto,
     RunEvaluationRequestDto, RunKindDto, RunOptimizationRequestDto, SweepTemplateDto,
 };
-use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{EmptyState, Help, Status, StatusPill, Surface};
 use crate::ui::pages::evaluate::launchers::{
     EvaluationLauncher, IndexProfileSelect, LauncherCallbacks, OptimizeLauncher,
 };
 use crate::ui::pages::evaluate::state::EvaluateSelection;
 use crate::ui::pages::shared::format_when;
+use crate::ui::state::event_bus::use_invalidator;
 
 #[component]
 pub fn RunStep<'a>(

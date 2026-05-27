@@ -20,9 +20,9 @@ use crate::shared::contracts::{
     aggregate_type, ChunkingConfigurationDto, IndexProfileDto, SourceDocumentDetailDto,
     SourceDocumentDto, SweepTemplateDto,
 };
-use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{EmptyState, PageHeader, Surface};
 use crate::ui::pages::shared::document_type_label;
+use crate::ui::state::event_bus::use_invalidator;
 
 #[component]
 pub fn EvaluatePage() -> impl IntoView {

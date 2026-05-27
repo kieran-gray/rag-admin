@@ -6,8 +6,8 @@ use uuid::Uuid;
 use super::nav_menu::{NavMenu, NavMenuItem};
 use super::theme_toggle::ThemeToggle;
 use crate::shared::contracts::{ActivityJobDto, ActivityKind};
-use crate::ui::components::app::activity::{open_tray_with, set_tray_open, use_activity_state};
-use crate::ui::components::app::event_bus::{use_event_bus, ConnectionState};
+use crate::ui::state::activity::{open_tray_with, set_tray_open, use_activity_state};
+use crate::ui::state::event_bus::{use_event_bus, ConnectionState};
 
 const CONFIGURATION_ITEMS: &[NavMenuItem] = &[
     NavMenuItem {

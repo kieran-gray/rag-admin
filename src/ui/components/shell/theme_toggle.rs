@@ -103,10 +103,7 @@ fn current_dom_theme_is_light() -> bool {
     let Some(root) = document.document_element() else {
         return false;
     };
-    matches!(
-        root.get_attribute("data-theme").as_deref(),
-        Some("light")
-    )
+    matches!(root.get_attribute("data-theme").as_deref(), Some("light"))
 }
 
 #[cfg(feature = "hydrate")]

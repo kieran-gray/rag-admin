@@ -6,11 +6,11 @@ use leptos_router::NavigateOptions;
 
 use crate::server_functions::source_document::list_documents;
 use crate::shared::contracts::{aggregate_type, DocumentListItemDto};
-use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{
     EmptyState, PageHeader, SkeletonColumn, SkeletonRows, StatusPill, Surface, TitleCell,
 };
 use crate::ui::pages::shared::{document_type_label, format_when, indexing_summary};
+use crate::ui::state::event_bus::use_invalidator;
 
 #[component]
 pub fn IngestWorkflowPage() -> impl IntoView {

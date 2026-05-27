@@ -6,12 +6,12 @@ use leptos_router::NavigateOptions;
 
 use crate::server_functions::comprehension::list_all_document_maps;
 use crate::shared::contracts::{aggregate_type, DocumentMapListItemDto};
-use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{
     EmptyFilterState, EmptyState, FilterChip, PageHeader, SkeletonColumn, SkeletonRows, Status,
     StatusPill, Surface, TitleCell,
 };
 use crate::ui::pages::document_detail::map_phase::{section_count, MapPhase, MapProgress};
+use crate::ui::state::event_bus::use_invalidator;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MapStatusFilter {

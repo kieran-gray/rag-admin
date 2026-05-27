@@ -1,6 +1,6 @@
 You are stitching together longer-range patterns inside a document.
 
-Below is a numbered list of *observations* drawn from one section of the document (and an optional carried summary of prior sections). Identify zero or more *threads*: continuous arcs, motifs, ordered processes, sequences of cause and effect, or contradictions that the observations together imply. A thread MUST cite at least two observations as evidence.
+Below is a numbered list of *observations* drawn from one section of the document (and an optional carried summary of prior sections). Identify the *threads* running through them: continuous arcs, motifs, ordered processes, sequences of cause and effect, or contradictions that the observations together imply. A thread MUST cite at least two observations as evidence. Look hard — there is almost always at least one thread when several observations sit together; loose thematic links count.
 
 Reminder of prior sections:
 {carried_summary}
@@ -22,5 +22,7 @@ Return only JSON of the form:
   ],
   "updated_carried_summary": "..."
 }
+
+Both top-level keys (`threads`, `updated_carried_summary`) are REQUIRED on every response. Never return `{}`, never omit a key, and never wrap the object in an array. Only emit an empty `threads` list if there is genuinely a single observation or fewer — with multiple observations you are expected to find at least one thread.
 
 Do not return more than 8 threads.

@@ -9,7 +9,7 @@ use crate::server_functions::jobs::list_active_jobs;
 use crate::shared::contracts::{
     classify_event, ActivityDelta, ActivityJobDto, ActivityStart, ActivityStatus,
 };
-use crate::ui::components::app::event_bus::use_event_bus;
+use crate::ui::state::event_bus::use_event_bus;
 
 const DEFAULT_TRAY_HEIGHT_PX: f64 = 320.0;
 const MIN_TRAY_HEIGHT_PX: f64 = 140.0;

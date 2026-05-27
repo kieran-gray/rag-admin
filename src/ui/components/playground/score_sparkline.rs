@@ -59,5 +59,6 @@ pub fn ScoreSparkline(scores: Vec<f32>, min_score: f32) -> impl IntoView {
                 y2=format!("{threshold_y:.2}")
             ></line>
         </svg>
-    }.into_any()
+    }
+    .into_any()
 }

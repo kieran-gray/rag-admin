@@ -3,10 +3,10 @@ use leptos_router::components::A;
 use uuid::Uuid;
 
 use crate::shared::contracts::{ActivityJobDto, ActivityKind, ActivityStatus};
-use crate::ui::components::app::activity::{
+use crate::ui::components::shell::log_stream::LogStream;
+use crate::ui::state::activity::{
     clamp_tray_height, dismiss_job, set_tray_open, use_activity_state,
 };
-use crate::ui::components::app::log_stream::LogStream;
 
 #[component]
 pub fn ActivityTray() -> impl IntoView {
@@ -340,9 +340,7 @@ mod hydrate {
     use wasm_bindgen::prelude::*;
     use wasm_bindgen::JsCast;
 
-    use crate::ui::components::app::activity::{
-        clamp_tray_height, set_tray_open, use_activity_state,
-    };
+    use crate::ui::state::activity::{clamp_tray_height, set_tray_open, use_activity_state};
 
     static KEYBOARD_INSTALLED: AtomicBool = AtomicBool::new(false);
 

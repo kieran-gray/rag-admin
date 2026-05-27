@@ -10,12 +10,12 @@ use crate::shared::contracts::{
     aggregate_type, DatasetListItemDto, DatasetListPageDto, DatasetListQueryDto,
     DatasetStatusFilterDto,
 };
-use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{
     use_cursor_pagination, EmptyFilterState, EmptyState, FilterChip, PageHeader, PaginationBar,
     PaginationSummary, SkeletonColumn, SkeletonRows, Status, StatusPill, Surface, TitleCell,
 };
 use crate::ui::pages::shared::format_when;
+use crate::ui::state::event_bus::use_invalidator;
 
 const PAGE_SIZE: u32 = 25;
 

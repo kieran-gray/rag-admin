@@ -6,7 +6,6 @@ use leptos_router::{
     NavigateOptions, ParamSegment, StaticSegment,
 };
 
-use crate::ui::components::app::event_bus::provide_event_bus;
 use crate::ui::components::playground::provide_playground_context;
 use crate::ui::components::shell::AppShell;
 use crate::ui::pages::{
@@ -21,6 +20,7 @@ use crate::ui::pages::{
     playground::{chat::ChatPage, embed::EmbedPage, retrieve::RetrievePage},
     workflows::{EvaluateWorkflowPage, IngestWorkflowPage, RunPage, RunsPage},
 };
+use crate::ui::state::event_bus::provide_event_bus;
 
 #[component]
 fn RedirectTo(to: &'static str) -> impl IntoView {

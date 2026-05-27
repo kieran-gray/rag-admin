@@ -8,11 +8,11 @@ use crate::server_functions::evaluation::get_evaluation_runs_page;
 use crate::shared::contracts::{
     aggregate_type, RunKindDto, RunListPageDto, RunListQueryDto, RunStatusFilterDto,
 };
-use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{
     use_cursor_pagination, EmptyFilterState, EmptyState, FilterChip, PageHeader, PaginationBar,
     PaginationSummary, Surface,
 };
+use crate::ui::state::event_bus::use_invalidator;
 
 use super::runs_table::{status_color, RunsTable, SkeletonRunsTable};
 

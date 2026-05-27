@@ -8,11 +8,11 @@ use crate::shared::contracts::{
     aggregate_type, ChunkingConfigurationDto, IndexProfileDto, IndexingDto,
     SourceDocumentDetailDto, SourceDocumentDto,
 };
-use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
 use crate::ui::pages::shared::{
     document_type_label, indexing_milestone, indexing_summary, short_hash,
 };
+use crate::ui::state::event_bus::use_invalidator;
 
 #[component]
 pub fn DocumentIngestPage() -> impl IntoView {

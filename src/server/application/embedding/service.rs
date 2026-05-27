@@ -311,9 +311,9 @@ fn apply_prefix(model: &str, text: &str, input_type: EmbedInputType) -> String {
     match (family, input_type) {
         (PrefixFamily::E5, EmbedInputType::Query) => format!("query: {text}"),
         (PrefixFamily::E5, EmbedInputType::Passage) => format!("passage: {text}"),
-        (PrefixFamily::Bge | PrefixFamily::Snowflake, EmbedInputType::Query) => format!(
-            "Represent this sentence for searching relevant passages: {text}"
-        ),
+        (PrefixFamily::Bge | PrefixFamily::Snowflake, EmbedInputType::Query) => {
+            format!("Represent this sentence for searching relevant passages: {text}")
+        }
         _ => text.to_string(),
     }
 }

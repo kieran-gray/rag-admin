@@ -17,10 +17,10 @@ use crate::shared::contracts::{
     ObservationDto, RequestMapBuildRequestDto, SourceDocumentDetailDto, SpanDto, SuggestedRoleDto,
     ThreadDto,
 };
-use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{
     ActionItem, ActionsMenu, Dialog, EmptyState, PageHeader, StatusPill, Surface,
 };
+use crate::ui::state::event_bus::use_invalidator;
 
 #[component]
 pub fn DocumentMapPage() -> impl IntoView {

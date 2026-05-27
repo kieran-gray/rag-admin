@@ -33,9 +33,9 @@ fn default_weight_matrix() -> Vec<AxisWeightDto> {
         })
         .collect()
 }
-use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{EmptyState, Help, Status, StatusPill, Surface};
 use crate::ui::pages::evaluate::state::EvaluateSelection;
+use crate::ui::state::event_bus::use_invalidator;
 
 #[component]
 pub fn DatasetStep(

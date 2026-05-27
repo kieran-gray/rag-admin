@@ -5,9 +5,9 @@ use uuid::Uuid;
 
 use crate::server_functions::comprehension::list_document_maps;
 use crate::shared::contracts::DocumentMapSummaryDto;
-use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{EmptyState, StatusPill, Surface};
 use crate::ui::pages::document_detail::map_phase::{section_count, MapPhase, MapProgress};
+use crate::ui::state::event_bus::use_invalidator;
 
 #[component]
 #[allow(clippy::needless_pass_by_value)]

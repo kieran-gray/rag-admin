@@ -1,7 +1,9 @@
 pub mod all_view;
 pub mod connector_browse;
+pub mod import_dialog;
 pub mod redirect_by_id;
 pub mod smart_filter;
+pub mod source_mark;
 
 pub use redirect_by_id::DocumentByIdRedirect;
 
@@ -11,9 +13,9 @@ use uuid::Uuid;
 
 use crate::server_functions::connector::list_connectors;
 use crate::shared::contracts::{aggregate_type, ConnectorDto};
-use crate::ui::components::app::event_bus::use_invalidator;
-use crate::ui::components::app::import_dialog::ImportDialog;
 use crate::ui::components::primitives::PageHeader;
+use crate::ui::pages::documents::import_dialog::ImportDialog;
+use crate::ui::state::event_bus::use_invalidator;
 
 use self::all_view::AllDocumentsView;
 use self::connector_browse::ConnectorBrowseView;

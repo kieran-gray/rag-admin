@@ -11,12 +11,12 @@ use crate::server_functions::evaluation::{
 use crate::shared::contracts::{
     aggregate_type, EvaluationDatasetDto, EvaluationQuestionDto, EvaluationReferenceDto,
 };
-use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{
     ConfirmDialog, EmptyState, Kv, PageHeader, Status, StatusPill, Surface,
 };
+use crate::ui::state::event_bus::use_invalidator;
 
-use crate::ui::pages::shared::{format_when, short_hash};
+use crate::ui::pages::shared::{format_when, short_hash, source_link};
 
 #[component]
 pub fn DatasetDetailPage() -> impl IntoView {
@@ -396,9 +396,10 @@ fn QuestionCard(question: EvaluationQuestionDto) -> impl IntoView {
 fn ReferenceCard(index: u32, reference: EvaluationReferenceDto) -> impl IntoView {
     let span = format!("[{}–{}]", reference.char_start, reference.char_end);
     let content = reference.content;
-    let href = format!(
-        "/documents/by-id/{}?tab=source&ref_start={}&ref_end={}",
-        reference.document_id, reference.char_start, reference.char_end,
+    let href = source_link(
+        reference.document_id,
+        Some(reference.char_start),
+        Some(reference.char_end),
     );
     view! {
         <A href=href attr:class="block border-l-2 border-[var(--color-border)] pl-3 py-1 hover:border-[var(--color-accent)] no-underline">

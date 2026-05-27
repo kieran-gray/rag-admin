@@ -15,11 +15,11 @@ use crate::shared::contracts::{
     aggregate_type, DocumentMapSummaryDto, EvaluationDatasetSummaryDto, EvaluationRunSummaryDto,
     IndexingDto, MarkdownBlockDto, MarkdownBlockKindDto, SourceDocumentDetailDto,
 };
-use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{
     ActionItem, ActionsMenu, ConfirmDialog, EmptyState, PageHeader, Status, StatusPill, Surface,
 };
 use crate::ui::pages::shared::{document_type_label, format_when, short_hash};
+use crate::ui::state::event_bus::use_invalidator;
 
 #[component]
 pub fn DocumentDetailPage() -> impl IntoView {
