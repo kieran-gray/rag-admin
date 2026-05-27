@@ -15,7 +15,7 @@ use crate::ui::pages::workflows::run_detail::{
     RunScoreStrip, VariantFilterContext, VariantsSection,
 };
 
-use super::drilldown_drawer::{DrawerTarget, DrilldownDrawer};
+use super::drilldown_modal::{DrilldownModal, ModalTarget};
 use super::optimizer_section::{optimizer_section_available, OptimizerSection};
 
 #[component]
@@ -66,19 +66,19 @@ pub fn RunSinglePage(run: EvaluationRunDto) -> impl IntoView {
         pareto_keys: pareto_set,
     };
 
-    let (drawer_target, set_drawer_target) = signal::<Option<DrawerTarget>>(None);
+    let (modal_target, set_modal_target) = signal::<Option<ModalTarget>>(None);
     let open_variant_key =
-        Signal::derive(move || drawer_target.with(|t| t.as_ref().map(|d| d.row_key.clone())));
+        Signal::derive(move || modal_target.with(|t| t.as_ref().map(|d| d.row_key.clone())));
 
-    let on_open_drawer = Callback::new(move |req: DrillRequest| {
-        set_drawer_target.set(Some(DrawerTarget {
+    let on_open_modal = Callback::new(move |req: DrillRequest| {
+        set_modal_target.set(Some(ModalTarget {
             row_key: req.row_key,
             variant_label: req.variant_label,
             split: req.split,
         }));
     });
-    let on_close_drawer = Callback::new(move |_| {
-        set_drawer_target.set(None);
+    let on_close_modal = Callback::new(move |_| {
+        set_modal_target.set(None);
     });
 
     let (highlight_request, set_highlight_request) = signal(0u32);
@@ -131,7 +131,7 @@ pub fn RunSinglePage(run: EvaluationRunDto) -> impl IntoView {
                             filter_ctx=filter_ctx
                             promote=promote
                             promote_status=promote_status
-                            on_open_drawer=on_open_drawer
+                            on_open_drilldown=on_open_modal
                             open_variant_key=open_variant_key
                             highlight_request=highlight_request
                         />
@@ -175,10 +175,10 @@ pub fn RunSinglePage(run: EvaluationRunDto) -> impl IntoView {
 
             <MetricLegend />
 
-            <DrilldownDrawer
+            <DrilldownModal
                 run_id=run_uuid
-                target=drawer_target
-                on_close=on_close_drawer
+                target=modal_target
+                on_close=on_close_modal
             />
         </div>
     }

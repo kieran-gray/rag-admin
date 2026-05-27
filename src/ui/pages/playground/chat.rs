@@ -1,5 +1,6 @@
 use gloo_timers::future::TimeoutFuture;
 use leptos::prelude::*;
+use leptos_router::hooks::use_query_map;
 use uuid::Uuid;
 
 use crate::server_functions::configuration::get_retrieval_profiles;
@@ -8,7 +9,7 @@ use crate::shared::contracts::{
 };
 use crate::ui::components::playground::metadata_filters::metadata_filters_from_signal;
 use crate::ui::components::playground::{
-    LatencyBadge, QueryInput, RequestInspector, RetrievalControls,
+    use_playground_context, LatencyBadge, QueryInput, RequestInspector, RetrievalControls,
 };
 use crate::ui::components::primitives::{EmptyState, PageHeader, Surface};
 
@@ -86,12 +87,34 @@ pub fn ChatPage() -> impl IntoView {
 #[component]
 fn ChatBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView {
     let retrieval_profiles_stored = StoredValue::new(retrieval_profiles.clone());
-    let initial_retrieval_profile = retrieval_profiles
-        .first()
-        .map(|p| p.retrieval_profile_id)
+    let playground = use_playground_context();
+    let query_params = use_query_map();
+    let url_question = query_params.with(|q| q.get("q").unwrap_or_default().to_string());
+    let url_profile_param = query_params.with(|q| q.get("profile").unwrap_or_default().to_string());
+
+    let initial_question = if url_question.is_empty() {
+        playground.last_query.get_untracked()
+    } else {
+        url_question
+    };
+    let url_profile_uuid = Uuid::parse_str(&url_profile_param).ok();
+    let initial_retrieval_profile = url_profile_uuid
+        .filter(|id| {
+            retrieval_profiles
+                .iter()
+                .any(|p| p.retrieval_profile_id == *id)
+        })
+        .or_else(|| {
+            playground.last_profile.get_untracked().filter(|id| {
+                retrieval_profiles
+                    .iter()
+                    .any(|p| p.retrieval_profile_id == *id)
+            })
+        })
+        .or_else(|| retrieval_profiles.first().map(|p| p.retrieval_profile_id))
         .unwrap_or_default();
 
-    let question = RwSignal::new(String::new());
+    let question = RwSignal::new(initial_question);
     let (retrieval_profile_id, set_retrieval_profile_id) = signal(initial_retrieval_profile);
     let top_k = RwSignal::new(8u32);
     let min_score = RwSignal::new(0.4f32);
@@ -108,6 +131,9 @@ fn ChatBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView {
         cancel_active_stream(active_stream);
 
         let pid = retrieval_profile_id.get_untracked();
+        playground.last_query.set(question_text.clone());
+        playground.last_profile.set(Some(pid));
+        playground.last_filters.set(filters.get_untracked());
         let req = ChatRequest {
             retrieval_profile_id: pid,
             query: question_text.clone(),
@@ -209,7 +235,7 @@ fn ChatBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView {
             let turn = selected
                 .and_then(|id| t.iter().find(|x| x.turn_id == id))
                 .or_else(|| t.last());
-            turn.map(|x| (x.turn_id, x.hits().to_vec()))
+            turn.map(|x| (x.turn_id, x.question.clone(), x.hits().to_vec()))
         })
     });
 
@@ -271,10 +297,12 @@ fn ChatBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView {
                             None => view! {
                                 <p class="muted text-sm">"Ask a question to see the retrieved chunks here."</p>
                             }.into_any(),
-                            Some((_, hits)) if hits.is_empty() => view! {
+                            Some((_, _, hits)) if hits.is_empty() => view! {
                                 <p class="muted text-sm">"No chunks retrieved for the selected turn."</p>
                             }.into_any(),
-                            Some((_, hits)) => view! { <SourcesList hits=hits /> }.into_any(),
+                            Some((_, question_text, hits)) => view! {
+                                <SourcesList question=question_text hits=hits />
+                            }.into_any(),
                         }
                     }}
                 </Surface>
@@ -576,7 +604,7 @@ fn ChatTurnView(
 }
 
 #[component]
-fn SourcesList(hits: Vec<QueryHit>) -> impl IntoView {
+fn SourcesList(question: String, hits: Vec<QueryHit>) -> impl IntoView {
     view! {
         <div class="chat-sources">
             {hits.into_iter().enumerate().map(|(i, hit)| {
@@ -593,6 +621,11 @@ fn SourcesList(hits: Vec<QueryHit>) -> impl IntoView {
                     (Some(doc_id), _, _) => Some(format!("/documents/by-id/{doc_id}?tab=source")),
                     _ => None,
                 };
+                let embed_link = format!(
+                    "/playground/embed?a={}&b={}",
+                    urlencoding::encode(&question),
+                    urlencoding::encode(&snippet),
+                );
                 view! {
                     <article class="chat-source">
                         <header class="chat-source-head">
@@ -606,9 +639,14 @@ fn SourcesList(hits: Vec<QueryHit>) -> impl IntoView {
                             </div>
                         </header>
                         <p class="chat-source-snippet">{snippet}</p>
-                        {source_link.map(|href| view! {
-                            <a class="btn btn-ghost btn-sm" href=href>"Open document"</a>
-                        })}
+                        <div class="chat-source-actions">
+                            {source_link.map(|href| view! {
+                                <a class="btn btn-ghost btn-sm" href=href>"Open document"</a>
+                            })}
+                            <a class="btn btn-ghost btn-sm" href=embed_link title="Compare this snippet against the question on the Embed page">
+                                "Open in Embed"
+                            </a>
+                        </div>
                     </article>
                 }
             }).collect_view()}

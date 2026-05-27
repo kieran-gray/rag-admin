@@ -17,6 +17,7 @@ pub fn RetrievalControls(
                     type="number"
                     min="1"
                     max="50"
+                    class="min-w-26"
                     prop:value=move || top_k.get().to_string()
                     on:input=move |ev| {
                         if let Ok(v) = event_target_value(&ev).parse::<u32>() {
@@ -32,6 +33,7 @@ pub fn RetrievalControls(
                     min="0"
                     max="1"
                     step="0.05"
+                    class="min-w-26"
                     prop:value=move || format!("{:.2}", min_score.get())
                     on:input=move |ev| {
                         if let Ok(v) = event_target_value(&ev).parse::<f32>() {

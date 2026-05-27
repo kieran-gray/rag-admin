@@ -132,7 +132,7 @@ impl RetrievalService {
                 }
             }
             let chunk_id = meta
-                .get("chunk_id")
+                .get("chunk_uuid")
                 .and_then(|v| v.as_str())
                 .and_then(|s| Uuid::parse_str(s).ok());
             let heading = meta

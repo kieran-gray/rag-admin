@@ -1,5 +1,5 @@
 mod compare_tab;
-mod drilldown_drawer;
+mod drilldown_modal;
 mod header;
 mod optimizer_section;
 mod page;

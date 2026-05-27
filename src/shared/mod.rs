@@ -10,7 +10,10 @@ pub use chunking::{
     BertChunkingConfig, ChunkingConfig, DarnChunkingConfig, DarnGranularity, LlmChunkingConfig,
     SectionChunkingConfig,
 };
-pub use embedding::{EmbedResult, EmbedderBackend, EmbeddingModel};
+pub use embedding::{
+    EmbedInputType, EmbedManyCandidate, EmbedManyResult, EmbedMatrixResult, EmbedResult,
+    EmbedderBackend, EmbeddingModel,
+};
 pub use evaluation::{
     evaluation_score, evaluation_score_with_judge, ordered_f32_vec, plain_f32_vec, ChunkingVariant,
     EvaluationMetrics, EvaluationQuestionResult, EvaluationReferenceResult, EvaluationResultSplit,

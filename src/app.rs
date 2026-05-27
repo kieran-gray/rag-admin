@@ -7,6 +7,7 @@ use leptos_router::{
 };
 
 use crate::ui::components::app::event_bus::provide_event_bus;
+use crate::ui::components::playground::provide_playground_context;
 use crate::ui::components::shell::AppShell;
 use crate::ui::pages::{
     artifacts::{chunk_sets::ChunkSetsPage, maps::MapsPage, DatasetDetailPage, DatasetsPage},
@@ -81,6 +82,7 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
             <head>
                 <meta charset="utf-8" />
                 <meta name="viewport" content="width=device-width, initial-scale=1" />
+                <script inner_html=THEME_BOOT_SCRIPT />
                 <AutoReload options=options.clone() />
                 <HydrationScripts options />
                 <link rel="stylesheet" id="leptos" href="/pkg/rag_admin.css" />
@@ -94,10 +96,13 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
     }
 }
 
+const THEME_BOOT_SCRIPT: &str = "(function(){try{var s=localStorage.getItem('rag-admin-theme');var t=s?s:(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');if(t==='light'){document.documentElement.setAttribute('data-theme','light');}}catch(e){}})();";
+
 #[component]
 pub fn App() -> impl IntoView {
     provide_meta_context();
     provide_event_bus();
+    provide_playground_context();
 
     view! {
         <Title text="rag-admin" />

@@ -18,7 +18,7 @@ The aesthetic is dark, bordered, and quiet. Pink accent is a *pointer* that says
 5. **Numbers align.** Use `font-variant-numeric: tabular-nums` anywhere digits stack vertically.
 6. **Labels are uppercase with tracking.** Eyebrows, table headers, pills. Titles and body stay sentence case. No title case ever.
 7. **The scale is the scale.** Spacing is one of 4 / 8 / 12 / 16 / 24 / 32 / 48 — nothing else, no `1.5`, no `2.5`. Type is one of five named roles — no sixth. Radius is 4px or fully round — no 6 or 8.
-8. **No new colors.** Blends use `color-mix()` from existing tokens. Adding a hex literal in a component is a code smell.
+8. **No new colors.** Blends use `color-mix()` from existing tokens. Adding a hex literal in a component is a code smell — and breaks the light theme, since the override layer can only swap token *values*.
 
 ## Tokens
 
@@ -58,6 +58,45 @@ The aesthetic is dark, bordered, and quiet. Pink accent is a *pointer* that says
 | Winner | `--status-winner` `#FFD700` | first-place leader badge — used at most once per ranking |
 
 Status colors are aliased as `--color-success`, `--color-danger` for semantic CSS. There is no `warn` token — soft warnings use `pending`.
+
+### Themes
+
+The app ships two themes. Default is dark; light mode opts in via `data-theme="light"` on `<html>`. Both speak the same token language — only the *values* swap — so components never branch on theme. If a component reaches for a literal hex, that's a token-extraction job, not a theme override.
+
+| Role | Dark | Light |
+|---|---|---|
+| Page background | `#0b0d10` | `#eef1f5` |
+| Surface 1 (cards) | `#14171c` | `#ffffff` |
+| Surface 2 (raised / hover) | `#1a1e25` | `#e6eaf0` |
+| Surface 3 (active / pressed) | `#20242c` | `#d6dce5` |
+| Code background | `#0e1115` | `#f6f8fa` |
+| Text | `#e5e7eb` | `#14181f` |
+| Text muted | `#8b94a3` | `#4b5360` |
+| Text faint | `#5b6470` | `#5f6775` |
+| Border | `#232831` | `#d4dae3` |
+| Border strong | `#2e3540` | `#b8bfca` |
+| Accent | `#f7768e` | `#c43459` |
+| Accent strong | `#e25c72` | `#9c1d40` |
+| Accent soft | `#2a1820` | `#fde7ed` |
+| Link | `#a5b4fc` | `#4338ca` |
+| Link hover | `#c7d2fe` | `#312e81` |
+| Status — OK | `#34d399` | `#15803d` |
+| Status — Pending | `#fbbf24` | `#92400e` |
+| Status — Fail | `#f87171` | `#b91c1c` |
+| Status — Stale | `#94a3b8` | `#5e6573` |
+| Status — Info | `#60a5fa` | `#1d4ed8` |
+| Status — Winner | `#FFD700` | `#92560b` |
+| On-accent (text on accent bg) | `#0b0d10` | `#ffffff` |
+| Trend down (compare deltas) | `#d97757` | `#c2410c` |
+| Badge text (on accent-soft) | `#fecdd3` | `#9c1d40` |
+
+**Surface ramp inverts.** In dark mode the ramp goes darkest→lightest (surface-1 is the darkest of the three). In light mode it goes lightest→darkest. The *intent* is preserved: each step adds visual distinction to the previous, regardless of direction. Don't try to enforce "lighter = raised" globally; enforce "more interactive = more contrast against the resting state."
+
+**Light-mode accents are darker on purpose.** The rose hue is the same brand pink, but values are picked so accent passes AA on white (≥4.5:1) and white text passes AA on the accent button (≥4.5:1). When you touch the accent in a component, never hardcode — read it from the token so both themes inherit the contrast guarantee.
+
+**Overlay shadows soften in light mode.** Black drop-shadows punch holes in a white interface. The light theme rebinds the activity tray, popover, modal, and search-focus shadows to slate-tinted `rgba(15, 23, 42, 0.10–0.22)`. New floating overlays should reuse one of the existing classes rather than introduce a new shadow value.
+
+**The toggle.** A pre-paint `<script>` in `<head>` reads `localStorage('rag-admin-theme')` (falling back to `prefers-color-scheme`) and sets `data-theme` before first paint, so there's no flash. The `<ThemeToggle />` in `nav.rs` mutates the same attribute and persists to storage. No global state, no context — the DOM attribute *is* the source of truth.
 
 ### Radius
 
@@ -182,7 +221,8 @@ The `▍` glyph is **brand-locked**. It appears nowhere else — not as a bullet
 - `shadow-*` Tailwind utility on anything that isn't a floating overlay
 - `rounded-md` / `rounded-lg` (these are 6px and 8px — not in the system)
 - Spacing values `1.5`, `2.5`, `5`, `7`, `9`, `10`, `11` (off-scale)
-- Hex color literals in components — go through tokens or `color-mix`
+- Hex color literals in components — go through tokens or `color-mix` (also breaks the light theme)
+- `rgba(0, 0, 0, …)` shadows that won't work on a white surface — soften via the `[data-theme="light"]` overrides or use `color-mix(in srgb, …)` with a token
 - `text-base`, `text-lg`, `text-xl`, `text-2xl` — use the named role classes
 - Title case anywhere
 - Multiple accent surfaces on the same screen

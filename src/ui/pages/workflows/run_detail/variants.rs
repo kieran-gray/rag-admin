@@ -131,7 +131,7 @@ pub(crate) fn VariantsSection(
     filter_ctx: VariantFilterContext,
     promote: PromoteHandle,
     promote_status: ReadSignal<Option<Result<String, String>>>,
-    on_open_drawer: Callback<DrillRequest>,
+    on_open_drilldown: Callback<DrillRequest>,
     open_variant_key: Signal<Option<String>>,
     highlight_request: ReadSignal<u32>,
 ) -> impl IntoView {
@@ -269,7 +269,7 @@ pub(crate) fn VariantsSection(
                     bests=bests
                     badge_for=badge_for
                     promote=promote
-                    on_open_drawer=on_open_drawer
+                    on_open_drilldown=on_open_drilldown
                     open_variant_key=open_variant_key
                 />
             }
@@ -282,7 +282,7 @@ pub(crate) fn VariantsSection(
                             badge=badge_for(&v)
                             bests=bests
                             promote=promote
-                            on_open_drawer=on_open_drawer
+                            on_open_drilldown=on_open_drilldown
                             open_variant_key=open_variant_key
                         />
                     }).collect_view()}
@@ -393,7 +393,7 @@ fn FamilyGroupedBars(
     bests: MetricBests,
     badge_for: impl Fn(&EvaluationVariantResult) -> VariantBadge + 'static + Send + Sync + Copy,
     promote: PromoteHandle,
-    on_open_drawer: Callback<DrillRequest>,
+    on_open_drilldown: Callback<DrillRequest>,
     open_variant_key: Signal<Option<String>>,
 ) -> impl IntoView {
     use std::collections::BTreeMap;
@@ -419,7 +419,7 @@ fn FamilyGroupedBars(
                                 badge=badge_for(&v)
                                 bests=bests
                                 promote=promote
-                                on_open_drawer=on_open_drawer
+                                on_open_drilldown=on_open_drilldown
                                 open_variant_key=open_variant_key
                             />
                         }).collect_view()}
@@ -437,7 +437,7 @@ fn VariantCard(
     badge: VariantBadge,
     bests: MetricBests,
     promote: PromoteHandle,
-    on_open_drawer: Callback<DrillRequest>,
+    on_open_drilldown: Callback<DrillRequest>,
     open_variant_key: Signal<Option<String>>,
 ) -> impl IntoView {
     let kind = if matches!(badge, VariantBadge::Leader) {
@@ -490,7 +490,7 @@ fn VariantCard(
                 let drill_label = drill_label.clone();
                 let row_key = key.clone();
                 move |_| {
-                    on_open_drawer.run(DrillRequest {
+                    on_open_drilldown.run(DrillRequest {
                         row_key: row_key.clone(),
                         variant_label: drill_label.clone(),
                         split: variant_split,
