@@ -9,8 +9,8 @@ use crate::server::application::evaluation::ports::LlmJudge;
 use crate::server::domain::configuration::chunking_configuration::ChunkingConfigurationRepository;
 use crate::server::domain::evaluation::value_objects::OptimizationBudget;
 use crate::shared::{
-    evaluation_score, ChunkingConfig, EvaluationMetrics, EvaluationResultSplit,
-    EvaluationRunOptions, OptimizationScope,
+    evaluation_score, evaluation_score_with_judge, ChunkingConfig, EvaluationMetrics,
+    EvaluationResultSplit, EvaluationRunOptions, OptimizationScope,
 };
 use event_sourcing::command_processor::CommandProcessor;
 use event_sourcing::event_store::EventStore;
@@ -32,7 +32,7 @@ use crate::server::domain::evaluation::run::commands::{
 };
 use crate::server::domain::evaluation::run::events::EvaluationRunEvent;
 use crate::server::domain::evaluation::split::{
-    seed_from_uuid, shuffled_tuning_order, three_way, ThreeWayRatios, ThreeWaySplit,
+    rung_question_sample, seed_from_uuid, three_way, ThreeWayRatios, ThreeWaySplit,
 };
 
 use crate::server::domain::evaluation::run::effects::OptimizeRunEffect;
@@ -312,7 +312,6 @@ impl OptimizeRunEffectExecutor {
         let schedule = budget.schedule();
         let mut outcomes: HashMap<u32, TrialOutcome> = HashMap::new();
         let mut active_trial_ids: Vec<u32> = Vec::new();
-        let tuning_order = shuffled_tuning_order(tuning_indices, effect.run_id);
         let mut proposed_params: HashMap<u32, HashMap<String, Value>> = resume
             .trials
             .iter()
@@ -321,7 +320,7 @@ impl OptimizeRunEffectExecutor {
 
         for (rung_idx, rung) in schedule.iter().enumerate() {
             let rung_num = (rung_idx + 1) as u32;
-            let subset = build_rung_subset(ctx, &tuning_order, *rung);
+            let subset = build_rung_subset(ctx, tuning_indices, effect.run_id, rung_idx, *rung);
 
             let batches = plan_rung_batches(
                 rung_idx,
@@ -599,8 +598,8 @@ impl OptimizeRunEffectExecutor {
         let Some(trial_id) = validation_scores
             .iter()
             .max_by(|a, b| {
-                evaluation_score(a.1)
-                    .partial_cmp(&evaluation_score(b.1))
+                evaluation_score_with_judge(a.1)
+                    .partial_cmp(&evaluation_score_with_judge(b.1))
                     .unwrap_or(Ordering::Equal)
             })
             .map(|(tid, _)| *tid)
@@ -1064,14 +1063,14 @@ fn plan_rung_batches(
 
 fn build_rung_subset<'a>(
     ctx: &'a RunContext,
-    tuning_order: &[usize],
+    tuning_indices: &[usize],
+    run_id: Uuid,
+    rung_idx: usize,
     rung: Rung,
 ) -> QuestionSubset<'a> {
-    let take = rung
-        .question_count(tuning_order.len())
-        .min(tuning_order.len());
-    let picked: &[usize] = tuning_order.get(..take).unwrap_or_default();
-    QuestionSubset::from_indices(&ctx.questions, &ctx.question_embeddings, picked)
+    let sample_size = rung.question_count(tuning_indices.len());
+    let picked = rung_question_sample(tuning_indices, run_id, rung_idx as u32, sample_size);
+    QuestionSubset::from_indices(&ctx.questions, &ctx.question_embeddings, &picked)
 }
 
 pub fn build_default_search_space(scope: OptimizationScope) -> SearchSpace {
@@ -1080,7 +1079,7 @@ pub fn build_default_search_space(scope: OptimizationScope) -> SearchSpace {
     if matches!(scope, OptimizationScope::Chunking | OptimizationScope::Both) {
         params.push(Parameter::Categorical {
             name: "strategy".into(),
-            values: vec!["section".into(), "bert".into(), "llm".into(), "darn".into()],
+            values: vec!["section".into(), "bert".into(), "darn".into()],
         });
         params.push(Parameter::Conditional {
             gate_parameter: "strategy".into(),
@@ -1104,14 +1103,44 @@ pub fn build_default_search_space(scope: OptimizationScope) -> SearchSpace {
         });
         params.push(Parameter::Conditional {
             gate_parameter: "strategy".into(),
-            gate_value: Value::String("llm".into()),
+            gate_value: Value::String("bert".into()),
             inner: Box::new(Parameter::IntRange {
-                name: "micro_chunk_tokens".into(),
+                name: "bert_overlap_tokens".into(),
+                low: 0,
+                high: 256,
+                log_scale: false,
+            }),
+        });
+        params.push(Parameter::Conditional {
+            gate_parameter: "strategy".into(),
+            gate_value: Value::String("bert".into()),
+            inner: Box::new(Parameter::IntRange {
+                name: "bert_min_tokens".into(),
                 low: 32,
-                high: 512,
+                high: 256,
                 log_scale: true,
             }),
         });
+        // params.push(Parameter::Conditional {
+        //     gate_parameter: "strategy".into(),
+        //     gate_value: Value::String("llm".into()),
+        //     inner: Box::new(Parameter::IntRange {
+        //         name: "llm_target_tokens".into(),
+        //         low: 128,
+        //         high: 1024,
+        //         log_scale: true,
+        //     }),
+        // });
+        // params.push(Parameter::Conditional {
+        //     gate_parameter: "strategy".into(),
+        //     gate_value: Value::String("llm".into()),
+        //     inner: Box::new(Parameter::IntRange {
+        //         name: "micro_chunk_tokens".into(),
+        //         low: 32,
+        //         high: 512,
+        //         log_scale: true,
+        //     }),
+        // });
         params.push(Parameter::Conditional {
             gate_parameter: "strategy".into(),
             gate_value: Value::String("darn".into()),
@@ -1122,6 +1151,16 @@ pub fn build_default_search_space(scope: OptimizationScope) -> SearchSpace {
                 log_scale: true,
             }),
         });
+        params.push(Parameter::Conditional {
+            gate_parameter: "strategy".into(),
+            gate_value: Value::String("darn".into()),
+            inner: Box::new(Parameter::IntRange {
+                name: "darn_overlap".into(),
+                low: 0,
+                high: 256,
+                log_scale: false,
+            }),
+        });
     }
 
     if matches!(
@@ -1130,7 +1169,7 @@ pub fn build_default_search_space(scope: OptimizationScope) -> SearchSpace {
     ) {
         params.push(Parameter::IntRange {
             name: "top_k".into(),
-            low: 1,
+            low: 3,
             high: 10,
             log_scale: false,
         });

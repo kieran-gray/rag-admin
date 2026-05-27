@@ -1,8 +1,10 @@
 use uuid::Uuid;
 
+use crate::server::domain::comprehension::map_item::MapItemRef;
 use crate::server::domain::shared::Timestamp;
 
-use super::super::question::{EvaluationReference, GrammarVariant, QuestionCategory};
+use super::super::question::{EvaluationReference, QuestionDimensions};
+use super::events::AxisWeight;
 
 pub struct RequestDatasetGeneration {
     pub dataset_id: Uuid,
@@ -13,11 +15,18 @@ pub struct RequestDatasetGeneration {
     pub target_question_count: u32,
     pub generation_model_id: Uuid,
     pub generation_model: String,
-    pub excerpt_similarity_threshold_milli: u32,
     pub duplicate_similarity_threshold_milli: u32,
     pub embedding_model_id: Uuid,
     pub max_attempts: u32,
-    pub grammar_variants_enabled: bool,
+    pub weight_matrix: Vec<AxisWeight>,
+    pub occurred_at: Timestamp,
+}
+
+pub struct ResolveMapDependency {
+    pub dataset_id: Uuid,
+    pub map_id: Uuid,
+    pub ready: bool,
+    pub failure_reason: Option<String>,
     pub occurred_at: Timestamp,
 }
 
@@ -27,9 +36,8 @@ pub struct AcceptQuestion {
     pub question: String,
     pub references: Vec<EvaluationReference>,
     pub embedding: Option<Vec<f32>>,
-    pub category: QuestionCategory,
-    pub grammar_variant: GrammarVariant,
-    pub paraphrase_of: Option<u32>,
+    pub dimensions: QuestionDimensions,
+    pub evidence_refs: Vec<MapItemRef>,
     pub occurred_at: Timestamp,
 }
 
@@ -69,6 +77,7 @@ pub struct DeleteDataset {
 
 pub enum EvaluationDatasetCommand {
     RequestDatasetGeneration(RequestDatasetGeneration),
+    ResolveMapDependency(ResolveMapDependency),
     AcceptQuestion(AcceptQuestion),
     RejectQuestion(RejectQuestion),
     CompleteDatasetGeneration(CompleteDatasetGeneration),
@@ -82,6 +91,7 @@ impl EvaluationDatasetCommand {
     pub fn dataset_id(&self) -> Uuid {
         match self {
             Self::RequestDatasetGeneration(c) => c.dataset_id,
+            Self::ResolveMapDependency(c) => c.dataset_id,
             Self::AcceptQuestion(c) => c.dataset_id,
             Self::RejectQuestion(c) => c.dataset_id,
             Self::CompleteDatasetGeneration(c) => c.dataset_id,
@@ -95,6 +105,7 @@ impl EvaluationDatasetCommand {
     pub fn kind(&self) -> &'static str {
         match self {
             Self::RequestDatasetGeneration(_) => "request_dataset_generation",
+            Self::ResolveMapDependency(_) => "resolve_map_dependency",
             Self::AcceptQuestion(_) => "accept_question",
             Self::RejectQuestion(_) => "reject_question",
             Self::CompleteDatasetGeneration(_) => "complete_dataset_generation",

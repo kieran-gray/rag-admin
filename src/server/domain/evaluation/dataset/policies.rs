@@ -1,50 +1,58 @@
-use crate::server::domain::evaluation::question::QuestionCategory;
 use event_sourcing::job_queue::{IdempotencyKey, NewJob};
 use event_sourcing::policy::{HasPolicies, PolicyContext, PolicyFn};
 
-use super::aggregate::{DatasetGenerationStatus, EvaluationDataset};
-use super::effects::{EvaluationDatasetEffect, GenerateParaphraseEffect, GenerateQuestionEffect};
+use super::aggregate::{DatasetGenerationStatus, EvaluationDataset, MapDependencyStatus};
+use super::effects::{
+    EnsureMapBuildEffect, EvaluationDatasetEffect, GenerateQuestionEffect, PollMapStatusEffect,
+};
 use super::events::EvaluationDatasetEvent;
 
 const ATTEMPT_EFFECT: &str = "attempt_question_generation";
-const PARAPHRASE_EFFECT: &str = "generate_paraphrase";
+const ENSURE_MAP_EFFECT: &str = "ensure_map_build";
+const POLL_MAP_EFFECT: &str = "poll_map_status";
 
 impl HasPolicies<EvaluationDataset, EvaluationDatasetEffect> for EvaluationDatasetEvent {
     fn policies() -> &'static [PolicyFn<Self, EvaluationDataset, EvaluationDatasetEffect>] {
         &[
-            attempt_on_generation_requested,
-            paraphrase_on_question_accepted,
+            ensure_map_on_request,
+            attempt_after_map_resolved,
             attempt_more_on_question_accepted,
             attempt_more_on_question_rejected,
         ]
     }
 }
 
-fn attempt_on_generation_requested(
+fn ensure_map_on_request(
     event: &EvaluationDatasetEvent,
     ctx: &PolicyContext<'_, EvaluationDataset, EvaluationDatasetEvent>,
 ) -> Vec<NewJob<EvaluationDatasetEffect>> {
-    if !is_generating(ctx.state) {
-        return Vec::new();
-    }
     match event {
-        EvaluationDatasetEvent::DatasetGenerationRequested(_) => vec![attempt_effect(ctx)],
+        EvaluationDatasetEvent::DatasetGenerationRequested(_) => {
+            let stream_id = ctx.envelope.metadata.stream_id;
+            let log_position = ctx.envelope.metadata.log_position;
+            vec![NewJob {
+                partition_key: stream_id,
+                job_type: ENSURE_MAP_EFFECT,
+                idempotency_key: IdempotencyKey::new(stream_id, log_position, ENSURE_MAP_EFFECT),
+                payload: EvaluationDatasetEffect::EnsureMapBuild(EnsureMapBuildEffect {
+                    dataset_id: stream_id,
+                }),
+            }]
+        }
         _ => Vec::new(),
     }
 }
 
-fn paraphrase_on_question_accepted(
+fn attempt_after_map_resolved(
     event: &EvaluationDatasetEvent,
     ctx: &PolicyContext<'_, EvaluationDataset, EvaluationDatasetEvent>,
 ) -> Vec<NewJob<EvaluationDatasetEffect>> {
-    if !is_generating(ctx.state) {
-        return Vec::new();
-    }
     match event {
-        EvaluationDatasetEvent::QuestionAccepted(e)
-            if e.paraphrase_of.is_none() && ctx.state.grammar_variants_enabled =>
-        {
-            vec![paraphrase_effect(ctx, e.sequence, e.category)]
+        EvaluationDatasetEvent::MapDependencyResolved(e) if e.ready => {
+            if !matches!(ctx.state.status, DatasetGenerationStatus::Generating) {
+                return Vec::new();
+            }
+            vec![attempt_effect(ctx)]
         }
         _ => Vec::new(),
     }
@@ -82,6 +90,7 @@ fn attempt_more_on_question_rejected(
 
 fn is_generating(state: &EvaluationDataset) -> bool {
     matches!(state.status, DatasetGenerationStatus::Generating)
+        && matches!(state.map_status, MapDependencyStatus::Ready)
 }
 
 fn should_attempt_more(state: &EvaluationDataset) -> bool {
@@ -106,22 +115,18 @@ fn attempt_effect(
     }
 }
 
-fn paraphrase_effect(
+#[allow(dead_code)]
+fn poll_map_effect(
     ctx: &PolicyContext<'_, EvaluationDataset, EvaluationDatasetEvent>,
-    clean_sequence: u32,
-    category: QuestionCategory,
 ) -> NewJob<EvaluationDatasetEffect> {
     let stream_id = ctx.envelope.metadata.stream_id;
     let log_position = ctx.envelope.metadata.log_position;
-    let discriminator = format!("paraphrase:{clean_sequence}");
     NewJob {
         partition_key: stream_id,
-        job_type: PARAPHRASE_EFFECT,
-        idempotency_key: IdempotencyKey::new(stream_id, log_position, &discriminator),
-        payload: EvaluationDatasetEffect::GenerateParaphrase(GenerateParaphraseEffect {
+        job_type: POLL_MAP_EFFECT,
+        idempotency_key: IdempotencyKey::new(stream_id, log_position, POLL_MAP_EFFECT),
+        payload: EvaluationDatasetEffect::PollMapStatus(PollMapStatusEffect {
             dataset_id: stream_id,
-            clean_sequence,
-            category,
         }),
     }
 }

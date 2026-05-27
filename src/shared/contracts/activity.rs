@@ -21,6 +21,7 @@ pub enum ActivityKind {
     Indexing,
     EvaluationDataset,
     EvaluationRun,
+    DocumentMap,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -90,12 +91,16 @@ pub fn classify(
             }))
         }
         (aggregate_type::INDEXING, "IndexingCompleted")
-        | (aggregate_type::EVALUATION_RUN, "RunCompleted") => Some(ActivityDelta::Complete {
+        | (aggregate_type::EVALUATION_RUN, "RunCompleted")
+        | (aggregate_type::EVALUATION_DATASET, "DatasetGenerationCompleted")
+        | (aggregate_type::DOCUMENT_MAP, "InsightsSynthesized") => Some(ActivityDelta::Complete {
             stream_id,
             occurred_at: occurred_at.to_string(),
         }),
         (aggregate_type::INDEXING, "IngestionFailed")
-        | (aggregate_type::EVALUATION_RUN, "RunFailed") => Some(ActivityDelta::Fail {
+        | (aggregate_type::EVALUATION_RUN, "RunFailed")
+        | (aggregate_type::EVALUATION_DATASET, "DatasetGenerationFailed")
+        | (aggregate_type::DOCUMENT_MAP, "MapFailed") => Some(ActivityDelta::Fail {
             stream_id,
             occurred_at: occurred_at.to_string(),
         }),
@@ -137,18 +142,6 @@ pub fn classify(
                 started_at: occurred_at.to_string(),
             }))
         }
-        (aggregate_type::EVALUATION_DATASET, "DatasetGenerationCompleted") => {
-            Some(ActivityDelta::Complete {
-                stream_id,
-                occurred_at: occurred_at.to_string(),
-            })
-        }
-        (aggregate_type::EVALUATION_DATASET, "DatasetGenerationFailed") => {
-            Some(ActivityDelta::Fail {
-                stream_id,
-                occurred_at: occurred_at.to_string(),
-            })
-        }
         (aggregate_type::EVALUATION_DATASET, "DatasetGenerationCancelled") => {
             Some(ActivityDelta::Cancel {
                 stream_id,
@@ -162,6 +155,16 @@ pub fn classify(
                 aggregate_type: aggregate_type_str.to_string(),
                 kind: ActivityKind::EvaluationRun,
                 label: format!("Run {}", short_id(stream_id)),
+                started_at: occurred_at.to_string(),
+            }))
+        }
+
+        (aggregate_type::DOCUMENT_MAP, "MapBuildRequested") => {
+            Some(ActivityDelta::Start(ActivityStart {
+                stream_id,
+                aggregate_type: aggregate_type_str.to_string(),
+                kind: ActivityKind::DocumentMap,
+                label: format!("Map {}", short_id(stream_id)),
                 started_at: occurred_at.to_string(),
             }))
         }

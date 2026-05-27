@@ -10,3 +10,4 @@ pub const RETRIEVAL_PROFILE_CATALOG: &str = "retrieval_profile_catalog";
 pub const SWEEP_TEMPLATE: &str = "sweep_template";
 pub const EVALUATION_DATASET: &str = "evaluation_dataset";
 pub const EVALUATION_RUN: &str = "evaluation_run";
+pub const DOCUMENT_MAP: &str = "document_map";

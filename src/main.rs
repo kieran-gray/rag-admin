@@ -12,6 +12,7 @@ async fn main() {
     use leptos::prelude::*;
     use leptos_axum::{generate_route_list, LeptosRoutes};
     use rag_admin::app::{shell, App as LeptosApp};
+    use rag_admin::server::api::chat_stream::chat_stream_handler;
     use rag_admin::server::api::events_ws::events_ws_handler;
     use rag_admin::server::api::health::health_check;
     use rag_admin::server::api::sse::job_logs_handler;
@@ -38,6 +39,7 @@ async fn main() {
         .route("/api/job/logs/{job_id}", get(job_logs_handler))
         .route("/api/events/ws", get(events_ws_handler))
         .route("/api/health", get(health_check))
+        .route("/api/chat_stream", post(chat_stream_handler))
         .route(
             "/api/source_documents/upload",
             post(upload_document).layer(DefaultBodyLimit::max(32 * 1024 * 1024)),

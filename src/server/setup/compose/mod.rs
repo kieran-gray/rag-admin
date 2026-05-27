@@ -1,6 +1,7 @@
 pub mod aggregates;
 pub mod catalog;
 pub mod chat;
+pub mod comprehension;
 pub mod connector;
 pub mod evaluation;
 pub mod indexing;
@@ -33,6 +34,7 @@ use crate::server::setup::seed::seed_if_empty;
 use self::aggregates::build_aggregate_wirings;
 use self::catalog::{CatalogDeps, CatalogServices};
 use self::chat::{ChatDeps, ChatServices};
+use self::comprehension::{ComprehensionDeps, ComprehensionServices};
 use self::connector::{ConnectorDeps, ConnectorServices};
 use self::evaluation::{EvaluationDeps, EvaluationServices};
 use self::indexing::{IndexingDeps, IndexingServices};
@@ -49,6 +51,7 @@ pub struct App {
     pub ingestion: Arc<IngestionServices>,
     pub retrieval: Arc<RetrievalServices>,
     pub chat: Arc<ChatServices>,
+    pub comprehension: Arc<ComprehensionServices>,
     pub evaluation: Arc<EvaluationServices>,
 }
 
@@ -92,7 +95,7 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         repos: &repos,
     })?;
 
-    let mut wakeups: HashMap<String, Arc<Notify>> = HashMap::new();
+    let mut wakeups: HashMap<String, Vec<Arc<Notify>>> = HashMap::new();
 
     let catalog = CatalogServices::build(CatalogDeps {
         pool: pool.clone(),
@@ -170,6 +173,21 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         rerank_service: Arc::clone(&platform.rerank_service),
     })?;
 
+    let comprehension = ComprehensionServices::build(ComprehensionDeps {
+        pool: pool.clone(),
+        clock: Arc::clone(&clock),
+        id_generator: Arc::clone(&id_generator),
+        repos: &repos,
+        wirings: &wirings,
+        event_bus: Arc::clone(&platform.event_bus),
+        job_registry: Arc::clone(&platform.job_registry),
+        activity_registry: Arc::clone(&platform.activity_registry),
+        chunker_registry: Arc::clone(&platform.chunker_registry),
+        chunk_set_command_handler: Arc::clone(&indexing.chunk_set_command_handler),
+        generation_service: Arc::clone(&platform.generation_service),
+        wakeups: &mut wakeups,
+    })?;
+
     let evaluation = EvaluationServices::build(EvaluationDeps {
         pool: pool.clone(),
         clock: Arc::clone(&clock),
@@ -181,6 +199,7 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         activity_registry: Arc::clone(&platform.activity_registry),
         chunker_registry: Arc::clone(&platform.chunker_registry),
         chunk_set_command_handler: Arc::clone(&indexing.chunk_set_command_handler),
+        document_map_command_handler: Arc::clone(&comprehension.document_map_command_handler),
         embedding_service: Arc::clone(&platform.embedding_service),
         generation_service: Arc::clone(&platform.generation_service),
         index_profile_resolver: Arc::clone(&catalog.index_profile_resolver),
@@ -198,6 +217,7 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         ingestion: Arc::new(ingestion),
         retrieval: Arc::new(retrieval),
         chat: Arc::new(chat),
+        comprehension: Arc::new(comprehension),
         evaluation: Arc::new(evaluation),
     };
 
@@ -214,6 +234,7 @@ impl App {
         provide_context(Arc::clone(&self.ingestion));
         provide_context(Arc::clone(&self.retrieval));
         provide_context(Arc::clone(&self.chat));
+        provide_context(Arc::clone(&self.comprehension));
         provide_context(Arc::clone(&self.evaluation));
     }
 
@@ -224,6 +245,7 @@ impl App {
             .layer(Extension(Arc::clone(
                 &self.ingestion.source_document_ingest_service,
             )))
+            .layer(Extension(Arc::clone(&self.chat)))
     }
 
     async fn seed_if_empty(&self) {

@@ -4,16 +4,21 @@ use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
+use crate::server::domain::comprehension::map_item::MapItemRef;
 use crate::server::domain::evaluation::{
     dataset::{
         aggregate::DatasetGenerationStatus,
         read_model::{EvaluationDatasetReadModel, NewDatasetSummary},
         repository::{
             DatasetListCursor, DatasetListPage, DatasetListPageItem, DatasetListQuery,
-            DatasetStatusFilter, EvaluationDatasetRepository, EvaluationDatasetRepositoryError,
+            DatasetStatusFilter, DatasetWithDocumentTitle, EvaluationDatasetRepository,
+            EvaluationDatasetRepositoryError,
         },
     },
-    question::{EvaluationQuestion, EvaluationReference},
+    question::{
+        CognitiveOperation, EvaluationQuestion, EvaluationReference, EvidenceKind,
+        QuestionDimensions,
+    },
 };
 use crate::server::domain::shared::Timestamp;
 use crate::server::infrastructure::shared::sql::timestamps::to_offset_datetime;
@@ -28,24 +33,21 @@ impl PostgresEvaluationDatasetRepository {
     }
 }
 
+const DATASET_COLS: &str = "dataset_id, document_id, document_version, content_hash, label, \
+target_question_count, generation_model_id, generation_model, \
+duplicate_similarity_threshold_milli, embedding_model_id, status, question_count, \
+rejection_count, failure_reason, created_at";
+
 #[async_trait]
 impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
     async fn load(
         &self,
         dataset_id: Uuid,
     ) -> Result<Option<EvaluationDatasetReadModel>, EvaluationDatasetRepositoryError> {
-        let row: Option<DatasetRow> = sqlx::query_as(
-            "
-            SELECT
-                dataset_id, document_id, document_version, content_hash, label,
-                target_question_count, generation_model_id, generation_model,
-                excerpt_similarity_threshold_milli, duplicate_similarity_threshold_milli,
-                embedding_model_id, status, question_count, rejection_count,
-                failure_reason, created_at
-            FROM evaluation_datasets
-            WHERE dataset_id = $1 AND deleted_at IS NULL
-            ",
-        )
+        let row: Option<DatasetRow> = sqlx::query_as(&format!(
+            "SELECT {DATASET_COLS} FROM evaluation_datasets \
+             WHERE dataset_id = $1 AND deleted_at IS NULL"
+        ))
         .bind(dataset_id)
         .fetch_optional(&self.pool)
         .await
@@ -54,23 +56,70 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         Ok(row.map(EvaluationDatasetReadModel::from))
     }
 
+    async fn load_with_document_title(
+        &self,
+        dataset_id: Uuid,
+    ) -> Result<Option<DatasetWithDocumentTitle>, EvaluationDatasetRepositoryError> {
+        let row = sqlx::query(&format!(
+            "SELECT {DATASET_COLS}, document_title FROM evaluation_datasets \
+             WHERE dataset_id = $1 AND deleted_at IS NULL"
+        ))
+        .bind(dataset_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| {
+            EvaluationDatasetRepositoryError::Internal(format!("load_with_document_title: {e}"))
+        })?;
+
+        let Some(row) = row else { return Ok(None) };
+        let dataset_row = DatasetRow {
+            dataset_id: row.try_get("dataset_id").map_err(|e| map_row_err(&e))?,
+            document_id: row.try_get("document_id").map_err(|e| map_row_err(&e))?,
+            document_version: row
+                .try_get("document_version")
+                .map_err(|e| map_row_err(&e))?,
+            content_hash: row.try_get("content_hash").map_err(|e| map_row_err(&e))?,
+            label: row.try_get("label").map_err(|e| map_row_err(&e))?,
+            target_question_count: row
+                .try_get("target_question_count")
+                .map_err(|e| map_row_err(&e))?,
+            generation_model_id: row
+                .try_get("generation_model_id")
+                .map_err(|e| map_row_err(&e))?,
+            generation_model: row
+                .try_get("generation_model")
+                .map_err(|e| map_row_err(&e))?,
+            duplicate_similarity_threshold_milli: row
+                .try_get("duplicate_similarity_threshold_milli")
+                .map_err(|e| map_row_err(&e))?,
+            embedding_model_id: row
+                .try_get("embedding_model_id")
+                .map_err(|e| map_row_err(&e))?,
+            status: row.try_get("status").map_err(|e| map_row_err(&e))?,
+            question_count: row.try_get("question_count").map_err(|e| map_row_err(&e))?,
+            rejection_count: row
+                .try_get("rejection_count")
+                .map_err(|e| map_row_err(&e))?,
+            failure_reason: row.try_get("failure_reason").map_err(|e| map_row_err(&e))?,
+            created_at: row.try_get("created_at").map_err(|e| map_row_err(&e))?,
+        };
+        let document_title: Option<String> =
+            row.try_get("document_title").map_err(|e| map_row_err(&e))?;
+        Ok(Some(DatasetWithDocumentTitle {
+            dataset: EvaluationDatasetReadModel::from(dataset_row),
+            document_title,
+        }))
+    }
+
     async fn list_for_document(
         &self,
         document_id: Uuid,
     ) -> Result<Vec<EvaluationDatasetReadModel>, EvaluationDatasetRepositoryError> {
-        let rows: Vec<DatasetRow> = sqlx::query_as(
-            "
-            SELECT
-                dataset_id, document_id, document_version, content_hash, label,
-                target_question_count, generation_model_id, generation_model,
-                excerpt_similarity_threshold_milli, duplicate_similarity_threshold_milli,
-                embedding_model_id, status, question_count, rejection_count,
-                failure_reason, created_at
-            FROM evaluation_datasets
-            WHERE document_id = $1 AND deleted_at IS NULL
-            ORDER BY created_at DESC
-            ",
-        )
+        let rows: Vec<DatasetRow> = sqlx::query_as(&format!(
+            "SELECT {DATASET_COLS} FROM evaluation_datasets \
+             WHERE document_id = $1 AND deleted_at IS NULL \
+             ORDER BY created_at DESC"
+        ))
         .bind(document_id)
         .fetch_all(&self.pool)
         .await
@@ -133,18 +182,11 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         }
         status_counts.sort_by_key(|(f, _)| dataset_status_filter_order(*f));
 
-        let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
-            "SELECT
-                d.dataset_id, d.document_id, d.document_version, d.content_hash, d.label,
-                d.target_question_count, d.generation_model_id, d.generation_model,
-                d.excerpt_similarity_threshold_milli, d.duplicate_similarity_threshold_milli,
-                d.embedding_model_id, d.status, d.question_count, d.rejection_count,
-                d.failure_reason, d.created_at,
-                d.document_title,
-                d.run_count
-            FROM evaluation_datasets d
-            WHERE d.deleted_at IS NULL",
-        );
+        let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(&format!(
+            "SELECT {DATASET_COLS}, d.document_title, d.run_count \
+             FROM evaluation_datasets d \
+             WHERE d.deleted_at IS NULL"
+        ));
         push_dataset_status_filter(&mut qb, &query.statuses);
 
         if let Some(cursor) = &query.cursor {
@@ -180,9 +222,6 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
                     .map_err(|e| map_row_err(&e))?,
                 generation_model: row
                     .try_get("generation_model")
-                    .map_err(|e| map_row_err(&e))?,
-                excerpt_similarity_threshold_milli: row
-                    .try_get("excerpt_similarity_threshold_milli")
                     .map_err(|e| map_row_err(&e))?,
                 duplicate_similarity_threshold_milli: row
                     .try_get("duplicate_similarity_threshold_milli")
@@ -246,7 +285,7 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         dataset_id: Uuid,
     ) -> Result<Vec<EvaluationQuestion>, EvaluationDatasetRepositoryError> {
         let question_rows: Vec<QuestionRow> = sqlx::query_as(
-            "SELECT sequence, question, embedding, category, grammar_variant, paraphrase_of \
+            "SELECT sequence, question, embedding, operation, evidence_kind, role, evidence_refs \
              FROM evaluation_questions WHERE dataset_id = $1 ORDER BY sequence ASC",
         )
         .bind(dataset_id)
@@ -257,25 +296,39 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         let mut questions = Vec::new();
         for q_row in question_rows {
             let ref_rows: Vec<ReferenceRow> = sqlx::query_as(
-                "SELECT content, char_start, char_end, embedding FROM evaluation_references WHERE dataset_id = $1 AND question_sequence = $2 ORDER BY sequence ASC"
+                "SELECT document_id, content, char_start, char_end, embedding \
+                 FROM evaluation_references WHERE dataset_id = $1 AND question_sequence = $2 \
+                 ORDER BY sequence ASC",
             )
             .bind(dataset_id)
             .bind(q_row.sequence)
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("load_references: {e}")))?;
+            .map_err(|e| {
+                EvaluationDatasetRepositoryError::Internal(format!("load_references: {e}"))
+            })?;
 
-            use crate::server::domain::evaluation::question::{GrammarVariant, QuestionCategory};
-            let category = QuestionCategory::parse(&q_row.category).unwrap_or_default();
-            let grammar_variant = GrammarVariant::parse(&q_row.grammar_variant).unwrap_or_default();
+            let operation = CognitiveOperation::parse(&q_row.operation).map_err(|e| {
+                EvaluationDatasetRepositoryError::Internal(format!("operation: {e}"))
+            })?;
+            let evidence = EvidenceKind::parse(&q_row.evidence_kind).map_err(|e| {
+                EvaluationDatasetRepositoryError::Internal(format!("evidence kind: {e}"))
+            })?;
+            let evidence_refs: Vec<MapItemRef> = serde_json::from_value(q_row.evidence_refs)
+                .map_err(|e| {
+                    EvaluationDatasetRepositoryError::Internal(format!("evidence_refs: {e}"))
+                })?;
             questions.push(EvaluationQuestion {
                 sequence: q_row.sequence as u32,
                 question: q_row.question,
                 references: ref_rows.into_iter().map(Into::into).collect(),
                 embedding: q_row.embedding.and_then(|v| serde_json::from_value(v).ok()),
-                category,
-                grammar_variant,
-                paraphrase_of: q_row.paraphrase_of.map(|n| n as u32),
+                dimensions: QuestionDimensions {
+                    operation,
+                    evidence,
+                    role: q_row.role,
+                },
+                evidence_refs,
             });
         }
 
@@ -294,16 +347,16 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
             INSERT INTO evaluation_datasets (
                 dataset_id, document_id, document_version, content_hash, label,
                 target_question_count, generation_model_id, generation_model,
-                excerpt_similarity_threshold_milli, duplicate_similarity_threshold_milli,
+                duplicate_similarity_threshold_milli,
                 embedding_model_id, status, question_count, rejection_count,
                 failure_reason, document_title, run_count, created_at, updated_at
             )
             VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-                'generating', 0, 0, NULL,
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                'awaiting_map', 0, 0, NULL,
                 (SELECT latest_metadata->>'title' FROM source_documents WHERE document_id = $2),
                 0,
-                $12, NOW()
+                $11, NOW()
             )
             ON CONFLICT (dataset_id) DO NOTHING
             ",
@@ -316,7 +369,6 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         .bind(summary.target_question_count as i32)
         .bind(summary.generation_model_id)
         .bind(&summary.generation_model)
-        .bind(summary.excerpt_similarity_threshold_milli as i32)
         .bind(summary.duplicate_similarity_threshold_milli as i32)
         .bind(summary.embedding_model_id)
         .bind(created_at)
@@ -339,20 +391,24 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         let embedding = serde_json::to_value(&question.embedding).map_err(|e| {
             EvaluationDatasetRepositoryError::Internal(format!("serialize question embedding: {e}"))
         })?;
+        let evidence_refs = serde_json::to_value(&question.evidence_refs).map_err(|e| {
+            EvaluationDatasetRepositoryError::Internal(format!("serialize evidence_refs: {e}"))
+        })?;
 
         let inserted: (bool,) = sqlx::query_as(
             "
             INSERT INTO evaluation_questions (
                 dataset_id, sequence, question, embedding,
-                category, grammar_variant, paraphrase_of
+                operation, evidence_kind, role, evidence_refs
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (dataset_id, sequence) DO UPDATE SET
                 question = EXCLUDED.question,
                 embedding = EXCLUDED.embedding,
-                category = EXCLUDED.category,
-                grammar_variant = EXCLUDED.grammar_variant,
-                paraphrase_of = EXCLUDED.paraphrase_of
+                operation = EXCLUDED.operation,
+                evidence_kind = EXCLUDED.evidence_kind,
+                role = EXCLUDED.role,
+                evidence_refs = EXCLUDED.evidence_refs
             RETURNING (xmax = 0) AS is_new
             ",
         )
@@ -360,9 +416,10 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         .bind(question.sequence as i32)
         .bind(&question.question)
         .bind(&embedding)
-        .bind(question.category.as_str())
-        .bind(question.grammar_variant.as_str())
-        .bind(question.paraphrase_of.map(|n| n as i32))
+        .bind(question.dimensions.operation.as_str())
+        .bind(question.dimensions.evidence.as_str())
+        .bind(&question.dimensions.role)
+        .bind(&evidence_refs)
         .fetch_one(&mut *tx)
         .await
         .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("save_question: {e}")))?;
@@ -377,10 +434,12 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
             sqlx::query(
                 "
                 INSERT INTO evaluation_references (
-                    dataset_id, question_sequence, sequence, content, char_start, char_end, embedding
+                    dataset_id, question_sequence, sequence, document_id, content,
+                    char_start, char_end, embedding
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 ON CONFLICT (dataset_id, question_sequence, sequence) DO UPDATE SET
+                    document_id = EXCLUDED.document_id,
                     content = EXCLUDED.content,
                     char_start = EXCLUDED.char_start,
                     char_end = EXCLUDED.char_end,
@@ -390,6 +449,7 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
             .bind(dataset_id)
             .bind(question.sequence as i32)
             .bind(i as i32)
+            .bind(reference.document_id)
             .bind(&reference.content)
             .bind(reference.char_start as i32)
             .bind(reference.char_end as i32)
@@ -403,12 +463,15 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
 
         if inserted.0 {
             sqlx::query(
-                "UPDATE evaluation_datasets SET question_count = question_count + 1, updated_at = NOW() WHERE dataset_id = $1",
+                "UPDATE evaluation_datasets SET question_count = question_count + 1, \
+                 updated_at = NOW() WHERE dataset_id = $1",
             )
             .bind(dataset_id)
             .execute(&mut *tx)
             .await
-            .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("bump question_count: {e}")))?;
+            .map_err(|e| {
+                EvaluationDatasetRepositoryError::Internal(format!("bump question_count: {e}"))
+            })?;
         }
 
         tx.commit().await.map_err(|e| {
@@ -423,7 +486,8 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         dataset_id: Uuid,
     ) -> Result<(), EvaluationDatasetRepositoryError> {
         sqlx::query(
-            "UPDATE evaluation_datasets SET rejection_count = rejection_count + 1, updated_at = NOW() WHERE dataset_id = $1",
+            "UPDATE evaluation_datasets SET rejection_count = rejection_count + 1, \
+             updated_at = NOW() WHERE dataset_id = $1",
         )
         .bind(dataset_id)
         .execute(&self.pool)
@@ -439,12 +503,52 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         dataset_id: Uuid,
     ) -> Result<(), EvaluationDatasetRepositoryError> {
         sqlx::query(
-            "UPDATE evaluation_datasets SET status = 'completed', failure_reason = NULL, updated_at = NOW() WHERE dataset_id = $1",
+            "UPDATE evaluation_datasets SET status = 'completed', failure_reason = NULL, \
+             updated_at = NOW() WHERE dataset_id = $1",
         )
         .bind(dataset_id)
         .execute(&self.pool)
         .await
         .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("mark_completed: {e}")))?;
+        Ok(())
+    }
+
+    async fn set_map_status(
+        &self,
+        dataset_id: Uuid,
+        ready: bool,
+        failure_reason: Option<String>,
+    ) -> Result<(), EvaluationDatasetRepositoryError> {
+        if ready {
+            sqlx::query(
+                "UPDATE evaluation_datasets \
+                 SET map_ready = TRUE, map_failure_reason = NULL, status = \
+                     CASE WHEN status = 'awaiting_map' THEN 'generating' ELSE status END, \
+                     updated_at = NOW() \
+                 WHERE dataset_id = $1",
+            )
+            .bind(dataset_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| {
+                EvaluationDatasetRepositoryError::Internal(format!("set_map_status ready: {e}"))
+            })?;
+        } else {
+            let reason = failure_reason.unwrap_or_else(|| "map build failed".into());
+            sqlx::query(
+                "UPDATE evaluation_datasets \
+                 SET map_ready = FALSE, map_failure_reason = $2, status = 'failed', \
+                     failure_reason = $2, updated_at = NOW() \
+                 WHERE dataset_id = $1",
+            )
+            .bind(dataset_id)
+            .bind(reason)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| {
+                EvaluationDatasetRepositoryError::Internal(format!("set_map_status failed: {e}"))
+            })?;
+        }
         Ok(())
     }
 
@@ -454,7 +558,8 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         reason: String,
     ) -> Result<(), EvaluationDatasetRepositoryError> {
         sqlx::query(
-            "UPDATE evaluation_datasets SET status = 'failed', failure_reason = $2, updated_at = NOW() WHERE dataset_id = $1",
+            "UPDATE evaluation_datasets SET status = 'failed', failure_reason = $2, \
+             updated_at = NOW() WHERE dataset_id = $1",
         )
         .bind(dataset_id)
         .bind(reason)
@@ -469,7 +574,8 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         dataset_id: Uuid,
     ) -> Result<(), EvaluationDatasetRepositoryError> {
         sqlx::query(
-            "UPDATE evaluation_datasets SET status = 'cancelled', updated_at = NOW() WHERE dataset_id = $1",
+            "UPDATE evaluation_datasets SET status = 'cancelled', \
+             updated_at = NOW() WHERE dataset_id = $1",
         )
         .bind(dataset_id)
         .execute(&self.pool)
@@ -484,7 +590,8 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         label: String,
     ) -> Result<(), EvaluationDatasetRepositoryError> {
         sqlx::query(
-            "UPDATE evaluation_datasets SET label = $2, updated_at = NOW() WHERE dataset_id = $1",
+            "UPDATE evaluation_datasets SET label = $2, updated_at = NOW() \
+             WHERE dataset_id = $1",
         )
         .bind(dataset_id)
         .bind(label)
@@ -496,7 +603,8 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
 
     async fn mark_deleted(&self, dataset_id: Uuid) -> Result<(), EvaluationDatasetRepositoryError> {
         sqlx::query(
-            "UPDATE evaluation_datasets SET deleted_at = NOW(), updated_at = NOW() WHERE dataset_id = $1 AND deleted_at IS NULL",
+            "UPDATE evaluation_datasets SET deleted_at = NOW(), updated_at = NOW() \
+             WHERE dataset_id = $1 AND deleted_at IS NULL",
         )
         .bind(dataset_id)
         .execute(&self.pool)
@@ -521,6 +629,29 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
             EvaluationDatasetRepositoryError::Internal(format!("increment_run_count: {e}"))
         })?;
         Ok(())
+    }
+
+    async fn find_awaiting_for_map(
+        &self,
+        map_id: Uuid,
+    ) -> Result<Vec<Uuid>, EvaluationDatasetRepositoryError> {
+        let rows: Vec<(Uuid,)> = sqlx::query_as(
+            "SELECT d.dataset_id \
+             FROM evaluation_datasets d \
+             JOIN document_maps m \
+               ON m.document_id = d.document_id \
+              AND m.document_version = d.document_version \
+             WHERE m.map_id = $1 \
+               AND d.status = 'awaiting_map' \
+               AND d.deleted_at IS NULL",
+        )
+        .bind(map_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| {
+            EvaluationDatasetRepositoryError::Internal(format!("find_awaiting_for_map: {e}"))
+        })?;
+        Ok(rows.into_iter().map(|(id,)| id).collect())
     }
 }
 
@@ -559,7 +690,7 @@ fn dataset_status_filter_db(filter: DatasetStatusFilter) -> &'static str {
 fn dataset_status_filter_from_str(s: &str) -> Option<DatasetStatusFilter> {
     match s {
         "completed" => Some(DatasetStatusFilter::Completed),
-        "generating" => Some(DatasetStatusFilter::Generating),
+        "generating" | "awaiting_map" => Some(DatasetStatusFilter::Generating),
         "failed" => Some(DatasetStatusFilter::Failed),
         "cancelled" => Some(DatasetStatusFilter::Cancelled),
         _ => None,
@@ -585,7 +716,6 @@ struct DatasetRow {
     target_question_count: i32,
     generation_model_id: Uuid,
     generation_model: String,
-    excerpt_similarity_threshold_milli: i32,
     duplicate_similarity_threshold_milli: i32,
     embedding_model_id: Uuid,
     status: String,
@@ -606,7 +736,6 @@ impl From<DatasetRow> for EvaluationDatasetReadModel {
             target_question_count: row.target_question_count as u32,
             generation_model_id: row.generation_model_id,
             generation_model: row.generation_model,
-            excerpt_similarity_threshold_milli: row.excerpt_similarity_threshold_milli as u32,
             duplicate_similarity_threshold_milli: row.duplicate_similarity_threshold_milli as u32,
             embedding_model_id: row.embedding_model_id,
             status: DatasetGenerationStatus::from_parts(&row.status, row.failure_reason.clone())
@@ -624,13 +753,15 @@ struct QuestionRow {
     sequence: i32,
     question: String,
     embedding: Option<serde_json::Value>,
-    category: String,
-    grammar_variant: String,
-    paraphrase_of: Option<i32>,
+    operation: String,
+    evidence_kind: String,
+    role: String,
+    evidence_refs: serde_json::Value,
 }
 
 #[derive(sqlx::FromRow)]
 struct ReferenceRow {
+    document_id: Uuid,
     content: String,
     char_start: i32,
     char_end: i32,
@@ -640,6 +771,7 @@ struct ReferenceRow {
 impl From<ReferenceRow> for EvaluationReference {
     fn from(row: ReferenceRow) -> Self {
         Self {
+            document_id: row.document_id,
             content: row.content,
             char_start: row.char_start as u32,
             char_end: row.char_end as u32,

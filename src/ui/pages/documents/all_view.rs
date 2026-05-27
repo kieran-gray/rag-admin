@@ -10,13 +10,13 @@ use crate::shared::contracts::{
     aggregate_type, DocumentListItemDto, DocumentListQueryDto, DocumentStatusFilterDto,
     SourceDescriptorDto, SourceFilterDto,
 };
-use crate::ui::components::app::event_bus::use_invalidator;
-use crate::ui::components::app::source_mark::SourceMark;
 use crate::ui::components::primitives::{
     use_cursor_pagination, EmptyFilterState, EmptyState, PaginationBar, PaginationSummary,
     SkeletonColumn, SkeletonRows, Status, StatusPill, Surface, TitleCell,
 };
+use crate::ui::pages::documents::source_mark::SourceMark;
 use crate::ui::pages::shared::indexing_summary;
+use crate::ui::state::event_bus::use_invalidator;
 
 use super::smart_filter::{ChipsState, SmartFilterBar};
 

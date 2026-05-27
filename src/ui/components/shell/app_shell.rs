@@ -2,9 +2,7 @@ use leptos::prelude::*;
 
 use super::activity_tray::ActivityTray;
 use super::nav::AppNav;
-use crate::ui::components::app::activity::{
-    clamp_tray_height, provide_activity_state, use_activity_state,
-};
+use crate::ui::state::activity::{clamp_tray_height, provide_activity_state, use_activity_state};
 
 #[component]
 pub fn AppShell(children: Children) -> impl IntoView {

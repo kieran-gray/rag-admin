@@ -141,7 +141,8 @@ impl From<EvaluationVariantResultRow> for EvaluationVariantResult {
                 retrieved_chunk_ids: Vec::new(),
                 missed_reference_count: 0,
                 reference_results: Vec::new(),
-                category: t.category.clone(),
+                operation: t.operation.clone(),
+                evidence_kind: t.evidence_kind.clone(),
             })
             .collect();
         Self {

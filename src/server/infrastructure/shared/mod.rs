@@ -4,5 +4,6 @@ pub mod http;
 pub mod id;
 pub mod markdown;
 pub mod sql;
+pub mod sse;
 pub mod time;
 pub mod tokenizer;

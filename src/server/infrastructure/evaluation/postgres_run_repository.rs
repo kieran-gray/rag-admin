@@ -318,7 +318,8 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             "
             SELECT
                 variant_label, split, top_k, min_score_milli,
-                question_sequence, retrieved_chunk_ids, scores, recall, precision, iou, category
+                question_sequence, retrieved_chunk_ids, scores, recall, precision, iou,
+                operation, evidence_kind
             FROM retrieval_traces
             WHERE run_id = $1
             ORDER BY variant_label, split, top_k, min_score_milli, question_sequence
@@ -349,7 +350,8 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
                     recall: tr.recall,
                     precision: tr.precision,
                     iou: tr.iou,
-                    category: tr.category,
+                    operation: tr.operation,
+                    evidence_kind: tr.evidence_kind,
                 });
         }
 
@@ -497,7 +499,8 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         let trace_rows: Vec<RetrievalTraceRow> = sqlx::query_as(
             "
             SELECT
-                question_sequence, retrieved_chunk_ids, scores, recall, precision, iou, category
+                question_sequence, retrieved_chunk_ids, scores, recall, precision, iou,
+                operation, evidence_kind
             FROM retrieval_traces
             WHERE run_id = $1 AND variant_label = $2 AND split = $3
               AND top_k = $4 AND min_score_milli = $5
@@ -520,11 +523,13 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
         question_sequences.sort_unstable();
         question_sequences.dedup();
 
-        let question_rows: Vec<(i32, String, String)> = if question_sequences.is_empty() {
+        let question_rows: Vec<(i32, String, String, String, String)> = if question_sequences
+            .is_empty()
+        {
             Vec::new()
         } else {
             sqlx::query_as(
-                "SELECT sequence, question, category FROM evaluation_questions \
+                "SELECT sequence, question, operation, evidence_kind, role FROM evaluation_questions \
                  WHERE dataset_id = $1 AND sequence = ANY($2)",
             )
             .bind(dataset_id)
@@ -537,9 +542,9 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
                 ))
             })?
         };
-        let question_text: HashMap<u32, (String, String)> = question_rows
+        let question_text: HashMap<u32, (String, String, String, String)> = question_rows
             .into_iter()
-            .map(|(seq, q, cat)| (seq as u32, (q, cat)))
+            .map(|(seq, q, op, ev, role)| (seq as u32, (q, op, ev, role)))
             .collect();
 
         let reference_rows: Vec<(i32, i32, String, i32, i32)> = if question_sequences.is_empty() {
@@ -572,7 +577,7 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             })
             .collect();
 
-        let mut parsed_traces: Vec<(u32, String, f32, f32, f32, Vec<Uuid>, Vec<f32>)> =
+        let mut parsed_traces: Vec<(u32, String, String, f32, f32, f32, Vec<Uuid>, Vec<f32>)> =
             Vec::with_capacity(trace_rows.len());
         let mut chunk_id_set: HashSet<Uuid> = HashSet::new();
         for row in trace_rows {
@@ -590,7 +595,8 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             }
             parsed_traces.push((
                 row.question_sequence as u32,
-                row.category,
+                row.operation,
+                row.evidence_kind,
                 row.recall,
                 row.precision,
                 row.iou,
@@ -635,15 +641,23 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             .collect();
 
         let mut questions: Vec<QuestionResultRow> = Vec::with_capacity(parsed_traces.len());
-        for (seq, category, recall, precision, iou, retrieved_chunk_ids, scores) in parsed_traces {
-            let (question, _) = question_text
-                .get(&seq)
-                .cloned()
-                .unwrap_or_else(|| (format!("Q{}", seq + 1), String::new()));
+        for (seq, operation, evidence_kind, recall, precision, iou, retrieved_chunk_ids, scores) in
+            parsed_traces
+        {
+            let (question, _, _, role) = question_text.get(&seq).cloned().unwrap_or_else(|| {
+                (
+                    format!("Q{}", seq + 1),
+                    String::new(),
+                    String::new(),
+                    String::new(),
+                )
+            });
             questions.push(QuestionResultRow {
                 sequence: seq,
                 question,
-                category,
+                operation,
+                evidence_kind,
+                role,
                 recall,
                 precision,
                 iou,
@@ -885,16 +899,17 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
                 "
                 INSERT INTO retrieval_traces (
                     run_id, variant_label, split, top_k, min_score_milli, question_sequence,
-                    retrieved_chunk_ids, scores, recall, precision, iou, category
+                    retrieved_chunk_ids, scores, recall, precision, iou, operation, evidence_kind
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                 ON CONFLICT (run_id, variant_label, split, top_k, min_score_milli, question_sequence) DO UPDATE SET
                     retrieved_chunk_ids = EXCLUDED.retrieved_chunk_ids,
                     scores = EXCLUDED.scores,
                     recall = EXCLUDED.recall,
                     precision = EXCLUDED.precision,
                     iou = EXCLUDED.iou,
-                    category = EXCLUDED.category
+                    operation = EXCLUDED.operation,
+                    evidence_kind = EXCLUDED.evidence_kind
                 ",
             )
             .bind(result.run_id)
@@ -908,7 +923,8 @@ impl EvaluationRunRepository for PostgresEvaluationRunRepository {
             .bind(trace.recall)
             .bind(trace.precision)
             .bind(trace.iou)
-            .bind(&trace.category)
+            .bind(&trace.operation)
+            .bind(&trace.evidence_kind)
             .execute(&mut *tx)
             .await
             .map_err(|e| {
@@ -1348,7 +1364,8 @@ struct RetrievalTraceRow {
     recall: f32,
     precision: f32,
     iou: f32,
-    category: String,
+    operation: String,
+    evidence_kind: String,
 }
 
 #[derive(sqlx::FromRow)]
@@ -1363,7 +1380,8 @@ struct RetrievalTraceRowFull {
     recall: f32,
     precision: f32,
     iou: f32,
-    category: String,
+    operation: String,
+    evidence_kind: String,
 }
 
 impl TryFrom<RetrievalTraceRow> for RetrievalTraceEntry {
@@ -1383,7 +1401,8 @@ impl TryFrom<RetrievalTraceRow> for RetrievalTraceEntry {
             recall: row.recall,
             precision: row.precision,
             iou: row.iou,
-            category: row.category,
+            operation: row.operation,
+            evidence_kind: row.evidence_kind,
         })
     }
 }

@@ -3,10 +3,10 @@ use leptos_router::components::A;
 use uuid::Uuid;
 
 use crate::shared::contracts::{ActivityJobDto, ActivityKind, ActivityStatus};
-use crate::ui::components::app::activity::{
+use crate::ui::components::shell::log_stream::LogStream;
+use crate::ui::state::activity::{
     clamp_tray_height, dismiss_job, set_tray_open, use_activity_state,
 };
-use crate::ui::components::app::log_stream::LogStream;
 
 #[component]
 pub fn ActivityTray() -> impl IntoView {
@@ -276,14 +276,15 @@ fn kind_label(kind: ActivityKind) -> &'static str {
         ActivityKind::Indexing => "Indexing",
         ActivityKind::EvaluationDataset => "Dataset",
         ActivityKind::EvaluationRun => "Run",
+        ActivityKind::DocumentMap => "Map",
     }
 }
 
 fn detail_href(kind: ActivityKind, stream_id: Uuid) -> Option<String> {
     match kind {
-        ActivityKind::EvaluationDataset => Some(format!("/evaluations/datasets/{stream_id}")),
-        ActivityKind::EvaluationRun => Some(format!("/evaluations/runs/{stream_id}")),
-        ActivityKind::Indexing => None,
+        ActivityKind::EvaluationDataset => Some(format!("/artifacts/datasets/{stream_id}")),
+        ActivityKind::EvaluationRun => Some(format!("/workflows/runs/{stream_id}")),
+        ActivityKind::Indexing | ActivityKind::DocumentMap => None,
     }
 }
 
@@ -339,9 +340,7 @@ mod hydrate {
     use wasm_bindgen::prelude::*;
     use wasm_bindgen::JsCast;
 
-    use crate::ui::components::app::activity::{
-        clamp_tray_height, set_tray_open, use_activity_state,
-    };
+    use crate::ui::state::activity::{clamp_tray_height, set_tray_open, use_activity_state};
 
     static KEYBOARD_INSTALLED: AtomicBool = AtomicBool::new(false);
 

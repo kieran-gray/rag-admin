@@ -6,20 +6,21 @@ use leptos_router::{
     NavigateOptions, ParamSegment, StaticSegment,
 };
 
-use crate::ui::components::app::event_bus::provide_event_bus;
+use crate::ui::components::playground::provide_playground_context;
 use crate::ui::components::shell::AppShell;
 use crate::ui::pages::{
-    artifacts::chunk_sets::ChunkSetsPage,
+    artifacts::{chunk_sets::ChunkSetsPage, maps::MapsPage, DatasetDetailPage, DatasetsPage},
     configuration::{
         catalog::CatalogPage, chunking::ChunkingPage, connectors::ConnectorsPage,
         profiles::ProfilesPage,
     },
-    document_detail::DocumentDetailPage,
+    document_detail::{DocumentDetailPage, DocumentIngestPage, DocumentMapPage},
     documents::{DocumentByIdRedirect, DocumentsPage},
     evaluate::{EvaluateByIdRedirect, EvaluatePage},
-    evaluations::{DatasetDetailPage, DatasetsPage, EvaluationsPage, RunPage},
     playground::{chat::ChatPage, embed::EmbedPage, retrieve::RetrievePage},
+    workflows::{EvaluateWorkflowPage, IngestWorkflowPage, RunPage, RunsPage},
 };
+use crate::ui::state::event_bus::provide_event_bus;
 
 #[component]
 fn RedirectTo(to: &'static str) -> impl IntoView {
@@ -36,58 +37,16 @@ fn RedirectTo(to: &'static str) -> impl IntoView {
     view! { <p class="muted">"Redirecting…"</p> }
 }
 
-struct LegacyRunTabRedirect;
-
-impl LegacyRunTabRedirect {
-    fn progress() -> impl IntoView {
-        Self::redirect("progress")
-    }
-
-    fn compare() -> impl IntoView {
-        Self::redirect("compare")
-    }
-
-    fn redirect(tab: &'static str) -> impl IntoView {
-        let params = use_params_map();
-        let query = use_query_map();
-        Effect::new(move |_| {
-            let run_id = params.with(|p| p.get("run_id").unwrap_or_default().to_string());
-            let with = query.with(|q| q.get("with").map(|t| t.to_string()));
-            let target = match with {
-                Some(w) => format!("/evaluations/runs/{run_id}?tab={tab}&with={w}"),
-                None => format!("/evaluations/runs/{run_id}?tab={tab}"),
-            };
-            use_navigate()(
-                &target,
-                NavigateOptions {
-                    replace: true,
-                    ..Default::default()
-                },
-            );
-        });
-        view! { <p class="muted">"Redirecting…"</p> }
-    }
-}
-
 #[component]
 fn LegacyRunRedirect() -> impl IntoView {
     let params = use_params_map();
     let query = use_query_map();
     Effect::new(move |_| {
         let run_id = params.with(|p| p.get("run_id").unwrap_or_default().to_string());
-        let q = query.with(|q| {
-            let mut parts: Vec<String> = Vec::new();
-            for k in ["tab", "with"] {
-                if let Some(v) = q.get(k) {
-                    parts.push(format!("{k}={v}"));
-                }
-            }
-            parts.join("&")
-        });
-        let target = if q.is_empty() {
-            format!("/evaluations/runs/{run_id}")
-        } else {
-            format!("/evaluations/runs/{run_id}?{q}")
+        let with = query.with(|q| q.get("with").map(|t| t.to_string()));
+        let target = match with {
+            Some(w) => format!("/workflows/runs/{run_id}?with={w}"),
+            None => format!("/workflows/runs/{run_id}"),
         };
         use_navigate()(
             &target,
@@ -106,7 +65,7 @@ fn LegacyDatasetRedirect() -> impl IntoView {
     Effect::new(move |_| {
         let dataset_id = params.with(|p| p.get("dataset_id").unwrap_or_default().to_string());
         use_navigate()(
-            &format!("/evaluations/datasets/{dataset_id}"),
+            &format!("/artifacts/datasets/{dataset_id}"),
             NavigateOptions {
                 replace: true,
                 ..Default::default()
@@ -123,6 +82,7 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
             <head>
                 <meta charset="utf-8" />
                 <meta name="viewport" content="width=device-width, initial-scale=1" />
+                <script inner_html=THEME_BOOT_SCRIPT />
                 <AutoReload options=options.clone() />
                 <HydrationScripts options />
                 <link rel="stylesheet" id="leptos" href="/pkg/rag_admin.css" />
@@ -136,10 +96,13 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
     }
 }
 
+const THEME_BOOT_SCRIPT: &str = "(function(){try{var s=localStorage.getItem('rag-admin-theme');var t=s?s:(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');if(t==='light'){document.documentElement.setAttribute('data-theme','light');}}catch(e){}})();";
+
 #[component]
 pub fn App() -> impl IntoView {
     provide_meta_context();
     provide_event_bus();
+    provide_playground_context();
 
     view! {
         <Title text="rag-admin" />
@@ -165,6 +128,24 @@ pub fn App() -> impl IntoView {
                     />
                     <Route
                         path=(
+                            StaticSegment("documents"),
+                            ParamSegment("doc_type"),
+                            ParamSegment("source_ref"),
+                            StaticSegment("ingest"),
+                        )
+                        view=DocumentIngestPage
+                    />
+                    <Route
+                        path=(
+                            StaticSegment("documents"),
+                            ParamSegment("doc_type"),
+                            ParamSegment("source_ref"),
+                            StaticSegment("map"),
+                        )
+                        view=DocumentMapPage
+                    />
+                    <Route
+                        path=(
                             StaticSegment("evaluate"),
                             StaticSegment("by-id"),
                             ParamSegment("document_id"),
@@ -180,32 +161,16 @@ pub fn App() -> impl IntoView {
                         view=EvaluatePage
                     />
                     <Route
-                        path=StaticSegment("evaluations")
-                        view=|| view! { <RedirectTo to="/evaluations/runs" /> }
-                    />
-                    <Route
-                        path=(StaticSegment("evaluations"), StaticSegment("runs"))
-                        view=EvaluationsPage
+                        path=(StaticSegment("workflows"), StaticSegment("runs"))
+                        view=RunsPage
                     />
                     <Route
                         path=(
-                            StaticSegment("evaluations"),
+                            StaticSegment("workflows"),
                             StaticSegment("runs"),
                             ParamSegment("run_id"),
                         )
                         view=RunPage
-                    />
-                    <Route
-                        path=(StaticSegment("evaluations"), StaticSegment("datasets"))
-                        view=DatasetsPage
-                    />
-                    <Route
-                        path=(
-                            StaticSegment("evaluations"),
-                            StaticSegment("datasets"),
-                            ParamSegment("dataset_id"),
-                        )
-                        view=DatasetDetailPage
                     />
                     <Route
                         path=(StaticSegment("runs"), ParamSegment("run_id"))
@@ -217,7 +182,7 @@ pub fn App() -> impl IntoView {
                             ParamSegment("run_id"),
                             StaticSegment("optimize"),
                         )
-                        view=LegacyRunTabRedirect::progress
+                        view=LegacyRunRedirect
                     />
                     <Route
                         path=(
@@ -225,7 +190,7 @@ pub fn App() -> impl IntoView {
                             ParamSegment("run_id"),
                             StaticSegment("replicate"),
                         )
-                        view=LegacyRunTabRedirect::compare
+                        view=LegacyRunRedirect
                     />
                     <Route
                         path=(StaticSegment("datasets"), ParamSegment("dataset_id"))
@@ -258,6 +223,30 @@ pub fn App() -> impl IntoView {
                     <Route
                         path=(StaticSegment("artifacts"), StaticSegment("chunk-sets"))
                         view=ChunkSetsPage
+                    />
+                    <Route
+                        path=(StaticSegment("workflows"), StaticSegment("ingest"))
+                        view=IngestWorkflowPage
+                    />
+                    <Route
+                        path=(StaticSegment("workflows"), StaticSegment("evaluate"))
+                        view=EvaluateWorkflowPage
+                    />
+                    <Route
+                        path=(StaticSegment("artifacts"), StaticSegment("maps"))
+                        view=MapsPage
+                    />
+                    <Route
+                        path=(StaticSegment("artifacts"), StaticSegment("datasets"))
+                        view=DatasetsPage
+                    />
+                    <Route
+                        path=(
+                            StaticSegment("artifacts"),
+                            StaticSegment("datasets"),
+                            ParamSegment("dataset_id"),
+                        )
+                        view=DatasetDetailPage
                     />
                     <Route
                         path=StaticSegment("artifacts")

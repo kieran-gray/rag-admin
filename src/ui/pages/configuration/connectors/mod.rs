@@ -6,10 +6,10 @@ use crate::server_functions::connector::list_connectors;
 use crate::shared::contracts::{
     aggregate_type, ConnectorCommandDto, ConnectorConfigDto, ConnectorDto, UnregisterConnectorDto,
 };
-use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{
     Dialog, EmptyState, InlineStatus, InlineStatusMessage, PageHeader, Surface,
 };
+use crate::ui::state::event_bus::use_invalidator;
 
 use self::form_dialog::{ConnectorForm, ConnectorFormDialog};
 

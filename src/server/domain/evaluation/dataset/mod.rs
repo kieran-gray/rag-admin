@@ -3,6 +3,8 @@ pub mod commands;
 pub mod effects;
 pub mod events;
 pub mod exceptions;
+pub mod map_bridge_projector;
+pub mod map_listener_policies;
 pub mod policies;
 pub mod projector;
 pub mod read_model;

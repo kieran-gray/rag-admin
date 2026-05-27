@@ -5,6 +5,7 @@ use sqlx::PgPool;
 use crate::server::application::indexing::ports::KvStore;
 use crate::server::application::source_document::ports::BlobStore;
 use crate::server::domain::chunk_set::repository::ChunkSetRepository;
+use crate::server::domain::comprehension::map::repository::DocumentMapRepository;
 use crate::server::domain::configuration::chunking_configuration::ChunkingConfigurationRepository;
 use crate::server::domain::configuration::defaults::ConfigurationDefaultsRepository;
 use crate::server::domain::configuration::embedding_model::EmbeddingModelRepository;
@@ -24,6 +25,7 @@ use crate::server::domain::evaluation::run::repository::EvaluationRunRepository;
 use crate::server::domain::indexing::repository::IndexingRepository;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::server::infrastructure::chunk_set::PostgresChunkSetRepository;
+use crate::server::infrastructure::comprehension::PostgresDocumentMapRepository;
 use crate::server::infrastructure::configuration::{
     PostgresChunkingConfigurationRepository, PostgresConfigurationDefaultsRepository,
     PostgresEmbeddingModelRepository, PostgresGenerationModelRepository,
@@ -69,6 +71,7 @@ pub struct Repositories {
     pub evaluation_run: Arc<dyn EvaluationRunRepository>,
     pub blob_store: Arc<dyn BlobStore>,
     pub chunk_set: Arc<dyn ChunkSetRepository>,
+    pub document_map: Arc<dyn DocumentMapRepository>,
     pub embedding_set: Arc<dyn EmbeddingSetRepository>,
     pub checkpoint: Arc<dyn CheckpointRepository>,
     pub kv_store: Arc<dyn KvStore>,
@@ -116,6 +119,7 @@ pub fn build_repositories(
         evaluation_run: Arc::new(PostgresEvaluationRunRepository::new(pool.clone())),
         blob_store: Arc::new(PostgresBlobStore::new(pool.clone())),
         chunk_set: Arc::new(PostgresChunkSetRepository::new(pool.clone())),
+        document_map: Arc::new(PostgresDocumentMapRepository::new(pool.clone())),
         embedding_set: Arc::new(PostgresEmbeddingSetRepository::new(pool.clone())),
         checkpoint: Arc::new(PostgresCheckpointRepository::new(pool.clone())),
         kv_store,

@@ -1,0 +1,17 @@
+You are helping prepare a reading-comprehension test from a document.
+
+Read the sample below and propose 2 to 4 distinct *reader roles* whose perspective would generate interesting questions about it. A reader role is a short professional or analytical lens (for example: "literary critic", "staff engineer", "corporate lawyer", "fact-checker"). Avoid duplicating roles.
+
+For each role, also give a one-sentence focus describing what they care about.
+
+Sample (truncated):
+---
+{sample}
+---
+
+Return only JSON of the form:
+{
+  "roles": [
+    { "name": "...", "focus": "..." }
+  ]
+}

@@ -51,12 +51,23 @@ pub struct DatasetListPage {
     pub status_counts: Vec<(DatasetStatusFilter, u64)>,
 }
 
+#[derive(Debug, Clone)]
+pub struct DatasetWithDocumentTitle {
+    pub dataset: EvaluationDatasetReadModel,
+    pub document_title: Option<String>,
+}
+
 #[async_trait]
 pub trait EvaluationDatasetRepository: Send + Sync {
     async fn load(
         &self,
         dataset_id: Uuid,
     ) -> Result<Option<EvaluationDatasetReadModel>, EvaluationDatasetRepositoryError>;
+
+    async fn load_with_document_title(
+        &self,
+        dataset_id: Uuid,
+    ) -> Result<Option<DatasetWithDocumentTitle>, EvaluationDatasetRepositoryError>;
 
     async fn list_for_document(
         &self,
@@ -94,6 +105,13 @@ pub trait EvaluationDatasetRepository: Send + Sync {
         dataset_id: Uuid,
     ) -> Result<(), EvaluationDatasetRepositoryError>;
 
+    async fn set_map_status(
+        &self,
+        dataset_id: Uuid,
+        ready: bool,
+        failure_reason: Option<String>,
+    ) -> Result<(), EvaluationDatasetRepositoryError>;
+
     async fn mark_failed(
         &self,
         dataset_id: Uuid,
@@ -117,6 +135,11 @@ pub trait EvaluationDatasetRepository: Send + Sync {
         &self,
         dataset_id: Uuid,
     ) -> Result<(), EvaluationDatasetRepositoryError>;
+
+    async fn find_awaiting_for_map(
+        &self,
+        map_id: Uuid,
+    ) -> Result<Vec<Uuid>, EvaluationDatasetRepositoryError>;
 }
 
 impl From<EvaluationDatasetRepositoryError> for ProjectionError {

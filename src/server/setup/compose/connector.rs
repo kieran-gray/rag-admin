@@ -35,7 +35,7 @@ pub struct ConnectorDeps<'a> {
     pub repos: &'a Repositories,
     pub wirings: &'a AggregateWirings,
     pub event_bus: Arc<EventBus>,
-    pub wakeups: &'a mut HashMap<String, Arc<Notify>>,
+    pub wakeups: &'a mut HashMap<String, Vec<Arc<Notify>>>,
 }
 
 impl ConnectorServices {
@@ -98,7 +98,7 @@ fn spawn_drivers(
     repos: &Repositories,
     wirings: &AggregateWirings,
     event_bus: &Arc<EventBus>,
-    wakeups: &mut HashMap<String, Arc<Notify>>,
+    wakeups: &mut HashMap<String, Vec<Arc<Notify>>>,
 ) {
     spawn_driver::<Connector, ()>(
         Arc::clone(&wirings.connector.event_store),

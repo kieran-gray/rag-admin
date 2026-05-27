@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::shared::contracts::QueryHit;
+use crate::shared::contracts::{QueryHit, Timings};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatRequest {
@@ -26,4 +26,31 @@ pub struct ChatResponse {
     pub answer: String,
     pub model: String,
     pub hits: Vec<QueryHit>,
+    #[serde(default)]
+    pub timings: Timings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatStreamMeta {
+    pub retrieval_profile_id: Uuid,
+    pub hits: Vec<QueryHit>,
+    pub model: String,
+    pub prompt: String,
+    #[serde(default)]
+    pub timings: Timings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatStreamDelta {
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatStreamDone {
+    pub timings: Timings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatStreamError {
+    pub message: String,
 }

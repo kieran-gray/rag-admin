@@ -207,13 +207,17 @@ pub struct EvaluationScoreWeights {
 impl Default for EvaluationScoreWeights {
     fn default() -> Self {
         Self {
-            recall: 0.40,
-            iou: 0.25,
-            precision: 0.20,
+            recall: 0.55,
+            iou: 0.15,
+            precision: 0.15,
             precision_omega: 0.15,
         }
     }
 }
+
+pub const RECALL_FLOOR: f32 = 0.5;
+
+pub const JUDGE_SCORE_WEIGHT: f32 = 0.3;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct EvaluationScorePolicy {
@@ -229,11 +233,28 @@ impl EvaluationScorePolicy {
         Self { weights }
     }
 
-    pub fn score(self, metrics: &EvaluationMetrics) -> f32 {
+    fn raw(self, metrics: &EvaluationMetrics) -> f32 {
         metrics.recall_mean * self.weights.recall
             + metrics.iou_mean * self.weights.iou
             + metrics.precision_mean * self.weights.precision
             + metrics.precision_omega_mean * self.weights.precision_omega
+    }
+
+    pub fn score(self, metrics: &EvaluationMetrics) -> f32 {
+        let base = self.raw(metrics);
+        if metrics.recall_mean < RECALL_FLOOR && RECALL_FLOOR > 0.0 {
+            base * (metrics.recall_mean / RECALL_FLOOR).max(0.0)
+        } else {
+            base
+        }
+    }
+
+    pub fn score_with_judge(self, metrics: &EvaluationMetrics) -> f32 {
+        let base = self.score(metrics);
+        match metrics.judge_score {
+            Some(j) => (1.0 - JUDGE_SCORE_WEIGHT) * base + JUDGE_SCORE_WEIGHT * j,
+            None => base,
+        }
     }
 }
 
@@ -245,6 +266,10 @@ impl Default for EvaluationScorePolicy {
 
 pub fn evaluation_score(metrics: &EvaluationMetrics) -> f32 {
     EvaluationScorePolicy::default().score(metrics)
+}
+
+pub fn evaluation_score_with_judge(metrics: &EvaluationMetrics) -> f32 {
+    EvaluationScorePolicy::default().score_with_judge(metrics)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -266,7 +291,8 @@ pub struct EvaluationQuestionResult {
     pub retrieved_chunk_ids: Vec<u32>,
     pub missed_reference_count: u32,
     pub reference_results: Vec<EvaluationReferenceResult>,
-    pub category: String,
+    pub operation: String,
+    pub evidence_kind: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

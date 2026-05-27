@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::f64::consts::PI;
 
@@ -6,8 +7,9 @@ use super::search_space::{Observation, Parameter, SearchSpace, Trial, Value};
 
 const GAMMA: f32 = 0.25;
 const N_CANDIDATES: usize = 24;
-pub const WARMUP_TRIALS: usize = 10;
+pub const WARMUP_TRIALS: usize = 20;
 const PERTURB_FRACTION: f64 = 0.15;
+const CATEGORICAL_SWITCH_PROB_FLOOR: f64 = 0.5;
 
 pub struct Tpe {
     space: SearchSpace,
@@ -60,7 +62,7 @@ impl Tpe {
 
     fn propose_one(&mut self) -> HashMap<String, Value> {
         if self.history.len() < WARMUP_TRIALS {
-            return self.sample_from_prior();
+            return self.sample_stratified_warmup();
         }
 
         let (good, bad): (Vec<Observation>, Vec<Observation>) = {
@@ -117,7 +119,14 @@ impl Tpe {
     }
 
     fn sample_from_prior(&mut self) -> HashMap<String, Value> {
-        let mut params: HashMap<String, Value> = HashMap::new();
+        self.sample_from_prior_with_fixed(&HashMap::new())
+    }
+
+    fn sample_from_prior_with_fixed(
+        &mut self,
+        fixed: &HashMap<String, Value>,
+    ) -> HashMap<String, Value> {
+        let mut params: HashMap<String, Value> = fixed.clone();
         let descriptors: Vec<Parameter> = self.space.parameters().to_vec();
         for p in descriptors {
             if let Parameter::Conditional {
@@ -128,16 +137,38 @@ impl Tpe {
             {
                 if params.get(gate_parameter) == Some(gate_value) {
                     let name = inner.name().to_string();
-                    let value = self.sample_param(inner);
-                    params.insert(name, value);
+                    if let Entry::Vacant(e) = params.entry(name) {
+                        let value = self.sample_param(inner);
+                        e.insert(value);
+                    }
                 }
             } else {
                 let name = p.name().to_string();
-                let value = self.sample_param(&p);
-                params.insert(name, value);
+                if let Entry::Vacant(e) = params.entry(name) {
+                    let value = self.sample_param(&p);
+                    e.insert(value);
+                }
             }
         }
         params
+    }
+
+    fn sample_stratified_warmup(&mut self) -> HashMap<String, Value> {
+        let categorical: Option<(String, Vec<String>)> =
+            self.space.parameters().iter().find_map(|p| match p {
+                Parameter::Categorical { name, values } if !values.is_empty() => {
+                    Some((name.clone(), values.clone()))
+                }
+                _ => None,
+            });
+        let mut fixed: HashMap<String, Value> = HashMap::new();
+        if let Some((name, values)) = categorical {
+            let idx = (self.next_trial_id as usize) % values.len();
+            if let Some(v) = values.get(idx) {
+                fixed.insert(name, Value::String(v.clone()));
+            }
+        }
+        self.sample_from_prior_with_fixed(&fixed)
     }
 
     fn sample_from_good(
@@ -183,7 +214,7 @@ impl Tpe {
                 if values.is_empty() {
                     return Value::String(String::new());
                 }
-                let switch_prob = 1.0 / values.len() as f64;
+                let switch_prob = (1.0 / values.len() as f64).max(CATEGORICAL_SWITCH_PROB_FLOOR);
                 if let Some(Value::String(current)) = pivot_value {
                     if self.next_f64() >= switch_prob {
                         return Value::String(current.clone());

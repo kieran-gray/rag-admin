@@ -9,8 +9,9 @@ mod steps;
 
 pub use redirect_by_id::EvaluateByIdRedirect;
 use state::EvaluateSelection;
-use steps::{DatasetStep, RunStep};
+use steps::{DatasetStep, MapStep, RunStep};
 
+use crate::server_functions::comprehension::list_document_maps;
 use crate::server_functions::configuration::{
     get_chunking_configurations, get_index_profiles, get_sweep_templates,
 };
@@ -19,9 +20,9 @@ use crate::shared::contracts::{
     aggregate_type, ChunkingConfigurationDto, IndexProfileDto, SourceDocumentDetailDto,
     SourceDocumentDto, SweepTemplateDto,
 };
-use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{EmptyState, PageHeader, Surface};
 use crate::ui::pages::shared::document_type_label;
+use crate::ui::state::event_bus::use_invalidator;
 
 #[component]
 pub fn EvaluatePage() -> impl IntoView {
@@ -110,6 +111,7 @@ pub fn EvaluatePage() -> impl IntoView {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WorkflowStep {
+    Map,
     Dataset,
     Run,
 }
@@ -117,13 +119,15 @@ enum WorkflowStep {
 impl WorkflowStep {
     fn ordinal(self) -> u8 {
         match self {
-            Self::Dataset => 1,
-            Self::Run => 2,
+            Self::Map => 1,
+            Self::Dataset => 2,
+            Self::Run => 3,
         }
     }
 
     fn label(self) -> &'static str {
         match self {
+            Self::Map => "Map",
             Self::Dataset => "Dataset",
             Self::Run => "Run",
         }
@@ -131,6 +135,7 @@ impl WorkflowStep {
 
     fn hint(self) -> &'static str {
         match self {
+            Self::Map => "Extract observations",
             Self::Dataset => "Pick or generate questions",
             Self::Run => "Configure and launch",
         }
@@ -157,15 +162,34 @@ fn EvaluateWorkspace(
     initial_run: Option<Uuid>,
 ) -> impl IntoView {
     let document_id = detail.document.document_id;
+    let document_version = detail.document.latest_version;
+    let document_type = detail.document.document_type.clone();
     let (header_eyebrow, header_title, header_subtitle) = derive_header(&detail.document);
 
     let selection = EvaluateSelection::new(&index_profiles, initial_dataset, initial_run);
 
+    let map_invalidator = use_invalidator(|e| e.from_any(&["document_map"]));
+    let maps = Resource::new(
+        move || (document_id, map_invalidator.get()),
+        move |(id, _)| async move { list_document_maps(id).await.unwrap_or_default() },
+    );
+
+    let map_ready = Memo::new(move |_| {
+        maps.get()
+            .map(|list| {
+                list.into_iter()
+                    .any(|m| m.document_version == document_version && m.status == "ready")
+            })
+            .unwrap_or(false)
+    });
+
     let initial_step_value = initial_step.unwrap_or_else(|| {
-        if initial_dataset.is_some() || initial_run.is_some() {
+        if initial_run.is_some() {
             WorkflowStep::Run
-        } else {
+        } else if initial_dataset.is_some() {
             WorkflowStep::Dataset
+        } else {
+            WorkflowStep::Map
         }
     });
     let (active_step, set_active_step) = signal(initial_step_value);
@@ -174,22 +198,26 @@ fn EvaluateWorkspace(
     let chunking_stored = StoredValue::new(chunking_configurations);
     let sweep_templates_stored = StoredValue::new(sweep_templates);
     let source_ref_stored = StoredValue::new(source_ref);
+    let document_type_stored = StoredValue::new(document_type);
 
     let step_state = move |step: WorkflowStep| -> StepState {
         let active = active_step.get();
+        let has_map = map_ready.get();
         let has_dataset = selection.dataset_id.get().is_some();
 
         if step == active {
             return StepState::Current;
         }
         let locked = match step {
-            WorkflowStep::Dataset => false,
-            WorkflowStep::Run => !has_dataset,
+            WorkflowStep::Map => false,
+            WorkflowStep::Dataset => !has_map,
+            WorkflowStep::Run => !has_map || !has_dataset,
         };
         if locked {
             return StepState::Locked;
         }
         let done = match step {
+            WorkflowStep::Map => has_map,
             WorkflowStep::Dataset => has_dataset,
             WorkflowStep::Run => false,
         };
@@ -200,6 +228,7 @@ fn EvaluateWorkspace(
         }
     };
 
+    let on_advance_to_dataset = Callback::new(move |_| set_active_step.set(WorkflowStep::Dataset));
     let on_advance_to_run = Callback::new(move |_| set_active_step.set(WorkflowStep::Run));
     let on_back_to_dataset = Callback::new(move |_| set_active_step.set(WorkflowStep::Dataset));
 
@@ -220,10 +249,20 @@ fn EvaluateWorkspace(
                 {move || {
                     let step = active_step.get();
                     let source_ref = source_ref_stored.get_value();
+                    let document_type = document_type_stored.get_value();
                     let index_profiles = index_profiles_stored.get_value();
                     let chunking = chunking_stored.get_value();
                     let sweep = sweep_templates_stored.get_value();
                     match step {
+                        WorkflowStep::Map => view! {
+                            <MapStep
+                                document_id=document_id
+                                document_version=document_version
+                                document_type=document_type
+                                source_ref_key=source_ref
+                                on_advance=on_advance_to_dataset
+                            />
+                        }.into_any(),
                         WorkflowStep::Dataset => view! {
                             <DatasetStep
                                 document_id=document_id
@@ -254,7 +293,7 @@ fn Stepper(
     set_active: WriteSignal<WorkflowStep>,
     step_state: impl Fn(WorkflowStep) -> StepState + Copy + Send + Sync + 'static,
 ) -> impl IntoView {
-    let steps = [WorkflowStep::Dataset, WorkflowStep::Run];
+    let steps = [WorkflowStep::Map, WorkflowStep::Dataset, WorkflowStep::Run];
 
     view! {
         <div class="surface flex p-0 overflow-hidden">
@@ -263,8 +302,9 @@ fn Stepper(
                 let is_last = idx == steps.len() - 1;
                 let state = move || step_state(step);
                 let tooltip = move || match step {
-                    WorkflowStep::Run => "Select a dataset first",
-                    WorkflowStep::Dataset => "",
+                    WorkflowStep::Map => "",
+                    WorkflowStep::Dataset => "Build a map first",
+                    WorkflowStep::Run => "Build a map and pick a dataset first",
                 };
                 view! {
                     <button
@@ -325,6 +365,7 @@ fn Stepper(
 
 fn step_from_query(s: &str) -> Option<WorkflowStep> {
     match s {
+        "map" | "maps" => Some(WorkflowStep::Map),
         "dataset" | "datasets" => Some(WorkflowStep::Dataset),
         "run" | "runs" | "optimize" | "results" | "result" | "monitor" => Some(WorkflowStep::Run),
         _ => None,

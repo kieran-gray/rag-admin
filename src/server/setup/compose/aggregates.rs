@@ -8,6 +8,7 @@ use tokio::sync::Notify;
 
 use crate::server::application::AppError;
 use crate::server::domain::chunk_set::aggregate::ChunkSet;
+use crate::server::domain::comprehension::map::aggregate::DocumentMap;
 use crate::server::domain::configuration::chunking_configuration::ChunkingConfigurationCatalog;
 use crate::server::domain::configuration::defaults::ConfigurationDefaults;
 use crate::server::domain::configuration::embedding_model::EmbeddingModelCatalog;
@@ -59,6 +60,7 @@ pub struct AggregateWirings {
     pub source_document: AggregateWiring<SourceDocument>,
     pub indexing: AggregateWiring<Indexing>,
     pub chunk_set: AggregateWiring<ChunkSet>,
+    pub document_map: AggregateWiring<DocumentMap>,
     pub dataset: AggregateWiring<EvaluationDataset>,
     pub run: AggregateWiring<EvaluationRun>,
 }
@@ -79,6 +81,7 @@ pub fn build_aggregate_wirings(pool: &PgPool) -> AggregateWirings {
         source_document: build_aggregate_wiring::<SourceDocument>(pool),
         indexing: build_aggregate_wiring::<Indexing>(pool),
         chunk_set: build_aggregate_wiring::<ChunkSet>(pool),
+        document_map: build_aggregate_wiring::<DocumentMap>(pool),
         dataset: build_aggregate_wiring::<EvaluationDataset>(pool),
         run: build_aggregate_wiring::<EvaluationRun>(pool),
     }
@@ -112,7 +115,7 @@ pub fn spawn_driver<A, R>(
     process_manager: Option<Arc<ProcessManager<A, R>>>,
     checkpoint_repository: Arc<dyn CheckpointRepository>,
     event_bus: Arc<EventBus>,
-    wakeups: &mut HashMap<String, Arc<Notify>>,
+    wakeups: &mut HashMap<String, Vec<Arc<Notify>>>,
 ) where
     A: Aggregate + 'static,
     A::Event: HasPolicies<A, R>,
@@ -131,7 +134,10 @@ pub fn spawn_driver<A, R>(
         Arc::clone(&projection_wakeup),
         Arc::clone(&effect_wakeup),
     ));
-    wakeups.insert(A::aggregate_type().to_owned(), projection_wakeup);
+    wakeups
+        .entry(A::aggregate_type().to_owned())
+        .or_default()
+        .push(projection_wakeup);
     tokio::spawn(projection_driver.run());
 
     if let Some(pm) = process_manager {

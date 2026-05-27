@@ -3,7 +3,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::server::application::llm::ports::{
-    GenerationRequest, GenerationResponse, GenerationResponseFormat,
+    GenerationRequest, GenerationResponse, GenerationResponseFormat, GenerationTokenStream,
 };
 use crate::server::application::llm::GenerationClientRegistry;
 use crate::server::application::AppError;
@@ -55,6 +55,29 @@ impl GenerationService {
         })?;
         client
             .generate(GenerationRequest {
+                model: resolved.model,
+                system: prompt.system,
+                user: prompt.user,
+                temperature: prompt.temperature,
+                response_format: prompt.response_format,
+            })
+            .await
+    }
+
+    pub async fn generate_stream(
+        &self,
+        generation_model_id: Uuid,
+        prompt: GenerationPrompt,
+    ) -> Result<GenerationTokenStream, AppError> {
+        let resolved = self.resolve(generation_model_id).await?;
+        let client = self.clients.get(&resolved.kind).ok_or_else(|| {
+            AppError::Internal(format!(
+                "no generation client registered for provider kind {}",
+                resolved.kind.as_str()
+            ))
+        })?;
+        client
+            .generate_stream(GenerationRequest {
                 model: resolved.model,
                 system: prompt.system,
                 user: prompt.user,

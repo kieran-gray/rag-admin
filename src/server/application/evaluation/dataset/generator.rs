@@ -1,164 +1,65 @@
 use std::collections::HashMap;
-use std::fmt::Write as _;
 
-use crate::server::application::evaluation::ports::EvaluationPrompt;
-use crate::server::domain::evaluation::question::QuestionCategory;
-
-const FACT_RETRIEVAL: &str = include_str!("prompts/fact_retrieval.txt");
-const ARCHITECTURE: &str = include_str!("prompts/architecture.txt");
-const REASONING: &str = include_str!("prompts/reasoning.txt");
-const CODE: &str = include_str!("prompts/code.txt");
-const TRICK: &str = include_str!("prompts/trick.txt");
-const GRAMMAR_BREAK: &str = include_str!("prompts/grammar_break.txt");
-
-pub fn build_paraphrase_prompt(original_question: &str) -> EvaluationPrompt {
-    EvaluationPrompt {
-        system: GRAMMAR_BREAK.to_string(),
-        user: format!("Original question:\n{original_question}\n\nReturn only JSON."),
-    }
-}
-
-pub const PARAPHRASE_MIN_COSINE: f32 = 0.8;
-
-fn system_prompt(category: QuestionCategory) -> &'static str {
-    match category {
-        QuestionCategory::FactRetrieval => FACT_RETRIEVAL,
-        QuestionCategory::Architecture => ARCHITECTURE,
-        QuestionCategory::Reasoning => REASONING,
-        QuestionCategory::Code => CODE,
-        QuestionCategory::Trick => TRICK,
-    }
-}
-
-pub fn build_question_prompt(
-    source_window: &str,
-    previous_coverage: &[String],
-) -> EvaluationPrompt {
-    build_question_prompt_for(
-        source_window,
-        previous_coverage,
-        QuestionCategory::FactRetrieval,
-    )
-}
-
-pub fn build_question_prompt_for(
-    source_window: &str,
-    previous_coverage: &[String],
-    category: QuestionCategory,
-) -> EvaluationPrompt {
-    let mut user_prompt = format!("Text:\n{source_window}\n\n");
-
-    if !previous_coverage.is_empty() {
-        let previous = previous_coverage.join("\n");
-        _ = write!(
-            user_prompt,
-            "Previously accepted question coverage to avoid repeating:\n{previous}\n\n"
-        );
-    };
-
-    _ = writeln!(
-        user_prompt,
-        "Category for this question: {}.\n\
-         Return only JSON.",
-        category.label(),
-    );
-
-    EvaluationPrompt {
-        system: system_prompt(category).to_string(),
-        user: user_prompt,
-    }
-}
+use crate::server::domain::evaluation::dataset::events::AxisWeight;
+use crate::server::domain::evaluation::question::{
+    is_combination_valid, CognitiveOperation, EvidenceKind,
+};
 
 #[derive(Debug, Clone)]
 pub struct GenerationPlan {
-    pub by_category: HashMap<QuestionCategory, u32>,
-    pub grammar_variants_per_question: u32,
+    pub by_axis: HashMap<(CognitiveOperation, EvidenceKind), u32>,
 }
 
 impl GenerationPlan {
-    pub fn default_for_count(target: u32) -> Self {
-        let counts = distribute_with_remainder(target, &[300, 250, 200, 150, 100]);
-        let mut by_category = HashMap::new();
-        for (cat, n) in QuestionCategory::all().iter().zip(counts) {
-            by_category.insert(*cat, n);
+    pub fn from_matrix(target: u32, weight_matrix: &[AxisWeight]) -> Self {
+        let total: u64 = weight_matrix.iter().map(|w| w.weight as u64).sum();
+        let mut by_axis = HashMap::new();
+        if total == 0 {
+            return Self { by_axis };
         }
-        Self {
-            by_category,
-            grammar_variants_per_question: 0,
+        for w in weight_matrix {
+            let Ok(op) = CognitiveOperation::parse(&w.operation) else {
+                continue;
+            };
+            let Ok(ev) = EvidenceKind::parse(&w.evidence) else {
+                continue;
+            };
+            if !is_combination_valid(op, ev) {
+                continue;
+            }
+            let n = (target as u64 * w.weight as u64 / total) as u32;
+            by_axis.insert((op, ev), n);
         }
+        Self { by_axis }
     }
 
-    pub fn total_questions(&self) -> u32 {
-        self.by_category.values().copied().sum()
-    }
-
-    pub fn schedule(&self) -> Vec<(QuestionCategory, u32)> {
-        QuestionCategory::all()
-            .into_iter()
-            .map(|c| (c, *self.by_category.get(&c).unwrap_or(&0)))
-            .filter(|(_, n)| *n > 0)
+    pub fn default_weight_matrix() -> Vec<AxisWeight> {
+        let defaults: &[(CognitiveOperation, EvidenceKind, u32)] = &[
+            (CognitiveOperation::Recall, EvidenceKind::Observation, 25),
+            (
+                CognitiveOperation::Comprehend,
+                EvidenceKind::Observation,
+                15,
+            ),
+            (CognitiveOperation::Comprehend, EvidenceKind::Thread, 10),
+            (CognitiveOperation::Analyse, EvidenceKind::Thread, 10),
+            (CognitiveOperation::Apply, EvidenceKind::Thread, 10),
+            (CognitiveOperation::Analyse, EvidenceKind::Insight, 5),
+            (CognitiveOperation::Synthesise, EvidenceKind::Insight, 10),
+            (CognitiveOperation::Evaluate, EvidenceKind::Insight, 5),
+            (
+                CognitiveOperation::Adversarial,
+                EvidenceKind::Observation,
+                10,
+            ),
+        ];
+        defaults
+            .iter()
+            .map(|(op, ev, w)| AxisWeight {
+                operation: op.as_str().into(),
+                evidence: ev.as_str().into(),
+                weight: *w,
+            })
             .collect()
-    }
-}
-
-fn distribute_with_remainder(total: u32, weights_milli: &[u32]) -> Vec<u32> {
-    let sum: u64 = weights_milli
-        .iter()
-        .copied()
-        .map(|w| w as u64)
-        .sum::<u64>()
-        .max(1);
-    let total64 = total as u64;
-    let mut counts: Vec<u32> = weights_milli
-        .iter()
-        .map(|w| ((total64 * (*w as u64) + sum / 2) / sum) as u32)
-        .collect();
-    let assigned: u32 = counts.iter().sum();
-    if assigned == total {
-        return counts;
-    }
-
-    let (idx, _) = weights_milli
-        .iter()
-        .enumerate()
-        .max_by_key(|(_, w)| **w)
-        .unwrap_or((0, &0));
-    if let Some(slot) = counts.get_mut(idx) {
-        if assigned < total {
-            *slot += total - assigned;
-        } else {
-            *slot = slot.saturating_sub(assigned - total);
-        }
-    }
-    counts
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn default_plan_distributes_30_25_20_15_10() {
-        let plan = GenerationPlan::default_for_count(100);
-        assert_eq!(plan.total_questions(), 100);
-        assert_eq!(plan.by_category[&QuestionCategory::FactRetrieval], 30);
-        assert_eq!(plan.by_category[&QuestionCategory::Architecture], 25);
-        assert_eq!(plan.by_category[&QuestionCategory::Reasoning], 20);
-        assert_eq!(plan.by_category[&QuestionCategory::Code], 15);
-        assert_eq!(plan.by_category[&QuestionCategory::Trick], 10);
-    }
-
-    #[test]
-    fn schedule_is_in_canonical_order() {
-        let plan = GenerationPlan::default_for_count(10);
-        let s = plan.schedule();
-        let cats: Vec<QuestionCategory> = s.iter().map(|(c, _)| *c).collect();
-        assert_eq!(cats, QuestionCategory::all().to_vec());
-    }
-
-    #[test]
-    fn small_target_keeps_every_category_at_minimum_zero() {
-        let plan = GenerationPlan::default_for_count(1);
-        assert_eq!(plan.total_questions(), 1);
     }
 }

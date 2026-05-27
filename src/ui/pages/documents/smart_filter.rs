@@ -8,7 +8,7 @@ use crate::server_functions::connector::list_connectors;
 use crate::shared::contracts::{
     aggregate_type, ConnectorDto, DocumentListPageDto, DocumentStatusFilterDto, SourceFacetDto,
 };
-use crate::ui::components::app::event_bus::use_invalidator;
+use crate::ui::state::event_bus::use_invalidator;
 
 const STATUS_KEY: &str = "status";
 const SOURCE_KEY: &str = "source";

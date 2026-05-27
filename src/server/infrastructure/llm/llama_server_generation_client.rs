@@ -1,15 +1,19 @@
 use std::sync::Arc;
 
+use async_stream::stream;
 use async_trait::async_trait;
+use futures_util::stream::StreamExt;
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 
 use crate::server::application::llm::ports::{
     GenerationClient, GenerationRequest, GenerationResponse, GenerationResponseFormat,
+    GenerationTokenStream,
 };
 use crate::server::application::llm::GenerationClientRegistry;
 use crate::server::application::AppError;
 use crate::server::infrastructure::shared::clients::LlamaServerApi;
+use crate::server::infrastructure::shared::sse::sse_data_stream;
 use crate::shared::reference_data::AiProviderKind;
 
 pub struct LlamaServerGenerationClient {
@@ -66,7 +70,7 @@ struct ChatChoiceMessage {
     content: Option<String>,
 }
 
-fn build_chat_request(request: GenerationRequest) -> ChatRequest {
+fn build_chat_request(request: GenerationRequest, stream: bool) -> ChatRequest {
     ChatRequest {
         model: request.model,
         messages: vec![
@@ -80,7 +84,7 @@ fn build_chat_request(request: GenerationRequest) -> ChatRequest {
             },
         ],
         temperature: request.temperature,
-        stream: false,
+        stream,
         response_format: match request.response_format {
             GenerationResponseFormat::Text => None,
             GenerationResponseFormat::Json => Some(ResponseFormat {
@@ -88,6 +92,46 @@ fn build_chat_request(request: GenerationRequest) -> ChatRequest {
             }),
         },
     }
+}
+
+#[derive(Deserialize)]
+struct ChunkResponse {
+    choices: Vec<ChunkChoice>,
+}
+
+#[derive(Deserialize)]
+struct ChunkChoice {
+    #[serde(default)]
+    delta: ChunkDelta,
+}
+
+#[derive(Deserialize, Default)]
+struct ChunkDelta {
+    #[serde(default)]
+    content: Option<String>,
+}
+
+pub(super) enum ChunkOutcome {
+    Token(String),
+    Skip,
+    Done,
+}
+
+fn parse_chunk(data: &str) -> Result<ChunkOutcome, AppError> {
+    if data.trim() == "[DONE]" {
+        return Ok(ChunkOutcome::Done);
+    }
+    let chunk: ChunkResponse = serde_json::from_str(data)
+        .map_err(|e| AppError::Upstream(format!("parse llama-server stream chunk: {e}")))?;
+    let content = chunk
+        .choices
+        .into_iter()
+        .next()
+        .and_then(|c| c.delta.content);
+    Ok(match content {
+        Some(t) if !t.is_empty() => ChunkOutcome::Token(t),
+        _ => ChunkOutcome::Skip,
+    })
 }
 
 fn parse_chat_response(body: &str) -> Result<GenerationResponse, AppError> {
@@ -108,7 +152,7 @@ impl GenerationClient for LlamaServerGenerationClient {
         let base_url = self.api.base_url.trim().trim_end_matches('/');
         let url = format!("{base_url}/v1/chat/completions");
 
-        let body = build_chat_request(request);
+        let body = build_chat_request(request, false);
         let body_bytes = serde_json::to_vec(&body)
             .map_err(|e| AppError::Internal(format!("encode llama-server generate body: {e}")))?;
 
@@ -124,6 +168,46 @@ impl GenerationClient for LlamaServerGenerationClient {
             .await?;
 
         parse_chat_response(&resp)
+    }
+
+    async fn generate_stream(
+        &self,
+        request: GenerationRequest,
+    ) -> Result<GenerationTokenStream, AppError> {
+        let base_url = self.api.base_url.trim().trim_end_matches('/');
+        let url = format!("{base_url}/v1/chat/completions");
+
+        let body = build_chat_request(request, true);
+        let body_bytes = serde_json::to_vec(&body).map_err(|e| {
+            AppError::Internal(format!("encode llama-server generate stream body: {e}"))
+        })?;
+
+        let byte_stream = self
+            .api
+            .request_stream(Method::POST, &url, body_bytes, "application/json")
+            .await?;
+
+        let mut data_stream = sse_data_stream(byte_stream);
+        let s = stream! {
+            while let Some(item) = data_stream.next().await {
+                match item {
+                    Ok(data) => match parse_chunk(&data) {
+                        Ok(ChunkOutcome::Token(t)) => yield Ok(t),
+                        Ok(ChunkOutcome::Skip) => {}
+                        Ok(ChunkOutcome::Done) => return,
+                        Err(e) => {
+                            yield Err(e);
+                            return;
+                        }
+                    },
+                    Err(e) => {
+                        yield Err(e);
+                        return;
+                    }
+                }
+            }
+        };
+        Ok(s.boxed())
     }
 }
 
@@ -144,7 +228,7 @@ mod tests {
 
     #[test]
     fn builds_openai_chat_request_with_system_and_user_messages() {
-        let body = build_chat_request(sample_request());
+        let body = build_chat_request(sample_request(), false);
         let json: Value = serde_json::from_str(&serde_json::to_string(&body).unwrap()).unwrap();
 
         assert_eq!(json["model"], "gemma3-12b");
@@ -165,7 +249,7 @@ mod tests {
             response_format: GenerationResponseFormat::Json,
             ..sample_request()
         };
-        let body = build_chat_request(req);
+        let body = build_chat_request(req, false);
         let json: Value = serde_json::from_str(&serde_json::to_string(&body).unwrap()).unwrap();
         assert_eq!(json["response_format"]["type"], "json_object");
     }

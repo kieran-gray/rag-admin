@@ -1,5 +1,6 @@
 use std::slice;
 use std::sync::Arc;
+use std::time::Instant;
 
 use uuid::Uuid;
 
@@ -12,7 +13,7 @@ use crate::server::application::indexing::VectorIndexResolver;
 use crate::server::application::rerank::{rerank_fetch_k, RerankService};
 use crate::server::application::AppError;
 use crate::server::domain::source_document::repository::SourceDocumentRepository;
-use crate::shared::contracts::{QueryHit, QueryRequest, QueryResult};
+use crate::shared::contracts::{QueryHit, QueryRequest, QueryResult, Timings};
 
 const SNIPPET_MAX_CHARS: usize = 320;
 
@@ -48,6 +49,9 @@ impl RetrievalService {
         let top_k = req.top_k.clamp(1, 50);
         let min_score = req.min_score.clamp(0.0, 1.0);
 
+        let started = Instant::now();
+        let mut timings = Timings::default();
+
         let profile = self
             .retrieval_profile_resolver
             .resolve(req.retrieval_profile_id)
@@ -59,6 +63,7 @@ impl RetrievalService {
             (None, None) => top_k,
         };
 
+        let embed_start = Instant::now();
         let embeddings = self
             .embedding_service
             .embed_with_resolved(
@@ -66,6 +71,7 @@ impl RetrievalService {
                 slice::from_ref(&req.query),
             )
             .await?;
+        timings.embed_ms = elapsed_ms(embed_start);
         let query_vector = embeddings
             .into_iter()
             .next()
@@ -84,6 +90,7 @@ impl RetrievalService {
                 value: f.value.trim().to_string(),
             })
             .collect();
+        let retrieve_start = Instant::now();
         let matches = vector_index
             .query(&VectorQuery {
                 vector: query_vector,
@@ -91,12 +98,17 @@ impl RetrievalService {
                 filter,
             })
             .await?;
+        timings.retrieve_ms = elapsed_ms(retrieve_start);
 
         let matches = match profile.reranker_model.as_ref() {
             Some(reranker) => {
-                self.rerank_service
+                let rerank_start = Instant::now();
+                let matches = self
+                    .rerank_service
                     .rerank_matches(reranker.reranker_model_id, &req.query, matches)
-                    .await?
+                    .await?;
+                timings.rerank_ms = Some(elapsed_ms(rerank_start));
+                matches
             }
             None => matches,
         };
@@ -120,7 +132,7 @@ impl RetrievalService {
                 }
             }
             let chunk_id = meta
-                .get("chunk_id")
+                .get("chunk_uuid")
                 .and_then(|v| v.as_str())
                 .and_then(|s| Uuid::parse_str(s).ok());
             let heading = meta
@@ -167,12 +179,19 @@ impl RetrievalService {
             });
         }
 
+        timings.total_ms = elapsed_ms(started);
+
         Ok(QueryResult {
             retrieval_profile_id: req.retrieval_profile_id,
             query: req.query,
             hits,
+            timings,
         })
     }
+}
+
+fn elapsed_ms(start: Instant) -> u32 {
+    u32::try_from(start.elapsed().as_millis()).unwrap_or(u32::MAX)
 }
 
 fn snippet(text: &str) -> String {

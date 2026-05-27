@@ -18,7 +18,8 @@ pub struct RetrievalTraceEntry {
     pub recall: f32,
     pub precision: f32,
     pub iou: f32,
-    pub category: String,
+    pub operation: String,
+    pub evidence_kind: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -10,12 +10,12 @@ use crate::shared::contracts::{
     GenerationModelDto, RerankerModelCommandDto, RerankerModelDto, VectorIndexCommandDto,
     VectorIndexDto,
 };
-use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{InlineStatusMessage, PageHeader, Surface};
 use crate::ui::pages::configuration::commands::{
     run_embedding_model_command, run_generation_model_command, run_reranker_model_command,
     run_vector_index_command,
 };
+use crate::ui::state::event_bus::use_invalidator;
 
 use self::form_dialog::{RegistryDeleteDialog, RegistryFormDialog};
 use self::sections::{

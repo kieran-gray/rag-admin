@@ -5,6 +5,7 @@ use reqwest::Method;
 
 use crate::server::application::AppError;
 use crate::server::infrastructure::shared::http::ReqwestHttpClient;
+use crate::server::infrastructure::shared::sse::ByteStream;
 
 pub struct LlamaServerApi {
     http: Arc<ReqwestHttpClient>,
@@ -47,6 +48,22 @@ impl LlamaServerApi {
             )));
         }
         Ok(body_text)
+    }
+
+    pub async fn request_stream(
+        &self,
+        method: Method,
+        url: &str,
+        body: Vec<u8>,
+        content_type: &str,
+    ) -> Result<ByteStream, AppError> {
+        let headers = Self::headers(content_type)?;
+        let body_opt = if body.is_empty() { None } else { Some(body) };
+        let (_, stream) = self
+            .http
+            .request_stream(method, url, headers, body_opt)
+            .await?;
+        Ok(stream)
     }
 }
 

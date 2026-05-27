@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::shared::contracts::comprehension::MapItemRefDto;
 use crate::shared::{
     ChunkingConfig, EvaluationMetrics, EvaluationResultSplit, EvaluationRunOptions,
     EvaluationScoreWeights, EvaluationVariantResult, OptimizationConfig, OrderedF32,
@@ -8,6 +9,7 @@ use crate::shared::{
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EvaluationReferenceDto {
+    pub document_id: Uuid,
     pub content: String,
     #[serde(deserialize_with = "crate::shared::serde_compat::u32_from_string")]
     pub char_start: u32,
@@ -18,14 +20,28 @@ pub struct EvaluationReferenceDto {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct QuestionDimensionsDto {
+    pub operation: String,
+    pub evidence: String,
+    pub role: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AxisWeightDto {
+    pub operation: String,
+    pub evidence: String,
+    pub weight: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EvaluationQuestionDto {
+    pub sequence: u32,
     pub question: String,
     pub references: Vec<EvaluationReferenceDto>,
     #[serde(default)]
     pub embedding: Option<Vec<OrderedF32>>,
-    pub category: String,
-    pub grammar_variant: String,
-    pub paraphrase_of: Option<u32>,
+    pub dimensions: QuestionDimensionsDto,
+    pub evidence_refs: Vec<MapItemRefDto>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -126,6 +142,7 @@ pub struct DatasetListPageDto {
 pub struct EvaluationDatasetDto {
     pub dataset_id: Uuid,
     pub document_id: Uuid,
+    pub document_title: Option<String>,
     pub document_version: u32,
     pub content_hash: String,
     pub label: String,
@@ -349,7 +366,9 @@ pub struct ReferenceExcerptDto {
 pub struct RunQuestionResultDto {
     pub sequence: u32,
     pub question: String,
-    pub category: String,
+    pub operation: String,
+    pub evidence_kind: String,
+    pub role: String,
     pub recall: f32,
     pub precision: f32,
     pub iou: f32,

@@ -1,8 +1,31 @@
-use crate::shared::contracts::IndexingDto;
+use uuid::Uuid;
+
+use crate::shared::contracts::{IndexingDto, QueryHit};
 use crate::ui::components::primitives::Status;
 
 pub fn short_hash(hash: &str) -> &str {
     hash.get(..12).unwrap_or(hash)
+}
+
+pub fn source_link(doc_id: Uuid, char_start: Option<u32>, char_end: Option<u32>) -> String {
+    match (char_start, char_end) {
+        (Some(start), Some(end)) => {
+            format!("/documents/by-id/{doc_id}?tab=source&ref_start={start}&ref_end={end}")
+        }
+        _ => format!("/documents/by-id/{doc_id}?tab=source"),
+    }
+}
+
+pub fn hit_source_link(hit: &QueryHit) -> Option<String> {
+    hit.document_id
+        .map(|doc_id| source_link(doc_id, hit.char_start, hit.char_end))
+}
+
+pub fn hit_display_title(hit: &QueryHit) -> String {
+    hit.document_title
+        .clone()
+        .or_else(|| hit.source_ref_key.clone())
+        .unwrap_or_else(|| "Unknown source".to_string())
 }
 
 pub fn document_type_label(doc_type: &str) -> &'static str {

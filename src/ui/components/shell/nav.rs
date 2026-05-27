@@ -4,22 +4,10 @@ use leptos_router::hooks::use_location;
 use uuid::Uuid;
 
 use super::nav_menu::{NavMenu, NavMenuItem};
+use super::theme_toggle::ThemeToggle;
 use crate::shared::contracts::{ActivityJobDto, ActivityKind};
-use crate::ui::components::app::activity::{open_tray_with, set_tray_open, use_activity_state};
-use crate::ui::components::app::event_bus::{use_event_bus, ConnectionState};
-
-const EVALUATIONS_ITEMS: &[NavMenuItem] = &[
-    NavMenuItem {
-        href: "/evaluations/runs",
-        label: "Runs",
-        hint: "evaluation runs",
-    },
-    NavMenuItem {
-        href: "/evaluations/datasets",
-        label: "Datasets",
-        hint: "question sets",
-    },
-];
+use crate::ui::state::activity::{open_tray_with, set_tray_open, use_activity_state};
+use crate::ui::state::event_bus::{use_event_bus, ConnectionState};
 
 const CONFIGURATION_ITEMS: &[NavMenuItem] = &[
     NavMenuItem {
@@ -44,11 +32,41 @@ const CONFIGURATION_ITEMS: &[NavMenuItem] = &[
     },
 ];
 
-const ARTIFACTS_ITEMS: &[NavMenuItem] = &[NavMenuItem {
-    href: "/artifacts/chunk-sets",
-    label: "Chunk sets",
-    hint: "cached chunks · GC",
-}];
+const ARTIFACTS_ITEMS: &[NavMenuItem] = &[
+    NavMenuItem {
+        href: "/artifacts/chunk-sets",
+        label: "Chunk sets",
+        hint: "cached chunks · GC",
+    },
+    NavMenuItem {
+        href: "/artifacts/maps",
+        label: "Maps",
+        hint: "summaries · build state",
+    },
+    NavMenuItem {
+        href: "/artifacts/datasets",
+        label: "Datasets",
+        hint: "question sets",
+    },
+];
+
+const WORKFLOWS_ITEMS: &[NavMenuItem] = &[
+    NavMenuItem {
+        href: "/workflows/ingest",
+        label: "Ingest",
+        hint: "chunk · embed · index",
+    },
+    NavMenuItem {
+        href: "/workflows/evaluate",
+        label: "Evaluate",
+        hint: "map · dataset · run",
+    },
+    NavMenuItem {
+        href: "/workflows/runs",
+        label: "Runs",
+        hint: "evaluation runs",
+    },
+];
 
 const PLAYGROUND_ITEMS: &[NavMenuItem] = &[
     NavMenuItem {
@@ -126,7 +144,7 @@ pub fn AppNav() -> impl IntoView {
                             </A>
                         }
                     }).collect_view()}
-                    <NavMenu label="Evaluations" prefix="/evaluations" items=EVALUATIONS_ITEMS />
+                    <NavMenu label="Workflows" prefix="/workflows" items=WORKFLOWS_ITEMS />
                     <NavMenu label="Playground" prefix="/playground" items=PLAYGROUND_ITEMS />
                     <NavMenu label="Artifacts" prefix="/artifacts" items=ARTIFACTS_ITEMS />
                     <NavMenu label="Config" prefix="/configuration" items=CONFIGURATION_ITEMS />
@@ -139,6 +157,8 @@ pub fn AppNav() -> impl IntoView {
                     title=connection_label
                     aria-label=connection_label
                 ></span>
+
+                <ThemeToggle />
 
                 <button
                     type="button"
@@ -248,6 +268,7 @@ fn kind_label(kind: ActivityKind) -> &'static str {
         ActivityKind::Indexing => "Indexing",
         ActivityKind::EvaluationDataset => "Dataset",
         ActivityKind::EvaluationRun => "Run",
+        ActivityKind::DocumentMap => "Map",
     }
 }
 

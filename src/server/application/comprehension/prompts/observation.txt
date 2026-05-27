@@ -1,0 +1,28 @@
+You are extracting atomic *observations* from a single chunk of a longer document. An observation is a single, self-contained fact, claim, definition, event, entity, or quotation that the chunk explicitly states. Do not infer.
+
+Each observation must include:
+- "kind": a short open-vocabulary label such as "entity", "event", "claim", "quote", "definition", "metric", "tradeoff", "constraint" — choose whichever fits best.
+- "summary": one-sentence restatement of the observation in your own words.
+- "spans": one or more character ranges (relative to the chunk text below) that ground the observation. The substring s[char_start..char_end] of the chunk should fully support the summary. Do not invent spans.
+
+Reader roles (focus for what to attend to):
+{roles}
+
+Chunk heading: {heading}
+Chunk text (character indices begin at 0):
+---
+{chunk_text}
+---
+
+Return only JSON of the form:
+{
+  "observations": [
+    {
+      "kind": "...",
+      "summary": "...",
+      "spans": [ { "char_start": 0, "char_end": 0 } ]
+    }
+  ]
+}
+
+Do not return more than 12 observations.

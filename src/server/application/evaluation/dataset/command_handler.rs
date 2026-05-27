@@ -3,6 +3,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::server::application::embedding::EmbeddingService;
+use crate::server::application::evaluation::dataset::generator::GenerationPlan;
 use crate::server::application::llm::GenerationService;
 use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::source_document::SourceDocumentQueryService;
@@ -12,6 +13,7 @@ use crate::server::domain::evaluation::dataset::commands::{
     CancelDatasetGeneration, DeleteDataset, EvaluationDatasetCommand, RenameDataset,
     RequestDatasetGeneration,
 };
+use crate::server::domain::evaluation::dataset::events::AxisWeight;
 use crate::shared::contracts::EvaluationJobInfo;
 use event_sourcing::CommandProcessor;
 
@@ -21,8 +23,8 @@ pub struct StartDatasetGenerationRequest {
     pub embedding_model_id: Uuid,
     pub label: String,
     pub question_count: u32,
-    pub excerpt_similarity_threshold_milli: u32,
     pub duplicate_similarity_threshold_milli: u32,
+    pub weight_matrix: Vec<AxisWeight>,
 }
 
 pub struct EvaluationDatasetCommandHandler {
@@ -81,6 +83,12 @@ impl EvaluationDatasetCommandHandler {
         let target = request.question_count.max(1);
         let max_attempts = target.saturating_mul(12).max(target.saturating_add(12));
 
+        let weight_matrix = if request.weight_matrix.is_empty() {
+            GenerationPlan::default_weight_matrix()
+        } else {
+            request.weight_matrix
+        };
+
         self.processor
             .handle(
                 dataset_id,
@@ -93,15 +101,12 @@ impl EvaluationDatasetCommandHandler {
                     target_question_count: target,
                     generation_model_id: generation_model.generation_model_id,
                     generation_model: generation_model.model.clone(),
-                    excerpt_similarity_threshold_milli: request
-                        .excerpt_similarity_threshold_milli
-                        .min(1000),
                     duplicate_similarity_threshold_milli: request
                         .duplicate_similarity_threshold_milli
                         .min(1000),
                     embedding_model_id: embedding_model.embedding_model_id,
                     max_attempts,
-                    grammar_variants_enabled: true,
+                    weight_matrix,
                     occurred_at,
                 }),
             )

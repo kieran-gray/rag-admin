@@ -75,27 +75,44 @@ pub fn params_to_run_config(
 
     let chunking = match strategy {
         "bert" => {
+            let defaults = BertChunkingConfig::default();
             let target_tokens = params
                 .get("bert_target_tokens")
                 .and_then(super::search_space::Value::as_int)
                 .map(|n| n.clamp(1, 8192) as u32)
-                .unwrap_or_else(|| BertChunkingConfig::default().target_tokens);
-            let defaults = BertChunkingConfig::default();
+                .unwrap_or(defaults.target_tokens);
+            let overlap_tokens = params
+                .get("bert_overlap_tokens")
+                .and_then(super::search_space::Value::as_int)
+                .map(|n| n.clamp(0, 8192) as u32)
+                .unwrap_or(defaults.overlap_tokens);
+            let min_tokens = params
+                .get("bert_min_tokens")
+                .and_then(super::search_space::Value::as_int)
+                .map(|n| n.clamp(1, 8192) as u32)
+                .unwrap_or(defaults.min_tokens)
+                .min(target_tokens);
             ChunkingConfig::Bert(BertChunkingConfig {
                 target_tokens,
-                overlap_tokens: defaults.overlap_tokens,
-                min_tokens: defaults.min_tokens,
+                overlap_tokens: overlap_tokens.min(target_tokens.saturating_sub(1).max(1)),
+                min_tokens,
             })
         }
         "llm" => {
             let defaults = LlmChunkingConfig::default();
+            let target_tokens = params
+                .get("llm_target_tokens")
+                .and_then(super::search_space::Value::as_int)
+                .map(|n| n.clamp(1, 8192) as u32)
+                .unwrap_or(defaults.target_tokens);
             let micro_chunk_tokens = params
                 .get("micro_chunk_tokens")
                 .and_then(super::search_space::Value::as_int)
                 .map(|n| n.clamp(1, 8192) as u32)
-                .unwrap_or(defaults.micro_chunk_tokens);
+                .unwrap_or(defaults.micro_chunk_tokens)
+                .min(target_tokens);
             ChunkingConfig::Llm(LlmChunkingConfig {
-                target_tokens: defaults.target_tokens,
+                target_tokens,
                 micro_chunk_tokens,
                 generation_model_id,
             })
@@ -111,7 +128,8 @@ pub fn params_to_run_config(
                 .get("darn_overlap")
                 .and_then(super::search_space::Value::as_int)
                 .map(|n| n.clamp(0, 8192) as u32)
-                .unwrap_or(defaults.overlap);
+                .unwrap_or(defaults.overlap)
+                .min(max_chunk_size.saturating_sub(1));
             ChunkingConfig::Darn(DarnChunkingConfig {
                 max_chunk_size,
                 overlap,

@@ -6,6 +6,7 @@ use tokio::sync::Notify;
 
 use crate::server::application::chunk_set::ChunkSetCommandHandler;
 use crate::server::application::chunking::ChunkerRegistry;
+use crate::server::application::comprehension::DocumentMapCommandHandler;
 use crate::server::application::configuration::IndexProfileResolver;
 use crate::server::application::embedding::EmbeddingService;
 use crate::server::application::evaluation::dataset::EvaluationDatasetEffectExecutor;
@@ -23,8 +24,10 @@ use crate::server::application::ports::{Clock, IdGenerator};
 use crate::server::application::source_document::SourceDocumentQueryService;
 use crate::server::application::{ActivityRegistry, JobRegistry};
 use crate::server::domain::chunk_set::ref_projectors::EvaluationRunChunkSetRefProjector;
+use crate::server::domain::comprehension::map::aggregate::DocumentMap;
 use crate::server::domain::evaluation::dataset::aggregate::EvaluationDataset;
 use crate::server::domain::evaluation::dataset::effects::EvaluationDatasetEffect;
+use crate::server::domain::evaluation::dataset::map_bridge_projector::EvaluationDatasetMapBridgeProjector;
 use crate::server::domain::evaluation::dataset::projector::EvaluationDatasetProjector;
 use crate::server::domain::evaluation::run::aggregate::EvaluationRun;
 use crate::server::domain::evaluation::run::effects::EvaluationRunEffect;
@@ -38,7 +41,7 @@ use crate::server::setup::compose::repositories::Repositories;
 use crate::server::setup::exceptions::SetupError;
 use event_sourcing::event_bus::EventBus;
 use event_sourcing::job_queue::JobQueue;
-use event_sourcing::process_manager::ProcessManager;
+use event_sourcing::process_manager::{EffectExecutor, ProcessManager};
 
 pub struct EvaluationServices {
     pub evaluation_dataset_command_handler: Arc<EvaluationDatasetCommandHandler>,
@@ -57,11 +60,12 @@ pub struct EvaluationDeps<'a> {
     pub activity_registry: Arc<ActivityRegistry>,
     pub chunker_registry: Arc<ChunkerRegistry>,
     pub chunk_set_command_handler: Arc<ChunkSetCommandHandler>,
+    pub document_map_command_handler: Arc<DocumentMapCommandHandler>,
     pub embedding_service: Arc<EmbeddingService>,
     pub generation_service: Arc<GenerationService>,
     pub index_profile_resolver: Arc<IndexProfileResolver>,
     pub source_document_query_service: Arc<SourceDocumentQueryService>,
-    pub wakeups: &'a mut HashMap<String, Arc<Notify>>,
+    pub wakeups: &'a mut HashMap<String, Vec<Arc<Notify>>>,
 }
 
 impl EvaluationServices {
@@ -77,6 +81,7 @@ impl EvaluationServices {
             activity_registry,
             chunker_registry,
             chunk_set_command_handler,
+            document_map_command_handler,
             embedding_service,
             generation_service,
             index_profile_resolver,
@@ -115,21 +120,27 @@ impl EvaluationServices {
         let dataset_job_queue: Arc<dyn JobQueue<EvaluationDatasetEffect>> = Arc::new(
             PostgresJobQueue::<EvaluationDatasetEffect>::new(pool.clone()),
         );
+        let bridge_job_queue: Arc<dyn JobQueue<EvaluationDatasetEffect>> = Arc::new(
+            PostgresJobQueue::<EvaluationDatasetEffect>::new(pool.clone()),
+        );
         let run_job_queue: Arc<dyn JobQueue<EvaluationRunEffect>> =
             Arc::new(PostgresJobQueue::<EvaluationRunEffect>::new(pool));
 
-        let dataset_effect_executor = EvaluationDatasetEffectExecutor::new(
-            Arc::clone(&repos.source_document),
-            Arc::clone(&repos.blob_store),
-            Arc::clone(&repos.evaluation_dataset),
-            evaluation_generator,
-            Arc::clone(&embedding_service),
-            Arc::clone(&wirings.dataset.command_processor),
-            Arc::clone(&wirings.dataset.aggregate_repository),
-            Arc::clone(&job_registry),
-            Arc::clone(&activity_registry),
-            Arc::clone(&clock),
-        );
+        let dataset_effect_executor: Arc<dyn EffectExecutor<EvaluationDatasetEffect>> =
+            EvaluationDatasetEffectExecutor::new(
+                Arc::clone(&repos.source_document),
+                Arc::clone(&repos.blob_store),
+                Arc::clone(&repos.evaluation_dataset),
+                Arc::clone(&repos.document_map),
+                Arc::clone(&document_map_command_handler),
+                evaluation_generator,
+                Arc::clone(&embedding_service),
+                Arc::clone(&wirings.dataset.command_processor),
+                Arc::clone(&wirings.dataset.aggregate_repository),
+                Arc::clone(&job_registry),
+                Arc::clone(&activity_registry),
+                Arc::clone(&clock),
+            );
 
         let trial_scorer = TrialScorer::new(
             Arc::clone(&repos.source_document),
@@ -186,7 +197,13 @@ impl EvaluationServices {
         let dataset_process_manager = Arc::new(ProcessManager::new(
             Arc::clone(&wirings.dataset.aggregate_repository),
             dataset_job_queue,
+            Arc::clone(&dataset_effect_executor),
+        ));
+        let map_bridge_process_manager = Arc::new(ProcessManager::with_queue_name(
+            Arc::clone(&wirings.document_map.aggregate_repository),
+            bridge_job_queue,
             dataset_effect_executor,
+            "document_map_bridge".to_string(),
         ));
         let run_process_manager = Arc::new(ProcessManager::new(
             Arc::clone(&wirings.run.aggregate_repository),
@@ -200,6 +217,14 @@ impl EvaluationServices {
                 &repos.evaluation_dataset,
             )))],
             Some(dataset_process_manager),
+            Arc::clone(&repos.checkpoint),
+            Arc::clone(&event_bus),
+            wakeups,
+        );
+        spawn_driver::<DocumentMap, EvaluationDatasetEffect>(
+            Arc::clone(&wirings.document_map.event_store),
+            vec![Arc::new(EvaluationDatasetMapBridgeProjector::new())],
+            Some(map_bridge_process_manager),
             Arc::clone(&repos.checkpoint),
             Arc::clone(&event_bus),
             wakeups,

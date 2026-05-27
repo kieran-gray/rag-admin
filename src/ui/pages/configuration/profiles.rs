@@ -11,13 +11,13 @@ use crate::shared::contracts::{
     RetrievalProfileCommandDto, RetrievalProfileDto, UpdateIndexProfileDto,
     UpdateRetrievalProfileDto,
 };
-use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{
     Dialog, EmptyState, InlineStatusMessage, PageHeader, Surface,
 };
 use crate::ui::pages::configuration::commands::{
     parse_uuid_or_none, run_index_profile_command, run_retrieval_profile_command,
 };
+use crate::ui::state::event_bus::use_invalidator;
 
 #[derive(Clone)]
 enum IndexFormMode {
