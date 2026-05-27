@@ -8,16 +8,17 @@ use crate::ui::pages::shared::format_when;
 
 #[allow(clippy::needless_pass_by_value)]
 #[component]
-pub fn RunHeader(run: EvaluationRunDto) -> impl IntoView {
+pub fn RunHeader(run: EvaluationRunDto, compare_with: Option<uuid::Uuid>) -> impl IntoView {
     let short = run.run_id.to_string().chars().take(8).collect::<String>();
     let title = format!("run-{short}");
+    let run_id = run.run_id;
     let (status_kind, status_label) =
         run_status(&run.status, run.variants_scored, run.variant_count);
 
     let kind_chip = kind_chip_label(&run);
     let context_line = context_line(&run);
 
-    let dataset_href = format!("/evaluations/datasets/{}", run.dataset_id);
+    let dataset_href = format!("/artifacts/datasets/{}", run.dataset_id);
     let workflow_href = run
         .document_id
         .map(|id| format!("/evaluate/by-id/{id}?dataset={}&step=run", run.dataset_id));
@@ -35,6 +36,12 @@ pub fn RunHeader(run: EvaluationRunDto) -> impl IntoView {
         })
     };
 
+    let compare_link = compare_with.map(|other| {
+        let in_compare = format!("/workflows/runs/{run_id}?with={other}");
+        let leave_compare = format!("/workflows/runs/{run_id}");
+        (in_compare, leave_compare, other)
+    });
+
     view! {
         <PageHeader
             title=title
@@ -48,7 +55,15 @@ pub fn RunHeader(run: EvaluationRunDto) -> impl IntoView {
                 <A href=href attr:class="muted hover:text-text">"← Back to workflow"</A>
             })}
             <A href=dataset_href attr:class="muted hover:text-text">"Open dataset"</A>
-            <A href="/evaluations/runs" attr:class="muted hover:text-text">"All evaluations"</A>
+            <A href="/workflows/runs" attr:class="muted hover:text-text">"All evaluations"</A>
+            {compare_link.map(|(_in_compare, leave, other)| {
+                let other_short = other.to_string().chars().take(8).collect::<String>();
+                view! {
+                    <span class="muted">"·"</span>
+                    <span class="pill pill-accent text-xs">{format!("Comparing with {other_short}")}</span>
+                    <A href=leave attr:class="muted hover:text-text">"Exit comparison"</A>
+                }
+            })}
         </div>
     }
 }

@@ -1,12 +1,9 @@
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
-use leptos::prelude::*;
-
 use crate::shared::{
     evaluation_score, EvaluationResultSplit, EvaluationVariantResult, ReliabilityFlag,
 };
-use crate::ui::components::primitives::Surface;
 
 use super::shared::{ci_overlaps, composite_ci_bounds, extract_trial_id, primary_leader, row_key};
 
@@ -81,7 +78,6 @@ fn leader_question_count(v: &EvaluationVariantResult) -> Option<u32> {
 
 pub(crate) fn reliability_advisor(
     variants: &[EvaluationVariantResult],
-    tied: &[EvaluationVariantResult],
     analysis_bucket: Option<EvaluationResultSplit>,
 ) -> Vec<AdvisorEntry> {
     let mut out = Vec::new();
@@ -112,13 +108,12 @@ pub(crate) fn reliability_advisor(
             out.push(AdvisorEntry {
                 flag: ReliabilityFlag::ValidationHoldoutGap,
                 detail: format!(
-                    "'{}' scored {:.1}% on {} but {:.1}% on holdout (gap {:.1}pp, holdout 95% confidence interval half-width {:.1}pp). The selection may have overfit.",
+                    "'{}' scored {:.1}% on {} but {:.1}% on holdout (gap {:.1}pp).",
                     holdout.variant.label,
                     s_score * 100.0,
                     selection.split.as_str(),
                     h_score * 100.0,
                     gap * 100.0,
-                    threshold * 100.0,
                 ),
             });
             break;
@@ -131,26 +126,13 @@ pub(crate) fn reliability_advisor(
                 out.push(AdvisorEntry {
                     flag: ReliabilityFlag::SmallSample,
                     detail: format!(
-                        "Only {n} questions in the {} set. The 95% confidence interval is ±{:.1}pp on the leader; scores within that band are not distinguishable.",
+                        "Only {n} questions in the {} set; CI ±{:.1}pp on the leader.",
                         leader.split.as_str(),
                         leader.metrics.composite_ci_half_width() * 100.0,
                     ),
                 });
             }
         }
-    }
-
-    if tied.len() > 1 {
-        let bucket_label = analysis_bucket
-            .map(EvaluationResultSplit::as_str)
-            .unwrap_or("the analysis bucket");
-        out.push(AdvisorEntry {
-            flag: ReliabilityFlag::StatisticalTie,
-            detail: format!(
-                "{} configs have 95% confidence intervals that overlap the {bucket_label} leader's. Confidence-interval overlap is a heuristic, not a formal equivalence test, but the ranking between them is unlikely to be reliable. Prefer the cheapest or simplest.",
-                tied.len(),
-            ),
-        });
     }
 
     if let Some(bucket) = analysis_bucket {
@@ -170,7 +152,7 @@ pub(crate) fn reliability_advisor(
                 out.push(AdvisorEntry {
                     flag: ReliabilityFlag::FlatLandscape,
                     detail: format!(
-                        "The top {} configs in the {} bucket all overlap in their 95% confidence intervals. The dataset isn't discriminating between them. Consider adding Reasoning or Trick category questions.",
+                        "Top {} configs in {} overlap on CI. Dataset isn't discriminating. Consider Reasoning or Trick questions.",
                         top.len(),
                         bucket.as_str(),
                     ),
@@ -201,7 +183,7 @@ pub(crate) fn reliability_advisor(
         out.push(AdvisorEntry {
             flag: ReliabilityFlag::StatisticalTie,
             detail: format!(
-                "{trial_count} configs were evaluated. The max-over-N estimator is biased upward (winner's curse), and 95% confidence intervals aren't multiple-comparison adjusted; the reported best score is more optimistic than a single fresh run on the same config would produce. Replicate with a new seed to sanity-check."
+                "{trial_count} configs evaluated; winner's curse applies. Replicate with a new seed."
             ),
         });
     }
@@ -217,27 +199,11 @@ pub(crate) fn reliability_advisor(
             if only_recall {
                 out.push(AdvisorEntry {
                     flag: ReliabilityFlag::FlatLandscape,
-                    detail: "Synthetic dataset uses only recall-type questions. Generator-shaped, extractive benchmarks reward lexical overlap; results will overstate retrieval quality on broader user queries. Add comprehend, analyse, or adversarial operations for a more honest signal.".to_string(),
+                    detail: "Dataset is recall-only; lexical overlap inflates retrieval quality. Add comprehend / analyse / adversarial questions.".to_string(),
                 });
             }
         }
     }
 
     out
-}
-
-#[component]
-pub(crate) fn ReliabilityAdvisor(entries: Vec<AdvisorEntry>) -> impl IntoView {
-    view! {
-        <Surface title="Reliability advisor".to_string()>
-            <div class="space-y-3">
-                {entries.into_iter().map(|e| view! {
-                    <div class="advisor-banner">
-                        <div class="advisor-banner-headline">{e.flag.headline()}</div>
-                        <div class="advisor-banner-detail muted">{e.detail}</div>
-                    </div>
-                }).collect_view()}
-            </div>
-        </Surface>
-    }
 }

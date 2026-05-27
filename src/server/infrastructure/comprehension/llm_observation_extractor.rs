@@ -4,7 +4,9 @@ use async_trait::async_trait;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::server::application::comprehension::ports::{ObservationContext, ObservationExtractor};
+use crate::server::application::comprehension::ports::{
+    snap_to_segments, ObservationContext, ObservationExtractor, TextSegmenter,
+};
 use crate::server::application::llm::ports::GenerationResponseFormat;
 use crate::server::application::llm::service::GenerationPrompt;
 use crate::server::application::llm::GenerationService;
@@ -19,16 +21,19 @@ const PROMPT_TEMPLATE: &str =
 pub struct LlmObservationExtractor {
     generation_service: Arc<GenerationService>,
     id_generator: Arc<dyn IdGenerator>,
+    segmenter: Arc<dyn TextSegmenter>,
 }
 
 impl LlmObservationExtractor {
     pub fn new(
         generation_service: Arc<GenerationService>,
         id_generator: Arc<dyn IdGenerator>,
+        segmenter: Arc<dyn TextSegmenter>,
     ) -> Arc<Self> {
         Arc::new(Self {
             generation_service,
             id_generator,
+            segmenter,
         })
     }
 }
@@ -79,6 +84,7 @@ impl ObservationExtractor for LlmObservationExtractor {
         let wire = parse_observations(&response.content)?;
         let chunk_text_len = ctx.chunk.text.chars().count() as u32;
         let chunk_byte_len = ctx.chunk.text.len() as u32;
+        let segments = self.segmenter.segments(&ctx.chunk.text);
         let mut out = Vec::new();
         for raw in wire.observations {
             let kind = raw.kind.trim().to_lowercase();
@@ -86,7 +92,7 @@ impl ObservationExtractor for LlmObservationExtractor {
             if kind.is_empty() || summary.is_empty() {
                 continue;
             }
-            let spans: Vec<Span> = raw
+            let raw_spans: Vec<Span> = raw
                 .spans
                 .into_iter()
                 .filter_map(|s| {
@@ -103,7 +109,9 @@ impl ObservationExtractor for LlmObservationExtractor {
                         char_end: ctx.chunk.char_start.saturating_add(s.char_end),
                     })
                 })
+                .map(|s| snap_to_segments(s, &segments, ctx.chunk.char_start))
                 .collect();
+            let spans = Span::normalize(raw_spans);
             if spans.is_empty() {
                 continue;
             }

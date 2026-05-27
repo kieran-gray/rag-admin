@@ -171,6 +171,27 @@ pub fn shuffled_tuning_order(tuning: &[usize], run_id: Uuid) -> Vec<usize> {
     indices
 }
 
+pub fn rung_question_sample(
+    tuning: &[usize],
+    run_id: Uuid,
+    rung_idx: u32,
+    sample_size: usize,
+) -> Vec<usize> {
+    if tuning.is_empty() || sample_size == 0 {
+        return Vec::new();
+    }
+    let take = sample_size.min(tuning.len());
+    let mut indices: Vec<usize> = tuning.to_vec();
+    let base = (run_id.as_u128() as u64) ^ ((run_id.as_u128() >> 64) as u64);
+    let mixed = base
+        .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+        .wrapping_add((rung_idx as u64).wrapping_add(1).wrapping_mul(0x100000001B3));
+    shuffle_in_place(&mut indices, normalise_seed(mixed));
+    indices.truncate(take);
+    indices.sort_unstable();
+    indices
+}
+
 pub fn seed_from_uuid(id: Uuid) -> u64 {
     let bytes = id.as_bytes();
     let (hi_bytes, lo_bytes) = bytes.split_at(8);
@@ -480,6 +501,52 @@ mod tests {
         let s = split_questions(seed(13), 5, 1000);
         assert_eq!(s.tuning.len(), 4);
         assert_eq!(s.holdout.len(), 1);
+    }
+
+    #[test]
+    fn rung_question_sample_is_deterministic_per_run_and_rung() {
+        let tuning: Vec<usize> = (0..40).collect();
+        let run_id = Uuid::from_u128(0xDEAD_BEEF_u128);
+        let a = rung_question_sample(&tuning, run_id, 0, 10);
+        let b = rung_question_sample(&tuning, run_id, 0, 10);
+        assert_eq!(a, b);
+        assert_eq!(a.len(), 10);
+    }
+
+    #[test]
+    fn rung_question_sample_differs_across_rungs() {
+        let tuning: Vec<usize> = (0..40).collect();
+        let run_id = Uuid::from_u128(0xCAFE_BABE_u128);
+        let r0 = rung_question_sample(&tuning, run_id, 0, 10);
+        let r1 = rung_question_sample(&tuning, run_id, 1, 10);
+        assert_ne!(r0, r1, "different rungs should draw different samples");
+    }
+
+    #[test]
+    fn rung_question_sample_returns_all_when_size_meets_total() {
+        let tuning: Vec<usize> = (0..40).collect();
+        let s = rung_question_sample(&tuning, Uuid::from_u128(7), 2, 40);
+        assert_eq!(s, tuning);
+    }
+
+    #[test]
+    fn rung_question_sample_empty_when_zero() {
+        let tuning: Vec<usize> = (0..40).collect();
+        assert!(rung_question_sample(&tuning, Uuid::from_u128(7), 0, 0).is_empty());
+        assert!(rung_question_sample(&[], Uuid::from_u128(7), 0, 5).is_empty());
+    }
+
+    #[test]
+    fn rung_question_sample_results_are_sorted_and_subset_of_input() {
+        let tuning: Vec<usize> = vec![3, 7, 11, 13, 17, 19, 23, 29];
+        let s = rung_question_sample(&tuning, Uuid::from_u128(0xC0DE), 1, 4);
+        assert_eq!(s.len(), 4);
+        for v in &s {
+            assert!(tuning.contains(v));
+        }
+        let mut sorted = s.clone();
+        sorted.sort_unstable();
+        assert_eq!(s, sorted);
     }
 
     #[test]

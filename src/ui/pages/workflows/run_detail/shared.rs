@@ -1,7 +1,5 @@
 use std::cmp::Ordering;
 
-use leptos::prelude::*;
-
 use crate::shared::{evaluation_score, EvaluationResultSplit, EvaluationVariantResult};
 
 #[derive(Clone, Copy)]
@@ -128,23 +126,4 @@ pub(crate) fn ci_overlaps(a: &EvaluationVariantResult, b: &EvaluationVariantResu
 
 pub(crate) fn ci_half(low: f32, high: f32) -> f32 {
     ((high - low) / 2.0).max(0.0)
-}
-
-pub(crate) fn metric_cell(value: f32, ci_low: f32, ci_high: f32, best: f32) -> impl IntoView {
-    let is_best = (value - best).abs() < 0.0005 && best > 0.0;
-    let cell_class = if is_best { "num cell-best" } else { "num" };
-    let half = ((ci_high - ci_low) / 2.0).max(0.0);
-    let ci_view = (half > 0.0005).then(|| {
-        view! {
-            <span class="cell-stddev" title="95% bootstrap confidence interval half-width">
-                {format!(" ± {:.1}", half * 100.0)}
-            </span>
-        }
-    });
-    view! {
-        <td class=cell_class>
-            {format!("{:.1}%", value * 100.0)}
-            {ci_view}
-        </td>
-    }
 }

@@ -40,6 +40,8 @@ pub trait DocumentMapRepository: Send + Sync {
         document_id: Uuid,
     ) -> Result<Vec<DocumentMapReadModel>, DocumentMapRepositoryError>;
 
+    async fn list_all(&self) -> Result<Vec<DocumentMapReadModel>, DocumentMapRepositoryError>;
+
     async fn load_observations_for_section(
         &self,
         map_id: Uuid,
@@ -98,6 +100,10 @@ pub trait DocumentMapRepository: Send + Sync {
         map_id: Uuid,
         reason: &str,
     ) -> Result<(), DocumentMapRepositoryError>;
+
+    async fn delete(&self, map_id: Uuid) -> Result<(), DocumentMapRepositoryError>;
+
+    async fn delete_event_stream(&self, map_id: Uuid) -> Result<(), DocumentMapRepositoryError>;
 }
 
 impl From<DocumentMapRepositoryError> for ProjectionError {

@@ -316,6 +316,21 @@ impl DocumentMapRepository for PostgresDocumentMapRepository {
         Ok(out)
     }
 
+    async fn list_all(&self) -> Result<Vec<DocumentMapReadModel>, DocumentMapRepositoryError> {
+        let ids: Vec<Uuid> =
+            sqlx::query_scalar("SELECT map_id FROM document_maps ORDER BY updated_at DESC")
+                .fetch_all(&self.pool)
+                .await
+                .map_err(|e| DocumentMapRepositoryError::Internal(format!("list_all: {e}")))?;
+        let mut out = Vec::with_capacity(ids.len());
+        for id in ids {
+            if let Some(r) = self.load_summary(id).await? {
+                out.push(r);
+            }
+        }
+        Ok(out)
+    }
+
     async fn load_observations_for_section(
         &self,
         map_id: Uuid,
@@ -617,6 +632,39 @@ impl DocumentMapRepository for PostgresDocumentMapRepository {
         .execute(&self.pool)
         .await
         .map_err(|e| DocumentMapRepositoryError::Internal(format!("project_failure: {e}")))?;
+        Ok(())
+    }
+
+    async fn delete(&self, map_id: Uuid) -> Result<(), DocumentMapRepositoryError> {
+        sqlx::query("DELETE FROM document_maps WHERE map_id = $1")
+            .bind(map_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| DocumentMapRepositoryError::Internal(format!("delete map: {e}")))?;
+        Ok(())
+    }
+
+    async fn delete_event_stream(&self, map_id: Uuid) -> Result<(), DocumentMapRepositoryError> {
+        let mut tx = self.pool.begin().await.map_err(|e| {
+            DocumentMapRepositoryError::Internal(format!("delete_event_stream begin: {e}"))
+        })?;
+        sqlx::query("DELETE FROM events WHERE aggregate_type = 'document_map' AND stream_id = $1")
+            .bind(map_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| DocumentMapRepositoryError::Internal(format!("delete map events: {e}")))?;
+        sqlx::query(
+            "DELETE FROM aggregate_snapshots WHERE aggregate_type = 'document_map' AND stream_id = $1",
+        )
+        .bind(map_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| {
+            DocumentMapRepositoryError::Internal(format!("delete map snapshot: {e}"))
+        })?;
+        tx.commit().await.map_err(|e| {
+            DocumentMapRepositoryError::Internal(format!("commit delete_event_stream: {e}"))
+        })?;
         Ok(())
     }
 }

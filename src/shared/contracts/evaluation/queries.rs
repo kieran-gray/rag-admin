@@ -142,6 +142,7 @@ pub struct DatasetListPageDto {
 pub struct EvaluationDatasetDto {
     pub dataset_id: Uuid,
     pub document_id: Uuid,
+    pub document_title: Option<String>,
     pub document_version: u32,
     pub content_hash: String,
     pub label: String,

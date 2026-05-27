@@ -11,10 +11,10 @@ use crate::server::application::comprehension::ports::{
     ThreadSynthRequest, ThreadSynthesizer,
 };
 use crate::server::application::source_document::ports::BlobStore;
-use crate::server::application::AppError;
+use crate::server::application::{ActivityRegistry, AppError, Job, JobRegistry};
 use crate::server::domain::chunk_set::chunk::Chunk;
 use crate::server::domain::chunk_set::repository::ChunkSetRepository;
-use crate::server::domain::comprehension::map::aggregate::section_for_chunk;
+use crate::server::domain::comprehension::map::aggregate::{section_count_for, section_for_chunk};
 use crate::server::domain::comprehension::map::effects::{
     DocumentMapEffect, ExtractObservationsEffect, SuggestRolesEffect, SynthesizeInsightsEffect,
     SynthesizeThreadsEffect,
@@ -37,6 +37,8 @@ pub struct DocumentMapEffectExecutor {
     observation_extractor: Arc<dyn ObservationExtractor>,
     thread_synthesizer: Arc<dyn ThreadSynthesizer>,
     insight_synthesizer: Arc<dyn InsightSynthesizer>,
+    job_registry: Arc<JobRegistry>,
+    activity_registry: Arc<ActivityRegistry>,
 }
 
 impl DocumentMapEffectExecutor {
@@ -51,6 +53,8 @@ impl DocumentMapEffectExecutor {
         observation_extractor: Arc<dyn ObservationExtractor>,
         thread_synthesizer: Arc<dyn ThreadSynthesizer>,
         insight_synthesizer: Arc<dyn InsightSynthesizer>,
+        job_registry: Arc<JobRegistry>,
+        activity_registry: Arc<ActivityRegistry>,
     ) -> Arc<Self> {
         Arc::new(Self {
             command_handler,
@@ -62,7 +66,21 @@ impl DocumentMapEffectExecutor {
             observation_extractor,
             thread_synthesizer,
             insight_synthesizer,
+            job_registry,
+            activity_registry,
         })
+    }
+
+    async fn open_job(&self, map_id: Uuid) -> Arc<Job> {
+        let job_id = map_id.to_string();
+        let (job, created) = self.job_registry.get_or_create(job_id.clone()).await;
+        if created {
+            let stream_url = format!("/api/job/logs/{job_id}");
+            self.activity_registry
+                .attach_stream(map_id, stream_url)
+                .await;
+        }
+        job
     }
 
     async fn load_summary(&self, map_id: Uuid) -> Result<Option<DocumentMapReadModel>, AppError> {
@@ -77,6 +95,8 @@ impl DocumentMapEffectExecutor {
         if summary.status == "ready" || summary.status == "failed" {
             return Ok(());
         }
+        let job = self.open_job(map_id).await;
+        job.info("Typing reader roles…").await;
 
         let document = self
             .source_document_repository
@@ -99,9 +119,11 @@ impl DocumentMapEffectExecutor {
         {
             Ok(r) => r,
             Err(e) => {
+                job.error(&format!("Role suggestion failed: {e}")).await;
                 self.command_handler
                     .fail_map(map_id, format!("role suggestion failed: {e}"))
                     .await?;
+                job.finish().await;
                 return Ok(());
             }
         };
@@ -115,6 +137,12 @@ impl DocumentMapEffectExecutor {
             roles
         };
 
+        job.info(&format!(
+            "Suggested {} role{}",
+            roles.len(),
+            plural(roles.len())
+        ))
+        .await;
         self.command_handler
             .record_suggested_roles(map_id, roles)
             .await?;
@@ -132,18 +160,17 @@ impl DocumentMapEffectExecutor {
         if summary.status == "ready" || summary.status == "failed" {
             return Ok(());
         }
+        let job = self.open_job(map_id).await;
 
         let chunks = self
             .chunk_set_repository
             .load_chunks(summary.chunk_set_id)
             .await?;
         let Some(chunk) = chunks.iter().find(|c| c.sequence == effect.chunk_sequence) else {
+            let msg = format!("chunk {} not found in chunk set", effect.chunk_sequence);
+            job.warn(&msg).await;
             self.command_handler
-                .record_chunk_extraction_failure(
-                    map_id,
-                    effect.chunk_sequence,
-                    format!("chunk {} not found in chunk set", effect.chunk_sequence),
-                )
+                .record_chunk_extraction_failure(map_id, effect.chunk_sequence, msg)
                 .await?;
             return Ok(());
         };
@@ -162,6 +189,11 @@ impl DocumentMapEffectExecutor {
         {
             Ok(o) => o,
             Err(e) => {
+                job.warn(&format!(
+                    "Chunk {} extraction failed: {e}",
+                    effect.chunk_sequence
+                ))
+                .await;
                 self.command_handler
                     .record_chunk_extraction_failure(map_id, effect.chunk_sequence, e.to_string())
                     .await?;
@@ -170,6 +202,14 @@ impl DocumentMapEffectExecutor {
         };
 
         let validated = validate_observations(&summary, chunk, observations);
+        let completed = summary.observations_extracted.saturating_add(1);
+        job.info(&format!(
+            "Observations · chunk {chunk_seq} ({completed}/{total}) · {count} extracted",
+            chunk_seq = effect.chunk_sequence,
+            total = summary.chunk_count,
+            count = validated.len(),
+        ))
+        .await;
         self.command_handler
             .record_observations(map_id, effect.chunk_sequence, validated)
             .await?;
@@ -187,6 +227,7 @@ impl DocumentMapEffectExecutor {
         if summary.status == "ready" || summary.status == "failed" {
             return Ok(());
         }
+        let job = self.open_job(map_id).await;
 
         let section_size = summary.section_size.max(1);
         let from = effect.section_sequence.saturating_mul(section_size);
@@ -211,6 +252,11 @@ impl DocumentMapEffectExecutor {
         {
             Ok(r) => r,
             Err(e) => {
+                job.warn(&format!(
+                    "Section {} synthesis failed: {e}",
+                    effect.section_sequence
+                ))
+                .await;
                 self.command_handler
                     .record_section_synthesis_failure(
                         map_id,
@@ -221,6 +267,15 @@ impl DocumentMapEffectExecutor {
                 return Ok(());
             }
         };
+        let section_total = section_count_for(summary.chunk_count, section_size);
+        let completed = summary.threads_synthesized.saturating_add(1);
+        job.info(&format!(
+            "Threads · section {sec} ({completed}/{total}) · {count} synthesized",
+            sec = effect.section_sequence,
+            total = section_total,
+            count = result.threads.len(),
+        ))
+        .await;
         self.command_handler
             .record_threads(
                 map_id,
@@ -243,6 +298,8 @@ impl DocumentMapEffectExecutor {
         if summary.status == "ready" || summary.status == "failed" {
             return Ok(());
         }
+        let job = self.open_job(map_id).await;
+        job.info("Synthesizing insights…").await;
         let Some(detail) = self.repository.load_detail(map_id).await? else {
             return Ok(());
         };
@@ -259,16 +316,37 @@ impl DocumentMapEffectExecutor {
         {
             Ok(i) => i,
             Err(e) => {
+                job.error(&format!("Insight synthesis failed: {e}")).await;
                 self.command_handler
                     .fail_map(map_id, format!("insight synthesis failed: {e}"))
                     .await?;
+                job.finish().await;
                 return Ok(());
             }
         };
+        let count = insights.len();
         self.command_handler
             .record_insights(map_id, insights)
             .await?;
+        let obs_count = detail.observations.len();
+        let thread_count = detail.threads.len();
+        job.info(&format!(
+            "Map ready · {count} insight{count_plural} from {obs_count} observation{obs_plural} and {thread_count} thread{thread_plural}",
+            count_plural = plural(count),
+            obs_plural = plural(obs_count),
+            thread_plural = plural(thread_count),
+        ))
+        .await;
+        job.finish().await;
         Ok(())
+    }
+}
+
+fn plural(n: usize) -> &'static str {
+    if n == 1 {
+        ""
+    } else {
+        "s"
     }
 }
 

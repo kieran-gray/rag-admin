@@ -176,7 +176,7 @@ fn plan_observation_seed(
     let chosen = pick_from(&pool, rng_seed)
         .ok_or_else(|| AppError::Validation("observation pool empty after filtering".into()))?;
     let item = observation_to_seed(chosen);
-    let spans = item.spans.clone();
+    let spans = Span::normalize(item.spans.iter().copied());
     Ok(QuestionSeed {
         dimensions,
         items: vec![item],
@@ -206,18 +206,16 @@ fn plan_thread_seed(
     };
     let chosen = pick_from(&pool, rng_seed)
         .ok_or_else(|| AppError::Validation("thread pool empty after filtering".into()))?;
-    let item = thread_to_seed(chosen);
-    let mut spans = item.spans.clone();
-    let mut items = vec![item];
+    let parent = thread_to_seed(chosen);
+    let spans = Span::normalize(parent.spans.iter().copied());
+    let mut items = vec![parent];
     for evidence_ref in &chosen.evidence {
         if let MapItemRef::Observation { observation_id, .. } = evidence_ref {
             if let Some(o) = observations
                 .iter()
                 .find(|o| o.observation_id == *observation_id)
             {
-                let obs_item = observation_to_seed(o);
-                spans.extend(obs_item.spans.iter().copied());
-                items.push(obs_item);
+                items.push(observation_to_seed(o));
             }
         }
     }
@@ -251,9 +249,9 @@ fn plan_insight_seed(
     };
     let chosen = pick_from(&pool, rng_seed)
         .ok_or_else(|| AppError::Validation("insight pool empty after filtering".into()))?;
-    let item = insight_to_seed(chosen);
-    let mut spans = item.spans.clone();
-    let mut items = vec![item];
+    let parent = insight_to_seed(chosen);
+    let spans = Span::normalize(parent.spans.iter().copied());
+    let mut items = vec![parent];
     for evidence_ref in &chosen.evidence {
         match evidence_ref {
             MapItemRef::Observation { observation_id, .. } => {
@@ -261,16 +259,12 @@ fn plan_insight_seed(
                     .iter()
                     .find(|o| o.observation_id == *observation_id)
                 {
-                    let obs_item = observation_to_seed(o);
-                    spans.extend(obs_item.spans.iter().copied());
-                    items.push(obs_item);
+                    items.push(observation_to_seed(o));
                 }
             }
             MapItemRef::Thread { thread_id, .. } => {
                 if let Some(t) = threads.iter().find(|t| t.thread_id == *thread_id) {
-                    let thread_item = thread_to_seed(t);
-                    spans.extend(thread_item.spans.iter().copied());
-                    items.push(thread_item);
+                    items.push(thread_to_seed(t));
                 }
             }
             MapItemRef::Insight { .. } | MapItemRef::Connection { .. } => {}
@@ -367,4 +361,141 @@ pub fn rebind_seed_to_map(seed: &QuestionSeed, map_id: Uuid) -> Vec<MapItemRef> 
             },
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn doc() -> Uuid {
+        Uuid::from_u128(0xAAAA_BBBB_CCCC_DDDD_1111_2222_3333_4444)
+    }
+
+    fn obs(id: u128, spans: Vec<(u32, u32)>) -> Observation {
+        Observation {
+            observation_id: Uuid::from_u128(id),
+            chunk_sequence: 0,
+            kind: "fact".into(),
+            summary: format!("observation {id}"),
+            spans: spans
+                .into_iter()
+                .map(|(s, e)| Span::new(doc(), s, e))
+                .collect(),
+        }
+    }
+
+    fn thread(id: u128, evidence_obs: &[&Observation]) -> Thread {
+        let spans = Span::normalize(evidence_obs.iter().flat_map(|o| o.spans.iter().copied()));
+        Thread {
+            thread_id: Uuid::from_u128(id),
+            section_sequence: 0,
+            kind: "arc".into(),
+            summary: format!("thread {id}"),
+            evidence: evidence_obs
+                .iter()
+                .map(|o| MapItemRef::Observation {
+                    map_id: Uuid::nil(),
+                    observation_id: o.observation_id,
+                })
+                .collect(),
+            spans,
+        }
+    }
+
+    fn insight(id: u128, evidence_obs: &[&Observation], evidence_threads: &[&Thread]) -> Insight {
+        let spans = Span::normalize(
+            evidence_obs
+                .iter()
+                .flat_map(|o| o.spans.iter().copied())
+                .chain(
+                    evidence_threads
+                        .iter()
+                        .flat_map(|t| t.spans.iter().copied()),
+                ),
+        );
+        let mut evidence: Vec<MapItemRef> = evidence_obs
+            .iter()
+            .map(|o| MapItemRef::Observation {
+                map_id: Uuid::nil(),
+                observation_id: o.observation_id,
+            })
+            .collect();
+        evidence.extend(evidence_threads.iter().map(|t| MapItemRef::Thread {
+            map_id: Uuid::nil(),
+            thread_id: t.thread_id,
+        }));
+        Insight {
+            insight_id: Uuid::from_u128(id),
+            kind: "theme".into(),
+            summary: format!("insight {id}"),
+            evidence,
+            spans,
+        }
+    }
+
+    fn dims(op: CognitiveOperation, ev: EvidenceKind) -> QuestionDimensions {
+        QuestionDimensions {
+            operation: op,
+            evidence: ev,
+            role: "reader".into(),
+        }
+    }
+
+    #[test]
+    fn thread_seed_spans_do_not_double_count_observations() {
+        let o1 = obs(1, vec![(100, 150)]);
+        let o2 = obs(2, vec![(200, 260)]);
+        let t = thread(10, &[&o1, &o2]);
+        let seed = plan_thread_seed(
+            dims(CognitiveOperation::Comprehend, EvidenceKind::Thread),
+            &[t],
+            &[o1.clone(), o2.clone()],
+            &UsedSeedRegistry::empty(),
+            0,
+        )
+        .unwrap();
+        assert_eq!(
+            seed.spans,
+            vec![Span::new(doc(), 100, 150), Span::new(doc(), 200, 260)]
+        );
+        assert_eq!(seed.items.len(), 3);
+    }
+
+    #[test]
+    fn insight_seed_spans_collapse_cascade_into_parent_only() {
+        let o1 = obs(1, vec![(4094, 4138), (4139, 4198), (4213, 4265)]);
+        let o2 = obs(2, vec![(4297, 4391), (4392, 4471), (4472, 4524)]);
+        let o3 = obs(3, vec![(4574, 4618), (4619, 4673)]);
+        let t = thread(10, &[&o1, &o2, &o3]);
+        let i = insight(20, &[&o1, &o2, &o3], &[&t]);
+        let seed = plan_insight_seed(
+            dims(CognitiveOperation::Synthesise, EvidenceKind::Insight),
+            &[i],
+            &[t],
+            &[o1, o2, o3],
+            &UsedSeedRegistry::empty(),
+            0,
+        )
+        .unwrap();
+        assert_eq!(
+            seed.spans,
+            vec![Span::new(doc(), 4094, 4524), Span::new(doc(), 4574, 4673)]
+        );
+    }
+
+    #[test]
+    fn observation_seed_normalizes_intra_observation_spans() {
+        let o = obs(1, vec![(100, 110), (111, 120), (200, 210)]);
+        let seed = plan_observation_seed(
+            dims(CognitiveOperation::Recall, EvidenceKind::Observation),
+            &[o],
+            &UsedSeedRegistry::empty(),
+            0,
+        )
+        .unwrap();
+        assert_eq!(
+            seed.spans,
+            vec![Span::new(doc(), 100, 120), Span::new(doc(), 200, 210)]
+        );
+    }
 }

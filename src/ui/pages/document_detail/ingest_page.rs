@@ -1,42 +1,28 @@
 use leptos::prelude::*;
 use leptos_router::hooks::{use_params_map, use_query_map};
-use uuid::Uuid;
 
-mod launchers;
-mod redirect_by_id;
-mod state;
-mod steps;
-
-pub use redirect_by_id::EvaluateByIdRedirect;
-use state::EvaluateSelection;
-use steps::{DatasetStep, MapStep, RunStep};
-
-use crate::server_functions::comprehension::list_document_maps;
-use crate::server_functions::configuration::{
-    get_chunking_configurations, get_index_profiles, get_sweep_templates,
-};
+use super::steps::{ChunkStep, ConfigSelection, DocumentStep, EmbedStep, IndexStep};
+use crate::server_functions::configuration::{get_chunking_configurations, get_index_profiles};
 use crate::server_functions::source_document::get_document_detail_by_source_ref;
 use crate::shared::contracts::{
-    aggregate_type, ChunkingConfigurationDto, IndexProfileDto, SourceDocumentDetailDto,
-    SourceDocumentDto, SweepTemplateDto,
+    aggregate_type, ChunkingConfigurationDto, IndexProfileDto, IndexingDto,
+    SourceDocumentDetailDto, SourceDocumentDto,
 };
 use crate::ui::components::app::event_bus::use_invalidator;
-use crate::ui::components::primitives::{EmptyState, PageHeader, Surface};
-use crate::ui::pages::shared::document_type_label;
+use crate::ui::components::primitives::{EmptyState, PageHeader, Status, StatusPill, Surface};
+use crate::ui::pages::shared::{
+    document_type_label, indexing_milestone, indexing_summary, short_hash,
+};
 
 #[component]
-pub fn EvaluatePage() -> impl IntoView {
+pub fn DocumentIngestPage() -> impl IntoView {
     let params = use_params_map();
     let source_ref =
         Memo::new(move |_| params.with(|p| p.get("source_ref").unwrap_or_default().to_string()));
 
     let query = use_query_map();
-    let initial_step =
+    let initial_tab =
         Memo::new(move |_| query.with(|q| q.get("step").and_then(|t| step_from_query(&t))));
-    let initial_dataset =
-        Memo::new(move |_| query.with(|q| q.get("dataset").and_then(|v| Uuid::parse_str(&v).ok())));
-    let initial_run =
-        Memo::new(move |_| query.with(|q| q.get("run").and_then(|v| Uuid::parse_str(&v).ok())));
 
     let doc_invalidator = use_invalidator(|e| {
         e.from_any(&[aggregate_type::SOURCE_DOCUMENT, aggregate_type::INDEXING])
@@ -58,7 +44,6 @@ pub fn EvaluatePage() -> impl IntoView {
             aggregate_type::EMBEDDING_MODEL_CATALOG,
             aggregate_type::GENERATION_MODEL_CATALOG,
             aggregate_type::VECTOR_INDEX_CATALOG,
-            aggregate_type::SWEEP_TEMPLATE,
         ])
     });
     let index_profiles = Resource::new(
@@ -69,18 +54,15 @@ pub fn EvaluatePage() -> impl IntoView {
         move || index_profile_invalidator.get(),
         |_| async move { get_chunking_configurations().await.unwrap_or_default() },
     );
-    let sweep_templates = Resource::new(
-        move || index_profile_invalidator.get(),
-        |_| async move { get_sweep_templates().await.unwrap_or_default() },
-    );
 
     view! {
         <div>
-            <Transition fallback=|| view! { <p class="muted">"Loading document…"</p> }>
+            <Transition fallback=|| view! {
+                <p class="muted">"Loading document…"</p>
+            }>
                 {move || {
                     let index_profiles = index_profiles.get().unwrap_or_default();
                     let chunking_configurations = chunking_configurations.get().unwrap_or_default();
-                    let sweep_templates = sweep_templates.get().unwrap_or_default();
                     detail.get().map(|res| match res {
                         Err(e) => view! {
                             <Surface>
@@ -88,18 +70,18 @@ pub fn EvaluatePage() -> impl IntoView {
                             </Surface>
                         }.into_any(),
                         Ok(None) => view! {
-                            <UnregisteredDocument source_ref=source_ref.get() />
+                            <NotFound source_ref=source_ref.get() />
+                        }.into_any(),
+                        Ok(Some(existing)) if existing.document.deleted => view! {
+                            <NotFound source_ref=source_ref.get() />
                         }.into_any(),
                         Ok(Some(existing)) => view! {
-                            <EvaluateWorkspace
+                            <IngestWorkspace
                                 detail=existing
                                 index_profiles=index_profiles
                                 chunking_configurations=chunking_configurations
-                                sweep_templates=sweep_templates
                                 source_ref=source_ref.get()
-                                initial_step=initial_step.get()
-                                initial_dataset=initial_dataset.get()
-                                initial_run=initial_run.get()
+                                initial_tab=initial_tab.get()
                             />
                         }.into_any(),
                     })
@@ -110,34 +92,38 @@ pub fn EvaluatePage() -> impl IntoView {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum WorkflowStep {
-    Map,
-    Dataset,
-    Run,
+pub enum WorkflowStep {
+    Document,
+    Chunk,
+    Embed,
+    Index,
 }
 
 impl WorkflowStep {
     fn ordinal(self) -> u8 {
         match self {
-            Self::Map => 1,
-            Self::Dataset => 2,
-            Self::Run => 3,
+            Self::Document => 1,
+            Self::Chunk => 2,
+            Self::Embed => 3,
+            Self::Index => 4,
         }
     }
 
     fn label(self) -> &'static str {
         match self {
-            Self::Map => "Map",
-            Self::Dataset => "Dataset",
-            Self::Run => "Run",
+            Self::Document => "Document",
+            Self::Chunk => "Chunk",
+            Self::Embed => "Embed",
+            Self::Index => "Index",
         }
     }
 
     fn hint(self) -> &'static str {
         match self {
-            Self::Map => "Extract observations",
-            Self::Dataset => "Pick or generate questions",
-            Self::Run => "Configure and launch",
+            Self::Document => "Review markdown",
+            Self::Chunk => "Split into chunks",
+            Self::Embed => "Vectorize chunks",
+            Self::Index => "Upsert to vector store",
         }
     }
 }
@@ -151,75 +137,59 @@ enum StepState {
 }
 
 #[component]
-fn EvaluateWorkspace(
+fn IngestWorkspace(
     detail: SourceDocumentDetailDto,
     index_profiles: Vec<IndexProfileDto>,
     chunking_configurations: Vec<ChunkingConfigurationDto>,
-    sweep_templates: Vec<SweepTemplateDto>,
     source_ref: String,
-    initial_step: Option<WorkflowStep>,
-    initial_dataset: Option<Uuid>,
-    initial_run: Option<Uuid>,
+    initial_tab: Option<WorkflowStep>,
 ) -> impl IntoView {
-    let document_id = detail.document.document_id;
-    let document_version = detail.document.latest_version;
-    let document_type = detail.document.document_type.clone();
-    let (header_eyebrow, header_title, header_subtitle) = derive_header(&detail.document);
+    let (header_eyebrow, header_title, header_subtitle, header_status) =
+        derive_header(&detail.document, &detail.indexings);
+    let (status_kind, status_label) = header_status;
 
-    let selection = EvaluateSelection::new(&index_profiles, initial_dataset, initial_run);
-
-    let map_invalidator = use_invalidator(|e| e.from_any(&["document_map"]));
-    let maps = Resource::new(
-        move || (document_id, map_invalidator.get()),
-        move |(id, _)| async move { list_document_maps(id).await.unwrap_or_default() },
-    );
-
-    let map_ready = Memo::new(move |_| {
-        maps.get()
-            .map(|list| {
-                list.into_iter()
-                    .any(|m| m.document_version == document_version && m.status == "ready")
-            })
-            .unwrap_or(false)
-    });
-
-    let initial_step_value = initial_step.unwrap_or_else(|| {
-        if initial_run.is_some() {
-            WorkflowStep::Run
-        } else if initial_dataset.is_some() {
-            WorkflowStep::Dataset
-        } else {
-            WorkflowStep::Map
-        }
-    });
+    let selection =
+        ConfigSelection::new(&index_profiles, &chunking_configurations, &detail.indexings);
+    let initial_step_value = initial_tab.unwrap_or_else(|| initial_step(&detail.indexings));
     let (active_step, set_active_step) = signal(initial_step_value);
 
-    let index_profiles_stored = StoredValue::new(index_profiles);
-    let chunking_stored = StoredValue::new(chunking_configurations);
-    let sweep_templates_stored = StoredValue::new(sweep_templates);
-    let source_ref_stored = StoredValue::new(source_ref);
-    let document_type_stored = StoredValue::new(document_type);
+    let index_profiles_stored = StoredValue::new(index_profiles.clone());
+    let chunking_stored = StoredValue::new(chunking_configurations.clone());
+    let indexings_stored = StoredValue::new(detail.indexings.clone());
+    let indexings_signal: Signal<Vec<IndexingDto>> =
+        Signal::derive(move || indexings_stored.get_value());
+
+    let active_indexing: Signal<Option<IndexingDto>> = Signal::derive(move || {
+        let pid = selection.index_profile_id.get()?;
+        indexings_signal
+            .get()
+            .into_iter()
+            .find(|ix| ix.index_profile_id == pid && !ix.removed)
+    });
 
     let step_state = move |step: WorkflowStep| -> StepState {
         let active = active_step.get();
-        let has_map = map_ready.get();
-        let has_dataset = selection.dataset_id.get().is_some();
+        let ix = active_indexing.get();
+        let has_chunk = ix.as_ref().is_some_and(|i| i.chunk_set_id.is_some());
+        let has_embed = ix.as_ref().is_some_and(|i| i.embedding_set_id.is_some());
+        let is_indexed = ix.as_ref().is_some_and(|i| i.status.contains("Indexed"));
 
         if step == active {
             return StepState::Current;
         }
         let locked = match step {
-            WorkflowStep::Map => false,
-            WorkflowStep::Dataset => !has_map,
-            WorkflowStep::Run => !has_map || !has_dataset,
+            WorkflowStep::Document | WorkflowStep::Chunk => false,
+            WorkflowStep::Embed => !has_chunk,
+            WorkflowStep::Index => !has_embed,
         };
         if locked {
             return StepState::Locked;
         }
         let done = match step {
-            WorkflowStep::Map => has_map,
-            WorkflowStep::Dataset => has_dataset,
-            WorkflowStep::Run => false,
+            WorkflowStep::Document => true,
+            WorkflowStep::Chunk => has_chunk,
+            WorkflowStep::Embed => has_embed,
+            WorkflowStep::Index => is_indexed,
         };
         if done {
             StepState::Done
@@ -228,16 +198,25 @@ fn EvaluateWorkspace(
         }
     };
 
-    let on_advance_to_dataset = Callback::new(move |_| set_active_step.set(WorkflowStep::Dataset));
-    let on_advance_to_run = Callback::new(move |_| set_active_step.set(WorkflowStep::Run));
-    let on_back_to_dataset = Callback::new(move |_| set_active_step.set(WorkflowStep::Dataset));
+    let source_ref_for_step = StoredValue::new(source_ref);
+
+    let on_advance_to_chunk = Callback::new(move |_| set_active_step.set(WorkflowStep::Chunk));
+    let on_advance_to_embed = Callback::new(move |_| set_active_step.set(WorkflowStep::Embed));
+    let on_advance_to_index = Callback::new(move |_| set_active_step.set(WorkflowStep::Index));
+    let on_back_to_chunk = Callback::new(move |_| set_active_step.set(WorkflowStep::Chunk));
+    let on_back_to_embed = Callback::new(move |_| set_active_step.set(WorkflowStep::Embed));
+
+    let header_subtitle = header_subtitle.unwrap_or_default();
 
     view! {
         <div>
             <PageHeader
                 title=header_title
                 eyebrow=header_eyebrow
-                subtitle=header_subtitle.unwrap_or_default()
+                subtitle=header_subtitle
+                actions=Box::new(move || view! {
+                    <StatusPill label=status_label.clone() kind=status_kind />
+                }.into_any())
             />
 
             <div class="space-y-6">
@@ -248,37 +227,42 @@ fn EvaluateWorkspace(
 
                 {move || {
                     let step = active_step.get();
-                    let source_ref = source_ref_stored.get_value();
-                    let document_type = document_type_stored.get_value();
-                    let index_profiles = index_profiles_stored.get_value();
-                    let chunking = chunking_stored.get_value();
-                    let sweep = sweep_templates_stored.get_value();
+                    let source_ref = source_ref_for_step.get_value();
                     match step {
-                        WorkflowStep::Map => view! {
-                            <MapStep
-                                document_id=document_id
-                                document_version=document_version
-                                document_type=document_type
-                                source_ref_key=source_ref
-                                on_advance=on_advance_to_dataset
+                        WorkflowStep::Document => view! {
+                            <DocumentStep
+                                selection=selection
+                                index_profiles=index_profiles_stored
+                                chunking_configurations=chunking_stored
+                                indexings=indexings_signal
+                                source_ref=source_ref
+                                on_advance=on_advance_to_chunk
                             />
                         }.into_any(),
-                        WorkflowStep::Dataset => view! {
-                            <DatasetStep
-                                document_id=document_id
+                        WorkflowStep::Chunk => view! {
+                            <ChunkStep
                                 selection=selection
-                                on_advance=on_advance_to_run
+                                chunking_configurations=chunking_stored
+                                indexings=indexings_signal
+                                source_ref=source_ref
+                                on_advance=on_advance_to_embed
                             />
                         }.into_any(),
-                        WorkflowStep::Run => view! {
-                            <RunStep
-                                document_id=document_id
-                                source_ref=&source_ref
+                        WorkflowStep::Embed => view! {
+                            <EmbedStep
                                 selection=selection
-                                index_profiles=index_profiles
-                                chunking_configurations=chunking
-                                sweep_templates=sweep
-                                on_back=on_back_to_dataset
+                                index_profiles=index_profiles_stored
+                                indexings=indexings_signal
+                                on_back=on_back_to_chunk
+                                on_advance=on_advance_to_index
+                            />
+                        }.into_any(),
+                        WorkflowStep::Index => view! {
+                            <IndexStep
+                                selection=selection
+                                index_profiles=index_profiles_stored
+                                indexings=indexings_signal
+                                on_back=on_back_to_embed
                             />
                         }.into_any(),
                     }
@@ -293,7 +277,12 @@ fn Stepper(
     set_active: WriteSignal<WorkflowStep>,
     step_state: impl Fn(WorkflowStep) -> StepState + Copy + Send + Sync + 'static,
 ) -> impl IntoView {
-    let steps = [WorkflowStep::Map, WorkflowStep::Dataset, WorkflowStep::Run];
+    let steps = [
+        WorkflowStep::Document,
+        WorkflowStep::Chunk,
+        WorkflowStep::Embed,
+        WorkflowStep::Index,
+    ];
 
     view! {
         <div class="surface flex p-0 overflow-hidden">
@@ -302,9 +291,9 @@ fn Stepper(
                 let is_last = idx == steps.len() - 1;
                 let state = move || step_state(step);
                 let tooltip = move || match step {
-                    WorkflowStep::Map => "",
-                    WorkflowStep::Dataset => "Build a map first",
-                    WorkflowStep::Run => "Build a map and pick a dataset first",
+                    WorkflowStep::Embed => "Chunk the document first",
+                    WorkflowStep::Index => "Embed the chunks first",
+                    _ => "",
                 };
                 view! {
                     <button
@@ -363,39 +352,63 @@ fn Stepper(
     }
 }
 
-fn step_from_query(s: &str) -> Option<WorkflowStep> {
-    match s {
-        "map" | "maps" => Some(WorkflowStep::Map),
-        "dataset" | "datasets" => Some(WorkflowStep::Dataset),
-        "run" | "runs" | "optimize" | "results" | "result" | "monitor" => Some(WorkflowStep::Run),
+fn step_from_query(tab: &str) -> Option<WorkflowStep> {
+    match tab {
+        "source" | "document" => Some(WorkflowStep::Document),
+        "chunk" | "chunks" | "chunking" => Some(WorkflowStep::Chunk),
+        "embed" | "embedding" => Some(WorkflowStep::Embed),
+        "index" | "indexing" => Some(WorkflowStep::Index),
         _ => None,
     }
 }
 
-fn derive_header(doc: &SourceDocumentDto) -> (String, String, Option<String>) {
+fn initial_step(indexings: &[IndexingDto]) -> WorkflowStep {
+    let live: Vec<&IndexingDto> = indexings.iter().filter(|ix| !ix.removed).collect();
+    if live.is_empty() {
+        return WorkflowStep::Document;
+    }
+    let most_advanced = live.iter().copied().max_by_key(|ix| indexing_milestone(ix));
+    match most_advanced {
+        None => WorkflowStep::Document,
+        Some(ix) if ix.status.contains("Indexed") => WorkflowStep::Index,
+        Some(ix) if ix.embedding_set_id.is_some() => WorkflowStep::Index,
+        Some(ix) if ix.chunk_set_id.is_some() => WorkflowStep::Embed,
+        _ => WorkflowStep::Chunk,
+    }
+}
+
+fn derive_header(
+    doc: &SourceDocumentDto,
+    indexings: &[IndexingDto],
+) -> (String, String, Option<String>, (Status, String)) {
     let type_label = document_type_label(&doc.document_type);
-    let eyebrow = format!("Evaluate / {} / {}", type_label, doc.source_ref_key);
+    let eyebrow = format!(
+        "Documents / {} / {} / Ingest",
+        type_label, doc.source_ref_key,
+    );
     let title = doc.title.clone();
     let subtitle = Some(format!(
-        "{type_label} · v{} · evaluate this document",
+        "{type_label} · v{} · {}",
         doc.latest_version,
+        short_hash(&doc.latest_content_hash),
     ));
-    (eyebrow, title, subtitle)
+    let summary = indexing_summary(indexings, Some(doc.latest_version));
+    (eyebrow, title, subtitle, (summary.status, summary.label))
 }
 
 #[component]
-fn UnregisteredDocument(source_ref: String) -> impl IntoView {
+fn NotFound(source_ref: String) -> impl IntoView {
     view! {
         <div>
             <PageHeader
                 title=source_ref.clone()
-                eyebrow=format!("Evaluate / {source_ref}")
+                eyebrow=format!("Documents / {source_ref} / Ingest")
                 subtitle="No document is registered at this source ref.".to_string()
             />
             <Surface>
                 <EmptyState
-                    title="Not imported"
-                    body="Import this document from the Documents page first; evaluations need a registered source.".to_string()
+                    title="Not found"
+                    body="Open the Documents page to import this from a connector, URL, or upload.".to_string()
                 />
             </Surface>
         </div>

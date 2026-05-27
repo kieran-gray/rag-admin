@@ -433,6 +433,7 @@ a:hover {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.8125rem;
+    table-layout: fixed;
 }
 
 .data-table thead th {
@@ -2959,4 +2960,351 @@ header::before {
     background-color: var(--color-surface-1);
     font-size: 0.7rem;
     color: var(--color-text-muted);
+}
+/* ── Run page · single-page consolidated view ──────────────────────────── */
+
+.run-single-page {
+    position: relative;
+}
+
+.run-score-strip {
+    display: grid;
+    grid-template-columns: minmax(280px, 1fr) minmax(280px, 1.4fr);
+    gap: 1px;
+    background-color: var(--color-border);
+}
+
+@media (max-width: 720px) {
+    .run-score-strip {
+        grid-template-columns: 1fr;
+    }
+}
+
+.run-score-card,
+.run-notes-card {
+    background-color: var(--color-surface-1);
+    padding: 1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.run-score-value {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 2rem;
+    line-height: 1;
+    color: var(--color-accent);
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.run-score-card-empty .run-score-value {
+    color: var(--color-text-muted);
+    font-size: 1.5rem;
+}
+
+.run-score-ci {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+}
+
+.run-score-chips {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.run-score-config {
+    font-size: 0.8125rem;
+    color: var(--color-text);
+}
+
+.run-score-ties {
+    align-self: flex-start;
+    background: transparent;
+    border: 1px solid var(--color-border-strong);
+    color: var(--color-accent);
+    padding: 0.25rem 0.625rem;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: background-color 80ms ease, border-color 80ms ease;
+}
+
+.run-score-ties:hover {
+    background-color: var(--color-accent-soft);
+    border-color: var(--color-accent);
+}
+
+.run-notes-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.run-notes-row {
+    display: grid;
+    grid-template-columns: 1.25rem 1fr;
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+}
+
+.run-notes-bullet {
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+.run-notes-warn .run-notes-bullet {
+    color: var(--status-warn, var(--color-accent));
+}
+
+.run-notes-headline {
+    font-weight: 600;
+    margin-right: 0.25rem;
+}
+
+/* ── Run page · collapsible sections ────────────────────────────────── */
+
+.run-collapsible {
+    border: 1px solid var(--color-border);
+    border-radius: 0.375rem;
+    background-color: var(--color-surface-1);
+}
+
+.run-collapsible-summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    user-select: none;
+}
+
+.run-collapsible-summary::-webkit-details-marker {
+    display: none;
+}
+
+.run-collapsible-chevron {
+    color: var(--color-text-muted);
+    transition: transform 120ms ease;
+    font-size: 0.75rem;
+    width: 0.875rem;
+}
+
+.run-collapsible[open] > .run-collapsible-summary .run-collapsible-chevron {
+    transform: rotate(90deg);
+}
+
+.run-collapsible-label {
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.run-collapsible-body {
+    padding: 0 1rem 1rem 1rem;
+}
+
+/* ── Run page · variants toolbar ────────────────────────────────────── */
+
+.variants-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    flex-wrap: wrap;
+}
+
+.dropdown-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.dropdown-label-text {
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.dropdown-select {
+    background-color: var(--color-surface-2);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: 0.25rem;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+
+.dropdown-select:focus-visible {
+    outline: 1px solid var(--color-accent);
+    outline-offset: 1px;
+}
+
+.variants-summary {
+    padding: 0 0.25rem;
+}
+
+.variants-bars-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.variants-family-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.variants-family-head {
+    font-size: 0.8125rem;
+    color: var(--color-text);
+    padding: 0.25rem 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+}
+
+/* ── Run page · variant card ────────────────────────────────────────── */
+
+.variant-card {
+    background-color: var(--color-surface-2);
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    padding: 0.875rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+    cursor: pointer;
+    transition: border-color 80ms ease, background-color 80ms ease;
+}
+
+.variant-card:hover {
+    border-color: var(--color-border-strong);
+    background-color: var(--color-surface-3, var(--color-surface-2));
+}
+
+.variant-card.is-leader {
+    border-left: 3px solid var(--color-accent);
+}
+
+.variant-card.is-tied {
+    border-left: 3px solid var(--color-accent-soft);
+}
+
+.variant-card.is-pareto {
+    border-left: 3px solid var(--status-info, var(--color-accent-soft));
+}
+
+.variant-card.is-open {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.variant-card-head {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    justify-content: space-between;
+}
+
+.variant-card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.variant-card-score {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.variant-card-score-value {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.variant-card-meta {
+    font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+.variant-card-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.variant-card-foot {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.variant-badge {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+}
+
+.variant-badge-leader {
+    color: var(--color-accent);
+}
+
+.variant-badge-tied {
+    color: var(--color-accent-soft, var(--color-accent));
+}
+
+.variant-badge-pareto {
+    color: var(--status-info, var(--color-accent-soft));
+}
+
+/* ── Run page · drilldown drawer ────────────────────────────────────── */
+
+.drilldown-drawer-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.4);
+    z-index: 60;
+    display: flex;
+    justify-content: flex-end;
+    backdrop-filter: blur(2px);
+}
+
+.drilldown-drawer {
+    width: min(560px, 95vw);
+    height: 100vh;
+    background-color: var(--color-surface-1);
+    border-left: 1px solid var(--color-border-strong);
+    box-shadow: -16px 0 32px -16px rgba(0, 0, 0, 0.55);
+    display: flex;
+    flex-direction: column;
+    animation: drawerSlide 140ms ease-out;
+}
+
+@keyframes drawerSlide {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+}
+
+.drilldown-drawer-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+    background-color: var(--color-surface-1);
+}
+
+.drilldown-drawer-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 0.75rem 1rem 1.5rem 1rem;
 }

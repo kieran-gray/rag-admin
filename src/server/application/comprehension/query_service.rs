@@ -1,3 +1,5 @@
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use uuid::Uuid;
@@ -11,18 +13,27 @@ use crate::server::domain::comprehension::observation::Observation;
 use crate::server::domain::comprehension::role::SuggestedRole;
 use crate::server::domain::comprehension::span::Span;
 use crate::server::domain::comprehension::thread::Thread;
+use crate::server::domain::source_document::read_model::SourceDocumentReadModel;
+use crate::server::domain::source_document::repository::SourceDocumentRepository;
 use crate::shared::contracts::{
-    DocumentMapDetailDto, DocumentMapSummaryDto, InsightDto, MapItemRefDto, ObservationDto,
-    SpanDto, SuggestedRoleDto, ThreadDto,
+    DocumentMapDetailDto, DocumentMapListItemDto, DocumentMapSummaryDto, InsightDto, MapItemRefDto,
+    ObservationDto, SpanDto, SuggestedRoleDto, ThreadDto,
 };
 
 pub struct ComprehensionQueryService {
     repository: Arc<dyn DocumentMapRepository>,
+    source_documents: Arc<dyn SourceDocumentRepository>,
 }
 
 impl ComprehensionQueryService {
-    pub fn new(repository: Arc<dyn DocumentMapRepository>) -> Arc<Self> {
-        Arc::new(Self { repository })
+    pub fn new(
+        repository: Arc<dyn DocumentMapRepository>,
+        source_documents: Arc<dyn SourceDocumentRepository>,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            repository,
+            source_documents,
+        })
     }
 
     pub async fn get_for_document(
@@ -59,6 +70,56 @@ impl ComprehensionQueryService {
     ) -> Result<Vec<DocumentMapSummaryDto>, AppError> {
         let rows = self.repository.list_for_document(document_id).await?;
         Ok(rows.iter().map(summary_to_dto).collect())
+    }
+
+    pub async fn list_all(&self) -> Result<Vec<DocumentMapListItemDto>, AppError> {
+        let rows = self.repository.list_all().await?;
+        let mut documents: HashMap<Uuid, SourceDocumentReadModel> = HashMap::new();
+        for row in &rows {
+            if let Entry::Vacant(entry) = documents.entry(row.document_id) {
+                if let Some(doc) = self.source_documents.load(row.document_id).await? {
+                    entry.insert(doc);
+                }
+            }
+        }
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                let doc = documents.get(&row.document_id);
+                map_list_item_dto(row, doc)
+            })
+            .collect())
+    }
+}
+
+fn map_list_item_dto(
+    row: DocumentMapReadModel,
+    doc: Option<&SourceDocumentReadModel>,
+) -> DocumentMapListItemDto {
+    let (document_title, document_type, source_ref_key) = doc
+        .map(|d| {
+            (
+                d.latest_metadata.title().to_string(),
+                format!("{:?}", d.document_type),
+                d.source_ref.natural_key(),
+            )
+        })
+        .unwrap_or_default();
+    DocumentMapListItemDto {
+        map_id: row.map_id,
+        document_id: row.document_id,
+        document_version: row.document_version,
+        document_title,
+        document_type,
+        source_ref_key,
+        status: row.status,
+        failure_reason: row.failure_reason,
+        chunk_count: row.chunk_count,
+        section_size: row.section_size,
+        observations_extracted: row.observations_extracted,
+        threads_synthesized: row.threads_synthesized,
+        insights_synthesized: row.insights_synthesized,
+        generation_model_id: row.generation_model_id,
     }
 }
 

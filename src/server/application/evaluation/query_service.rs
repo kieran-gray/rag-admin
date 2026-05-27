@@ -13,7 +13,7 @@ use crate::server::domain::evaluation::{
         read_model::EvaluationDatasetReadModel,
         repository::{
             DatasetListCursor, DatasetListPage, DatasetListQuery, DatasetStatusFilter,
-            EvaluationDatasetRepository,
+            DatasetWithDocumentTitle, EvaluationDatasetRepository,
         },
     },
     run::{
@@ -53,6 +53,16 @@ impl EvaluationQueryService {
     ) -> Result<Option<EvaluationDatasetReadModel>, AppError> {
         self.dataset_repository
             .load(dataset_id)
+            .await
+            .map_err(|e| AppError::Internal(format!("failed to load evaluation dataset: {e}")))
+    }
+
+    pub async fn get_dataset_with_document_title(
+        &self,
+        dataset_id: Uuid,
+    ) -> Result<Option<DatasetWithDocumentTitle>, AppError> {
+        self.dataset_repository
+            .load_with_document_title(dataset_id)
             .await
             .map_err(|e| AppError::Internal(format!("failed to load evaluation dataset: {e}")))
     }

@@ -12,10 +12,11 @@ pub use chunking::{
 };
 pub use embedding::{EmbedResult, EmbedderBackend, EmbeddingModel};
 pub use evaluation::{
-    evaluation_score, ordered_f32_vec, plain_f32_vec, ChunkingVariant, EvaluationMetrics,
-    EvaluationQuestionResult, EvaluationReferenceResult, EvaluationResultSplit,
-    EvaluationRunOptions, EvaluationRunResult, EvaluationRunSummary, EvaluationScorePolicy,
-    EvaluationScoreWeights, EvaluationVariantResult, OptimizationBudget, OptimizationConfig,
-    OptimizationScope, OrderedF32, ReliabilityFlag,
+    evaluation_score, evaluation_score_with_judge, ordered_f32_vec, plain_f32_vec,
+    ChunkingVariant, EvaluationMetrics, EvaluationQuestionResult, EvaluationReferenceResult,
+    EvaluationResultSplit, EvaluationRunOptions, EvaluationRunResult, EvaluationRunSummary,
+    EvaluationScorePolicy, EvaluationScoreWeights, EvaluationVariantResult, OptimizationBudget,
+    OptimizationConfig, OptimizationScope, OrderedF32, ReliabilityFlag, JUDGE_SCORE_WEIGHT,
+    RECALL_FLOOR,
 };
 pub use pareto::{pareto_frontier, ParetoPoint};

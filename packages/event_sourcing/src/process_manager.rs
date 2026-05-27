@@ -39,6 +39,7 @@ where
     repository: Arc<AggregateRepository<A>>,
     queue: Arc<dyn JobQueue<R>>,
     executor: Arc<dyn EffectExecutor<R>>,
+    queue_name: String,
     worker_id: String,
     _phantom: PhantomData<R>,
 }
@@ -54,13 +55,27 @@ where
         queue: Arc<dyn JobQueue<R>>,
         executor: Arc<dyn EffectExecutor<R>>,
     ) -> Self {
+        Self::with_queue_name(repository, queue, executor, A::aggregate_type().to_string())
+    }
+
+    pub fn with_queue_name(
+        repository: Arc<AggregateRepository<A>>,
+        queue: Arc<dyn JobQueue<R>>,
+        executor: Arc<dyn EffectExecutor<R>>,
+        queue_name: String,
+    ) -> Self {
         Self {
             repository,
             queue,
             executor,
-            worker_id: format!("{}-{}", A::aggregate_type(), Uuid::new_v4()),
+            worker_id: format!("{queue_name}-{}", Uuid::new_v4()),
+            queue_name,
             _phantom: PhantomData,
         }
+    }
+
+    fn queue_name(&self) -> &str {
+        &self.queue_name
     }
 
     pub async fn enqueue_effects_for(
@@ -99,7 +114,7 @@ where
                     jobs = ?job_types,
                     "enqueued jobs"
                 );
-                self.queue.enqueue(A::aggregate_type(), &pending).await?;
+                self.queue.enqueue(self.queue_name(), &pending).await?;
             }
         }
 
@@ -109,7 +124,7 @@ where
     pub async fn claim_and_dispatch_one(&self) -> Result<bool, EsError> {
         let Some(job) = self
             .queue
-            .claim(A::aggregate_type(), &self.worker_id, LEASE)
+            .claim(self.queue_name(), &self.worker_id, LEASE)
             .await?
         else {
             return Ok(false);

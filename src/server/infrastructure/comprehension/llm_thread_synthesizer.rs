@@ -123,7 +123,7 @@ impl ThreadSynthesizer for LlmThreadSynthesizer {
                 kind,
                 summary,
                 evidence,
-                spans,
+                spans: Span::normalize(spans),
             });
         }
 

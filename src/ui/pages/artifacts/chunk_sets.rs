@@ -484,7 +484,7 @@ fn ChunkSetRow(
         .collect::<String>();
 
     let delete_title = if in_use {
-        "In use — pinned or referenced; cannot delete"
+        "In use, pinned or referenced; cannot delete"
     } else {
         "Delete"
     };

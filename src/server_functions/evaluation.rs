@@ -91,19 +91,21 @@ pub async fn get_dataset(dataset_id: Uuid) -> Result<Option<EvaluationDatasetDto
     let query = &services.evaluation_query_service;
 
     let dataset = query
-        .get_dataset(dataset_id)
+        .get_dataset_with_document_title(dataset_id)
         .await
         .map_err(|e| map_app_error(&e))?;
 
-    if let Some(d) = dataset {
+    if let Some(loaded) = dataset {
         let questions = query
             .load_questions(dataset_id)
             .await
             .map_err(|e| map_app_error(&e))?;
 
+        let d = loaded.dataset;
         Ok(Some(EvaluationDatasetDto {
             dataset_id: d.dataset_id,
             document_id: d.document_id,
+            document_title: loaded.document_title,
             document_version: d.document_version,
             content_hash: d.content_hash,
             label: d.label,

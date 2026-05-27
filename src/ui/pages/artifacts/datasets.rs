@@ -246,7 +246,7 @@ fn DatasetsTableHead() -> impl IntoView {
 #[component]
 fn DatasetRow(item: DatasetListItemDto) -> impl IntoView {
     let dataset_id = item.dataset_id;
-    let href = format!("/evaluations/datasets/{dataset_id}");
+    let href = format!("/artifacts/datasets/{dataset_id}");
     let nav_href = href.clone();
     let on_row_click = move |ev: leptos::ev::MouseEvent| {
         if ev.default_prevented() || ev.ctrl_key() || ev.meta_key() || ev.shift_key() {

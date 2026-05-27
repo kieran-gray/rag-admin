@@ -76,9 +76,18 @@ web-sys = { version = "0.3", features = [
     "FileList",
     "FormData",
     "HtmlInputElement",
+    "HtmlAnchorElement",
+    "HtmlElement",
+    "Document",
+    "Blob",
+    "BlobPropertyBag",
+    "Url",
+    "Element",
     "DragEvent",
     "DataTransfer",
+    "KeyboardEvent",
 ] }
+js-sys = "0.3"
 gloo-timers = { version = "0.3", features = ["futures"] }
 gloo-net = { version = "0.6", features = ["http"] }
 serde = { version = "1", features = ["derive"] }

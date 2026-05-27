@@ -40,17 +40,6 @@ pub(crate) fn category_breakdown(leader: &EvaluationVariantResult) -> Vec<Catego
         .collect()
 }
 
-fn pretty_category(slug: &str) -> &'static str {
-    match slug {
-        "fact_retrieval" => "Fact retrieval",
-        "architecture" => "Architecture",
-        "reasoning" => "Reasoning",
-        "code" => "Code",
-        "trick" => "Trick",
-        _ => "Other",
-    }
-}
-
 #[component]
 pub(crate) fn CategoryBreakdownPanel(rows: Vec<CategoryRow>) -> impl IntoView {
     view! {
@@ -70,27 +59,18 @@ pub(crate) fn CategoryBreakdownPanel(rows: Vec<CategoryRow>) -> impl IntoView {
                 </thead>
                 <tbody>
                     {rows.into_iter().map(|r| {
-                        let is_trick = r.category == "trick";
-                        let trick_cell = move |value: f32| -> leptos::prelude::AnyView {
+                        let cell = move |value: f32| -> leptos::prelude::AnyView {
                             view! {
                                 <td class="num">{format!("{:.1}%", value * 100.0)}</td>
                             }.into_any()
                         };
                         view! {
                             <tr>
-                                <td>
-                                    {pretty_category(&r.category)}
-                                    {is_trick.then(|| view! {
-                                        <span
-                                            class="pill pill-neutral text-[10px] ml-2"
-                                            title="Trick questions test that the retriever does not invent a reference span. 0% recall on these is the intended outcome."
-                                        >"target 0%"</span>
-                                    })}
-                                </td>
+                                <td>{r.category}</td>
                                 <td class="num">{r.n}</td>
-                                {trick_cell(r.recall)}
-                                {trick_cell(r.precision)}
-                                {trick_cell(r.iou)}
+                                {cell(r.recall)}
+                                {cell(r.precision)}
+                                {cell(r.iou)}
                             </tr>
                         }
                     }).collect_view()}

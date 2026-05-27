@@ -24,8 +24,9 @@ pub use chunk_set::{
     DeleteUnusedChunkSetsResponseDto, SetChunkSetPinnedRequestDto,
 };
 pub use comprehension::{
-    DocumentMapDetailDto, DocumentMapSummaryDto, InsightDto, MapItemRefDto, ObservationDto,
-    RequestMapBuildRequestDto, RequestMapBuildResponseDto, SpanDto, SuggestedRoleDto, ThreadDto,
+    DocumentMapDetailDto, DocumentMapListItemDto, DocumentMapSummaryDto, InsightDto, MapItemRefDto,
+    ObservationDto, RequestMapBuildRequestDto, RequestMapBuildResponseDto, SpanDto,
+    SuggestedRoleDto, ThreadDto,
 };
 pub use configuration::{
     AddEmbeddingModelDto, AddGenerationModelDto, AddRerankerModelDto, AddVectorIndexDto,

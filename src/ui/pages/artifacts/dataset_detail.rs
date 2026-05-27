@@ -73,10 +73,10 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
     let dataset_id = dataset.dataset_id;
     let dataset_short = dataset_id.to_string().chars().take(8).collect::<String>();
     let document_id = dataset.document_id;
+    let document_title = dataset.document_title.clone();
     let document_version = dataset.document_version;
     let content_hash_short = short_hash(&dataset.content_hash).to_string();
     let generation_model = dataset.generation_model.clone();
-    let generation_model_id = dataset.generation_model_id.to_string();
     let embedding_model_id = dataset.embedding_model_id.to_string();
     let target = dataset.target_question_count;
     let actual = dataset.question_count;
@@ -85,6 +85,11 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
     let failure_reason = dataset.failure_reason.clone();
     let questions = dataset.questions;
     let label = dataset.label;
+
+    let eyebrow = match document_title.as_deref() {
+        Some(title) if !title.is_empty() => format!("Evaluations / Dataset · {title}"),
+        _ => "Evaluations / Dataset".to_string(),
+    };
 
     let (editing, set_editing) = signal(false);
     let (label_input, set_label_input) = signal(label.clone());
@@ -166,7 +171,7 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
             match delete_dataset(dataset_id).await {
                 Ok(_) => {
                     use_navigate()(
-                        "/evaluations/datasets",
+                        "/artifacts/datasets",
                         NavigateOptions {
                             replace: true,
                             ..Default::default()
@@ -186,16 +191,19 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
         <div>
             <PageHeader
                 title=format!("Dataset {dataset_short}")
-                eyebrow="Evaluations / Dataset".to_string()
+                eyebrow=eyebrow
                 subtitle=format!("{actual}/{target} questions · {created_at}")
                 actions=Box::new(move || view! {
                     <StatusPill label=status_label.to_string() kind=status_kind />
                 }.into_any())
             />
 
-            <div class="mb-4">
-                <A href=format!("/evaluate/by-id/{document_id}") attr:class="muted text-sm">
+            <div class="mb-4 flex items-center gap-3 flex-wrap text-sm">
+                <A href=format!("/evaluate/by-id/{document_id}") attr:class="muted hover:text-text">
                     "← Back to evaluation"
+                </A>
+                <A href=format!("/documents/by-id/{document_id}?tab=source") attr:class="muted hover:text-text">
+                    "Open source document"
                 </A>
             </div>
 
@@ -274,15 +282,24 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
                 </Surface>
             })}
 
-            <Surface title="Generation context".to_string() class="mb-4".to_string()>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-y-1.5 gap-x-6">
-                    <Kv label="Document".to_string() value=document_id.to_string() />
-                    <Kv label="Version".to_string() value=format!("v{document_version} · {content_hash_short}") />
-                    <Kv label="Generation model".to_string() value=format!("{generation_model} ({generation_model_id})") />
-                    <Kv label="Embedding model".to_string() value=embedding_model_id />
-                    <Kv label="Rejections".to_string() value=format!("{rejected}") />
+            <details class="surface collapsible-card mb-4">
+                <summary class="collapsible-card-summary">
+                    <div class="section-title">"Generation context"</div>
+                    <span class="collapsible-card-hint muted text-xs">
+                        <span>{generation_model.clone()}</span>
+                        <span class="collapsible-card-chevron">"▾"</span>
+                    </span>
+                </summary>
+                <div class="collapsible-card-body">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-y-1.5 gap-x-6">
+                        <Kv label="Document".to_string() value=document_id.to_string() />
+                        <Kv label="Version".to_string() value=format!("v{document_version} · {content_hash_short}") />
+                        <Kv label="Generation model".to_string() value=generation_model.clone() />
+                        <Kv label="Embedding model".to_string() value=embedding_model_id />
+                        <Kv label="Rejections".to_string() value=format!("{rejected}") />
+                    </div>
                 </div>
-            </Surface>
+            </details>
 
             <Surface title=format!("Questions ({})", questions.len())>
                 {if questions.is_empty() {
@@ -293,10 +310,12 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
                         />
                     }.into_any()
                 } else {
+                    let dimension_summary = summarise_dimensions(&questions);
                     view! {
-                        <div class="space-y-3">
-                            {questions.into_iter().enumerate().map(|(i, q)| view! {
-                                <QuestionCard index=(i as u32) + 1 question=q />
+                        <DimensionDistribution summary=dimension_summary />
+                        <div class="space-y-2 mt-4">
+                            {questions.into_iter().map(|q| view! {
+                                <QuestionCard question=q />
                             }).collect_view()}
                         </div>
                     }.into_any()
@@ -330,27 +349,33 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
 }
 
 #[component]
-fn QuestionCard(index: u32, question: EvaluationQuestionDto) -> impl IntoView {
+fn QuestionCard(question: EvaluationQuestionDto) -> impl IntoView {
     let references = question.references;
     let ref_count = references.len();
     let question_text = question.question;
+    let sequence = question.sequence;
     let operation = question.dimensions.operation.clone();
     let evidence = question.dimensions.evidence.clone();
     let role = question.dimensions.role.clone();
 
     view! {
-        <div class="surface-raised rounded p-4 space-y-3">
-            <div class="flex items-start gap-3 flex-wrap">
-                <span class="font-mono text-xs muted shrink-0 pt-0.5">{format!("Q{index:02}")}</span>
-                <p class="text-text leading-relaxed flex-1">{question_text}</p>
-                <div class="flex items-center gap-1 shrink-0">
-                    <span class="pill text-xs" title="Cognitive operation">{operation}</span>
-                    <span class="pill text-xs" title="Evidence tier">{evidence}</span>
-                    <span class="pill text-xs" title="Reader role">{role}</span>
+        <details class="surface-raised rounded collapsible-card">
+            <summary class="collapsible-card-summary">
+                <div class="flex items-start gap-3 flex-wrap min-w-0 flex-1">
+                    <span class="font-mono text-xs muted shrink-0 pt-0.5">{format!("Q{sequence:02}")}</span>
+                    <p class="text-text leading-relaxed flex-1 min-w-0">{question_text}</p>
+                    <div class="flex items-center gap-1 shrink-0">
+                        <span class="pill pill-neutral text-xs" title="Cognitive operation">{operation}</span>
+                        <span class="pill pill-neutral text-xs" title="Evidence tier">{evidence}</span>
+                        <span class="pill pill-neutral text-xs" title="Reader role">{role}</span>
+                    </div>
                 </div>
-            </div>
-            <div class="pl-8 space-y-2">
-                <div class="eyebrow">{format!("References ({ref_count})")}</div>
+                <span class="collapsible-card-hint muted text-xs shrink-0">
+                    <span>{format!("{ref_count} ref{}", if ref_count == 1 { "" } else { "s" })}</span>
+                    <span class="collapsible-card-chevron">"▾"</span>
+                </span>
+            </summary>
+            <div class="collapsible-card-body">
                 {if references.is_empty() {
                     view! { <p class="text-xs muted">"No references attached."</p> }.into_any()
                 } else {
@@ -363,7 +388,7 @@ fn QuestionCard(index: u32, question: EvaluationQuestionDto) -> impl IntoView {
                     }.into_any()
                 }}
             </div>
-        </div>
+        </details>
     }
 }
 
@@ -371,13 +396,76 @@ fn QuestionCard(index: u32, question: EvaluationQuestionDto) -> impl IntoView {
 fn ReferenceCard(index: u32, reference: EvaluationReferenceDto) -> impl IntoView {
     let span = format!("[{}–{}]", reference.char_start, reference.char_end);
     let content = reference.content;
+    let href = format!(
+        "/documents/by-id/{}?tab=source&ref_start={}&ref_end={}",
+        reference.document_id, reference.char_start, reference.char_end,
+    );
     view! {
-        <div class="border-l-2 border-[var(--color-border)] pl-3 py-1">
+        <A href=href attr:class="block border-l-2 border-[var(--color-border)] pl-3 py-1 hover:border-[var(--color-accent)] no-underline">
             <div class="flex items-center gap-2 mb-1">
                 <span class="font-mono text-xs muted">{format!("ref {index}")}</span>
                 <span class="font-mono text-xs faint">{span}</span>
+                <span class="ml-auto text-xs muted">"Open in source ↗"</span>
             </div>
             <p class="text-sm text-text whitespace-pre-wrap">{content}</p>
+        </A>
+    }
+}
+
+#[derive(Clone)]
+struct DimensionSummary {
+    operation: Vec<(String, u32)>,
+    evidence: Vec<(String, u32)>,
+    role: Vec<(String, u32)>,
+}
+
+fn summarise_dimensions(questions: &[EvaluationQuestionDto]) -> DimensionSummary {
+    fn tally<F: Fn(&EvaluationQuestionDto) -> &str>(
+        questions: &[EvaluationQuestionDto],
+        key: F,
+    ) -> Vec<(String, u32)> {
+        let mut counts: Vec<(String, u32)> = Vec::new();
+        for q in questions {
+            let value = key(q);
+            if let Some(entry) = counts.iter_mut().find(|(name, _)| name == value) {
+                entry.1 += 1;
+            } else {
+                counts.push((value.to_string(), 1));
+            }
+        }
+        counts.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        counts
+    }
+
+    DimensionSummary {
+        operation: tally(questions, |q| q.dimensions.operation.as_str()),
+        evidence: tally(questions, |q| q.dimensions.evidence.as_str()),
+        role: tally(questions, |q| q.dimensions.role.as_str()),
+    }
+}
+
+#[component]
+fn DimensionDistribution(summary: DimensionSummary) -> impl IntoView {
+    let row = move |label: &'static str, items: Vec<(String, u32)>| {
+        view! {
+            <div class="grid grid-cols-[6rem_1fr] gap-3 items-baseline">
+                <span class="eyebrow">{label}</span>
+                <div class="flex flex-wrap items-center gap-1">
+                    {items.into_iter().map(|(name, count)| view! {
+                        <span class="pill pill-neutral text-xs">
+                            <span>{name}</span>
+                            <span class="muted">{format!("· {count}")}</span>
+                        </span>
+                    }).collect_view()}
+                </div>
+            </div>
+        }
+    };
+    view! {
+        <div class="space-y-2 pb-3 border-b border-[var(--color-border)]">
+            {row("operation", summary.operation)}
+            {row("evidence", summary.evidence)}
+            {row("role", summary.role)}
         </div>
     }
 }

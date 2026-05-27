@@ -6,13 +6,15 @@ use tokio::sync::Notify;
 use crate::server::application::chunk_set::ChunkSetCommandHandler;
 use crate::server::application::chunking::ChunkerRegistry;
 use crate::server::application::comprehension::ports::{
-    InsightSynthesizer, ObservationExtractor, RoleTyper, ThreadSynthesizer,
+    InsightSynthesizer, ObservationExtractor, RoleTyper, TextSegmenter, ThreadSynthesizer,
 };
 use crate::server::application::comprehension::{
     ComprehensionQueryService, DocumentMapCommandHandler, DocumentMapEffectExecutor,
+    ParagraphSegmenter,
 };
 use crate::server::application::llm::GenerationService;
 use crate::server::application::ports::{Clock, IdGenerator};
+use crate::server::application::{ActivityRegistry, JobRegistry};
 use crate::server::domain::comprehension::map::aggregate::DocumentMap;
 use crate::server::domain::comprehension::map::effects::DocumentMapEffect;
 use crate::server::domain::comprehension::map::projector::DocumentMapProjector;
@@ -40,6 +42,8 @@ pub struct ComprehensionDeps<'a> {
     pub repos: &'a Repositories,
     pub wirings: &'a AggregateWirings,
     pub event_bus: Arc<EventBus>,
+    pub job_registry: Arc<JobRegistry>,
+    pub activity_registry: Arc<ActivityRegistry>,
     pub chunker_registry: Arc<ChunkerRegistry>,
     pub chunk_set_command_handler: Arc<ChunkSetCommandHandler>,
     pub generation_service: Arc<GenerationService>,
@@ -55,6 +59,8 @@ impl ComprehensionServices {
             repos,
             wirings,
             event_bus,
+            job_registry,
+            activity_registry,
             chunker_registry,
             chunk_set_command_handler,
             generation_service,
@@ -62,9 +68,11 @@ impl ComprehensionServices {
         } = deps;
 
         let role_typer: Arc<dyn RoleTyper> = LlmRoleTyper::new(Arc::clone(&generation_service));
+        let segmenter: Arc<dyn TextSegmenter> = Arc::new(ParagraphSegmenter::new());
         let observation_extractor: Arc<dyn ObservationExtractor> = LlmObservationExtractor::new(
             Arc::clone(&generation_service),
             Arc::clone(&id_generator),
+            segmenter,
         );
         let thread_synthesizer: Arc<dyn ThreadSynthesizer> =
             LlmThreadSynthesizer::new(Arc::clone(&generation_service), Arc::clone(&id_generator));
@@ -92,6 +100,8 @@ impl ComprehensionServices {
             observation_extractor,
             thread_synthesizer,
             insight_synthesizer,
+            job_registry,
+            activity_registry,
         );
 
         let map_job_queue: Arc<dyn JobQueue<DocumentMapEffect>> =
@@ -114,8 +124,10 @@ impl ComprehensionServices {
             wakeups,
         );
 
-        let comprehension_query_service =
-            ComprehensionQueryService::new(Arc::clone(&repos.document_map));
+        let comprehension_query_service = ComprehensionQueryService::new(
+            Arc::clone(&repos.document_map),
+            Arc::clone(&repos.source_document),
+        );
 
         Ok(Self {
             document_map_command_handler,

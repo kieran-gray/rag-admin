@@ -139,7 +139,7 @@ impl InsightSynthesizer for LlmInsightSynthesizer {
                 kind,
                 summary,
                 evidence,
-                spans,
+                spans: Span::normalize(spans),
             });
         }
         Ok(insights)

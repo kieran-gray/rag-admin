@@ -6,17 +6,20 @@ use leptos::task::spawn_local;
 use leptos_router::hooks::use_params_map;
 use uuid::Uuid;
 
-use crate::server_functions::comprehension::{get_document_map, request_document_map_build};
+use super::map_phase::{section_count, MapPhase, MapProgress};
+use crate::server_functions::comprehension::{
+    get_document_map, rebuild_document_map, request_document_map_build,
+};
 use crate::server_functions::configuration::get_configuration;
 use crate::server_functions::source_document::get_document_detail_by_source_ref;
 use crate::shared::contracts::{
-    aggregate_type, ConfigurationDto, DocumentMapDetailDto, DocumentMapSummaryDto, InsightDto,
-    MapItemRefDto, ObservationDto, RequestMapBuildRequestDto, SourceDocumentDetailDto, SpanDto,
-    SuggestedRoleDto, ThreadDto,
+    aggregate_type, ConfigurationDto, DocumentMapDetailDto, InsightDto, MapItemRefDto,
+    ObservationDto, RequestMapBuildRequestDto, SourceDocumentDetailDto, SpanDto, SuggestedRoleDto,
+    ThreadDto,
 };
 use crate::ui::components::app::event_bus::use_invalidator;
 use crate::ui::components::primitives::{
-    ActionItem, ActionsMenu, Dialog, EmptyState, PageHeader, Status, StatusPill, Surface,
+    ActionItem, ActionsMenu, Dialog, EmptyState, PageHeader, StatusPill, Surface,
 };
 
 #[component]
@@ -124,6 +127,33 @@ fn MapWorkspace(detail: SourceDocumentDetailDto) -> impl IntoView {
         });
     };
 
+    let on_rebuild = move |_| {
+        let Some(model_id) = selected_model.get() else {
+            set_build_error.set(Some("Pick a generation model first".into()));
+            return;
+        };
+        set_busy.set(true);
+        set_build_error.set(None);
+        spawn_local(async move {
+            match rebuild_document_map(RequestMapBuildRequestDto {
+                document_id,
+                document_version,
+                generation_model_id: model_id,
+            })
+            .await
+            {
+                Ok(_) => {
+                    set_busy.set(false);
+                    map_resource.refetch();
+                }
+                Err(e) => {
+                    set_busy.set(false);
+                    set_build_error.set(Some(e.to_string()));
+                }
+            }
+        });
+    };
+
     let eyebrow_label = format!("Documents / {source_ref_key} / Map");
 
     view! {
@@ -176,7 +206,7 @@ fn MapWorkspace(detail: SourceDocumentDetailDto) -> impl IntoView {
                                     set_selected_model=set_selected_model
                                     busy=busy
                                     build_error=build_error
-                                    on_build=on_build
+                                    on_rebuild=on_rebuild
                                 />
                             }.into_any(),
                         }
@@ -228,7 +258,7 @@ fn MapDetailView(
     set_selected_model: WriteSignal<Option<Uuid>>,
     busy: ReadSignal<bool>,
     build_error: ReadSignal<Option<String>>,
-    on_build: impl Fn(()) + Copy + Send + Sync + 'static,
+    on_rebuild: impl Fn(()) + Copy + Send + Sync + 'static,
 ) -> impl IntoView {
     let summary = detail.summary;
     let carried_summary = detail.carried_summary;
@@ -237,7 +267,12 @@ fn MapDetailView(
     let insights = detail.insights;
 
     let phase = MapPhase::from_status(&summary.status);
-    let (status_kind, status_label_text) = phase.pill(&summary);
+    let (status_kind, status_label_text) = phase.pill(MapProgress {
+        observations_extracted: summary.observations_extracted,
+        chunk_count: summary.chunk_count,
+        threads_synthesized: summary.threads_synthesized,
+        section_size: summary.section_size,
+    });
 
     let chunk_count = summary.chunk_count;
     let section_total = section_count(summary.chunk_count, summary.section_size);
@@ -265,16 +300,13 @@ fn MapDetailView(
     let threads_stored = StoredValue::new(threads);
     let insights_stored = StoredValue::new(insights);
 
-    let subtitle_text = format!(
-        "v{document_version} · {chunk_count} chunks · {section_total} sections"
-    );
+    let subtitle_text =
+        format!("v{document_version} · {chunk_count} chunks · {section_total} sections");
     let status_label_for_header = status_label_text.clone();
 
     let open_rebuild = Callback::new(move |_| set_rebuild_open.set(true));
     let close_rebuild = Callback::new(move |_| set_rebuild_open.set(false));
-    let actions_items = vec![
-        ActionItem::new("Rebuild map", open_rebuild).danger(),
-    ];
+    let actions_items = vec![ActionItem::new("Rebuild map", open_rebuild).danger()];
 
     view! {
         <div>
@@ -298,7 +330,7 @@ fn MapDetailView(
                 set_selected_model=set_selected_model
                 busy=busy
                 build_error=build_error
-                on_build=on_build
+                on_rebuild=on_rebuild
             />
 
             <div class="space-y-4">
@@ -437,10 +469,10 @@ fn RebuildDialog(
     set_selected_model: WriteSignal<Option<Uuid>>,
     busy: ReadSignal<bool>,
     build_error: ReadSignal<Option<String>>,
-    on_build: impl Fn(()) + Copy + Send + Sync + 'static,
+    on_rebuild: impl Fn(()) + Copy + Send + Sync + 'static,
 ) -> impl IntoView {
     let on_confirm = move |_| {
-        on_build(());
+        on_rebuild(());
         on_close.run(());
     };
     view! {
@@ -523,22 +555,22 @@ fn PipelineStrip(
     let stages = [
         Stage {
             label: "Roles",
-            state: phase.stage_state(MapPhase::TypingRoles),
+            state: phase_stage_state(phase, MapPhase::TypingRoles),
             detail: String::new(),
         },
         Stage {
             label: "Observations",
-            state: phase.stage_state(MapPhase::ExtractingObservations),
+            state: phase_stage_state(phase, MapPhase::ExtractingObservations),
             detail: format!("{observations_extracted}/{chunk_count}"),
         },
         Stage {
             label: "Threads",
-            state: phase.stage_state(MapPhase::SynthesizingThreads),
+            state: phase_stage_state(phase, MapPhase::SynthesizingThreads),
             detail: format!("{threads_synthesized}/{section_total}"),
         },
         Stage {
             label: "Insights",
-            state: phase.stage_state(MapPhase::SynthesizingInsights),
+            state: phase_stage_state(phase, MapPhase::SynthesizingInsights),
             detail: format!("{insights_synthesized}"),
         },
     ];
@@ -805,7 +837,11 @@ const ROW_BADGE_CLASS: &str = "font-mono text-[11px] muted shrink-0 w-20";
 #[component]
 fn InsightCard(insight: InsightDto) -> impl IntoView {
     let evidence_summary = summarize_evidence(&insight.evidence);
-    let spans_label = format!("{} span{}", insight.spans.len(), plural(insight.spans.len()));
+    let spans_label = format!(
+        "{} span{}",
+        insight.spans.len(),
+        plural(insight.spans.len())
+    );
     view! {
         <details class="surface-raised rounded p-3">
             <summary class="cursor-pointer flex items-start gap-3 list-none">
@@ -952,88 +988,6 @@ enum Tier {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum MapPhase {
-    Pending,
-    TypingRoles,
-    ExtractingObservations,
-    SynthesizingThreads,
-    SynthesizingInsights,
-    Ready,
-    Failed,
-}
-
-impl MapPhase {
-    fn from_status(status: &str) -> Self {
-        match status {
-            "ready" => Self::Ready,
-            "failed" => Self::Failed,
-            "typing_roles" => Self::TypingRoles,
-            "extracting_observations" => Self::ExtractingObservations,
-            "synthesizing_threads" => Self::SynthesizingThreads,
-            "synthesizing_insights" => Self::SynthesizingInsights,
-            _ => Self::Pending,
-        }
-    }
-
-    fn order(self) -> u8 {
-        match self {
-            Self::Pending => 0,
-            Self::TypingRoles => 1,
-            Self::ExtractingObservations => 2,
-            Self::SynthesizingThreads => 3,
-            Self::SynthesizingInsights => 4,
-            Self::Ready => 5,
-            Self::Failed => 99,
-        }
-    }
-
-    fn is_ready(self) -> bool {
-        matches!(self, Self::Ready)
-    }
-
-    fn is_failed(self) -> bool {
-        matches!(self, Self::Failed)
-    }
-
-    fn stage_state(self, stage: MapPhase) -> StageState {
-        use std::cmp::Ordering;
-        if self.is_failed() {
-            return StageState::Pending;
-        }
-        match self.order().cmp(&stage.order()) {
-            Ordering::Greater => StageState::Done,
-            Ordering::Equal => StageState::Active,
-            Ordering::Less => StageState::Pending,
-        }
-    }
-
-    fn pill(self, summary: &DocumentMapSummaryDto) -> (Status, String) {
-        match self {
-            Self::Ready => (Status::Ok, "Ready".to_string()),
-            Self::Failed => (Status::Fail, "Failed".to_string()),
-            Self::Pending => (Status::Pending, "Queued".to_string()),
-            Self::TypingRoles => (Status::Pending, "Typing roles".to_string()),
-            Self::ExtractingObservations => (
-                Status::Pending,
-                format!(
-                    "Observations {}/{}",
-                    summary.observations_extracted, summary.chunk_count
-                ),
-            ),
-            Self::SynthesizingThreads => (
-                Status::Pending,
-                format!(
-                    "Threads {}/{}",
-                    summary.threads_synthesized,
-                    section_count(summary.chunk_count, summary.section_size)
-                ),
-            ),
-            Self::SynthesizingInsights => (Status::Pending, "Synthesizing insights".to_string()),
-        }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
 enum StageState {
     Pending,
     Active,
@@ -1046,11 +1000,16 @@ struct Stage {
     detail: String,
 }
 
-fn section_count(chunk_count: u32, section_size: u32) -> u32 {
-    if section_size == 0 || chunk_count == 0 {
-        return 0;
+fn phase_stage_state(phase: MapPhase, stage: MapPhase) -> StageState {
+    use std::cmp::Ordering;
+    if phase.is_failed() {
+        return StageState::Pending;
     }
-    chunk_count.div_ceil(section_size)
+    match phase.order().cmp(&stage.order()) {
+        Ordering::Greater => StageState::Done,
+        Ordering::Equal => StageState::Active,
+        Ordering::Less => StageState::Pending,
+    }
 }
 
 fn kind_counts<'a>(iter: impl Iterator<Item = &'a str>) -> Vec<(String, usize)> {

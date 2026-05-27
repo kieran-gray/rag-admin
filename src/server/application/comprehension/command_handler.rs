@@ -85,6 +85,27 @@ impl DocumentMapCommandHandler {
         document_version: u32,
         generation_model_id: Uuid,
     ) -> Result<MapBuildHandle, AppError> {
+        self.build_for_document(document_id, document_version, generation_model_id, false)
+            .await
+    }
+
+    pub async fn rebuild_for_document(
+        &self,
+        document_id: Uuid,
+        document_version: u32,
+        generation_model_id: Uuid,
+    ) -> Result<MapBuildHandle, AppError> {
+        self.build_for_document(document_id, document_version, generation_model_id, true)
+            .await
+    }
+
+    async fn build_for_document(
+        &self,
+        document_id: Uuid,
+        document_version: u32,
+        generation_model_id: Uuid,
+        force_rebuild: bool,
+    ) -> Result<MapBuildHandle, AppError> {
         let document = self
             .source_document_repository
             .load(document_id)
@@ -92,18 +113,24 @@ impl DocumentMapCommandHandler {
             .ok_or_else(|| AppError::NotFound(format!("document {document_id}")))?;
         let content_hash = document.latest_content_hash.as_hex().to_string();
 
-        if let Some(existing) = self
+        let existing = self
             .repository
             .find_for_document(document_id, document_version)
-            .await?
-        {
-            let status = parse_status_str(&existing.status, existing.failure_reason.clone());
-            return Ok(MapBuildHandle {
-                map_id: existing.map_id,
-                chunk_set_id: existing.chunk_set_id,
-                chunk_count: existing.chunk_count,
-                status,
-            });
+            .await?;
+
+        if let Some(existing) = existing {
+            if force_rebuild {
+                self.repository.delete(existing.map_id).await?;
+                self.repository.delete_event_stream(existing.map_id).await?;
+            } else {
+                let status = parse_status_str(&existing.status, existing.failure_reason.clone());
+                return Ok(MapBuildHandle {
+                    map_id: existing.map_id,
+                    chunk_set_id: existing.chunk_set_id,
+                    chunk_count: existing.chunk_count,
+                    status,
+                });
+            }
         }
 
         let chunking_config = comprehension_chunking_config();

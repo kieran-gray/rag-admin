@@ -2,7 +2,7 @@ use leptos::prelude::*;
 use uuid::Uuid;
 
 use crate::shared::contracts::{
-    DocumentMapDetailDto, DocumentMapSummaryDto, RequestMapBuildRequestDto,
+    DocumentMapDetailDto, DocumentMapListItemDto, DocumentMapSummaryDto, RequestMapBuildRequestDto,
     RequestMapBuildResponseDto,
 };
 
@@ -45,6 +45,19 @@ pub async fn list_document_maps(
 }
 
 #[server(
+    name = ListAllDocumentMaps,
+    prefix = "/api",
+    endpoint = "list_all_document_maps"
+)]
+pub async fn list_all_document_maps() -> Result<Vec<DocumentMapListItemDto>, ServerFnError> {
+    ctx::<Arc<ComprehensionServices>>()?
+        .comprehension_query_service
+        .list_all()
+        .await
+        .map_err(|e| map_app_error(&e))
+}
+
+#[server(
     name = RequestDocumentMapBuild,
     prefix = "/api",
     endpoint = "request_document_map_build"
@@ -55,6 +68,31 @@ pub async fn request_document_map_build(
     let handle = ctx::<Arc<ComprehensionServices>>()?
         .document_map_command_handler
         .request_build_for_document(
+            request.document_id,
+            request.document_version,
+            request.generation_model_id,
+        )
+        .await
+        .map_err(|e| map_app_error(&e))?;
+    Ok(RequestMapBuildResponseDto {
+        map_id: handle.map_id,
+        chunk_set_id: handle.chunk_set_id,
+        chunk_count: handle.chunk_count,
+        status: handle.status.as_str().to_string(),
+    })
+}
+
+#[server(
+    name = RebuildDocumentMap,
+    prefix = "/api",
+    endpoint = "rebuild_document_map"
+)]
+pub async fn rebuild_document_map(
+    request: RequestMapBuildRequestDto,
+) -> Result<RequestMapBuildResponseDto, ServerFnError> {
+    let handle = ctx::<Arc<ComprehensionServices>>()?
+        .document_map_command_handler
+        .rebuild_for_document(
             request.document_id,
             request.document_version,
             request.generation_model_id,

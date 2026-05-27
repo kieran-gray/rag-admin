@@ -90,7 +90,7 @@ fn CompareView(left: EvaluationRunDto, right: EvaluationRunDto) -> impl IntoView
         <div class="space-y-4">
             <div class="flex items-center gap-3 flex-wrap text-sm">
                 <StatusPill label=verdict_label kind=verdict_kind />
-                <A href=format!("/evaluations/runs/{right_id}?tab=variants") attr:class="muted hover:text-text">
+                <A href=format!("/workflows/runs/{right_id}") attr:class="muted hover:text-text">
                     {format!("Open run {right_short}")}
                 </A>
             </div>

@@ -66,7 +66,7 @@ pub fn SkeletonRunsTable() -> impl IntoView {
 fn RunRow(run: RecentEvaluationRunDto) -> impl IntoView {
     use leptos_router::components::A;
 
-    let href = format!("/evaluations/runs/{}", run.run_id);
+    let href = format!("/workflows/runs/{}", run.run_id);
     let title = run
         .document_title
         .clone()

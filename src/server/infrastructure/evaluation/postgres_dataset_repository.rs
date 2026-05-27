@@ -11,7 +11,8 @@ use crate::server::domain::evaluation::{
         read_model::{EvaluationDatasetReadModel, NewDatasetSummary},
         repository::{
             DatasetListCursor, DatasetListPage, DatasetListPageItem, DatasetListQuery,
-            DatasetStatusFilter, EvaluationDatasetRepository, EvaluationDatasetRepositoryError,
+            DatasetStatusFilter, DatasetWithDocumentTitle, EvaluationDatasetRepository,
+            EvaluationDatasetRepositoryError,
         },
     },
     question::{
@@ -53,6 +54,61 @@ impl EvaluationDatasetRepository for PostgresEvaluationDatasetRepository {
         .map_err(|e| EvaluationDatasetRepositoryError::Internal(format!("load: {e}")))?;
 
         Ok(row.map(EvaluationDatasetReadModel::from))
+    }
+
+    async fn load_with_document_title(
+        &self,
+        dataset_id: Uuid,
+    ) -> Result<Option<DatasetWithDocumentTitle>, EvaluationDatasetRepositoryError> {
+        let row = sqlx::query(&format!(
+            "SELECT {DATASET_COLS}, document_title FROM evaluation_datasets \
+             WHERE dataset_id = $1 AND deleted_at IS NULL"
+        ))
+        .bind(dataset_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| {
+            EvaluationDatasetRepositoryError::Internal(format!("load_with_document_title: {e}"))
+        })?;
+
+        let Some(row) = row else { return Ok(None) };
+        let dataset_row = DatasetRow {
+            dataset_id: row.try_get("dataset_id").map_err(|e| map_row_err(&e))?,
+            document_id: row.try_get("document_id").map_err(|e| map_row_err(&e))?,
+            document_version: row
+                .try_get("document_version")
+                .map_err(|e| map_row_err(&e))?,
+            content_hash: row.try_get("content_hash").map_err(|e| map_row_err(&e))?,
+            label: row.try_get("label").map_err(|e| map_row_err(&e))?,
+            target_question_count: row
+                .try_get("target_question_count")
+                .map_err(|e| map_row_err(&e))?,
+            generation_model_id: row
+                .try_get("generation_model_id")
+                .map_err(|e| map_row_err(&e))?,
+            generation_model: row
+                .try_get("generation_model")
+                .map_err(|e| map_row_err(&e))?,
+            duplicate_similarity_threshold_milli: row
+                .try_get("duplicate_similarity_threshold_milli")
+                .map_err(|e| map_row_err(&e))?,
+            embedding_model_id: row
+                .try_get("embedding_model_id")
+                .map_err(|e| map_row_err(&e))?,
+            status: row.try_get("status").map_err(|e| map_row_err(&e))?,
+            question_count: row.try_get("question_count").map_err(|e| map_row_err(&e))?,
+            rejection_count: row
+                .try_get("rejection_count")
+                .map_err(|e| map_row_err(&e))?,
+            failure_reason: row.try_get("failure_reason").map_err(|e| map_row_err(&e))?,
+            created_at: row.try_get("created_at").map_err(|e| map_row_err(&e))?,
+        };
+        let document_title: Option<String> =
+            row.try_get("document_title").map_err(|e| map_row_err(&e))?;
+        Ok(Some(DatasetWithDocumentTitle {
+            dataset: EvaluationDatasetReadModel::from(dataset_row),
+            document_title,
+        }))
     }
 
     async fn list_for_document(

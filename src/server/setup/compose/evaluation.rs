@@ -199,10 +199,11 @@ impl EvaluationServices {
             dataset_job_queue,
             Arc::clone(&dataset_effect_executor),
         ));
-        let map_bridge_process_manager = Arc::new(ProcessManager::new(
+        let map_bridge_process_manager = Arc::new(ProcessManager::with_queue_name(
             Arc::clone(&wirings.document_map.aggregate_repository),
             bridge_job_queue,
             dataset_effect_executor,
+            "document_map_bridge".to_string(),
         ));
         let run_process_manager = Arc::new(ProcessManager::new(
             Arc::clone(&wirings.run.aggregate_repository),

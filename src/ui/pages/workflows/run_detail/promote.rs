@@ -98,7 +98,7 @@ pub(crate) fn ReplicatePanel(run_id: uuid::Uuid) -> impl IntoView {
         leptos::task::spawn_local(async move {
             match replicate_optimization_run(run_id).await {
                 Ok(new_run_id) => {
-                    let url = format!("/evaluations/runs/{new_run_id}?tab=compare&with={run_id}");
+                    let url = format!("/workflows/runs/{new_run_id}?with={run_id}");
                     use_navigate()(&url, NavigateOptions::default());
                     set_replicating.set(false);
                 }

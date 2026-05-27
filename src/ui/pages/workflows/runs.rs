@@ -1,6 +1,7 @@
 use leptos::either::Either;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
+use leptos_router::components::A;
 use leptos_router::hooks::query_signal;
 
 use crate::server_functions::evaluation::get_evaluation_runs_page;
@@ -13,18 +14,7 @@ use crate::ui::components::primitives::{
     PaginationSummary, Surface,
 };
 
-mod dataset_detail;
-mod datasets;
-mod new_run_dialog;
-mod run_detail;
-mod run_view;
-mod runs_table;
-
-pub use dataset_detail::DatasetDetailPage;
-pub use datasets::DatasetsPage;
-pub use new_run_dialog::NewEvaluationDialog;
-pub use run_view::RunPage;
-use runs_table::{status_color, RunsTable, SkeletonRunsTable};
+use super::runs_table::{status_color, RunsTable, SkeletonRunsTable};
 
 const PAGE_SIZE: u32 = 25;
 
@@ -50,7 +40,7 @@ impl RunFilterState {
 }
 
 #[component]
-pub fn EvaluationsPage() -> impl IntoView {
+pub fn RunsPage() -> impl IntoView {
     let invalidator = use_invalidator(|e| e.from_any(&[aggregate_type::EVALUATION_RUN]));
 
     let (statuses_query, set_statuses_query) = query_signal::<String>("status");
@@ -89,11 +79,6 @@ pub fn EvaluationsPage() -> impl IntoView {
         move || (filter_state.get(), current_cursor.get(), invalidator.get()),
         |(state, cursor, _)| async move { get_evaluation_runs_page(state.to_query(cursor)).await },
     );
-
-    let (launcher_open, set_launcher_open) = signal(false);
-    let launcher_open_signal: Signal<bool> = launcher_open.into();
-    let close_launcher = Callback::new(move |_| set_launcher_open.set(false));
-    let open_launcher = move |_| set_launcher_open.set(true);
 
     let toggle_status = Callback::<RunStatusFilterDto>::new(move |status| {
         let mut current = filter_state.get_untracked().statuses;
@@ -180,13 +165,9 @@ pub fn EvaluationsPage() -> impl IntoView {
                 eyebrow="Evaluations".to_string()
                 subtitle="Evaluation runs across this workspace.".to_string()
                 actions=Box::new(move || view! {
-                    <button
-                        type="button"
-                        class="btn btn-primary"
-                        on:click=open_launcher
-                    >
+                    <A href="/workflows/evaluate" attr:class="btn btn-primary">
                         "+ New evaluation"
-                    </button>
+                    </A>
                 }.into_any())
             />
 
@@ -244,7 +225,6 @@ pub fn EvaluationsPage() -> impl IntoView {
                 </Suspense>
             </Surface>
 
-            <NewEvaluationDialog open=launcher_open_signal on_close=close_launcher />
         </div>
     }
 }

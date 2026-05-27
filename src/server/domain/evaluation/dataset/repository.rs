@@ -51,12 +51,23 @@ pub struct DatasetListPage {
     pub status_counts: Vec<(DatasetStatusFilter, u64)>,
 }
 
+#[derive(Debug, Clone)]
+pub struct DatasetWithDocumentTitle {
+    pub dataset: EvaluationDatasetReadModel,
+    pub document_title: Option<String>,
+}
+
 #[async_trait]
 pub trait EvaluationDatasetRepository: Send + Sync {
     async fn load(
         &self,
         dataset_id: Uuid,
     ) -> Result<Option<EvaluationDatasetReadModel>, EvaluationDatasetRepositoryError>;
+
+    async fn load_with_document_title(
+        &self,
+        dataset_id: Uuid,
+    ) -> Result<Option<DatasetWithDocumentTitle>, EvaluationDatasetRepositoryError>;
 
     async fn list_for_document(
         &self,

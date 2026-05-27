@@ -91,6 +91,24 @@ pub struct DocumentMapDetailDto {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocumentMapListItemDto {
+    pub map_id: Uuid,
+    pub document_id: Uuid,
+    pub document_version: u32,
+    pub document_title: String,
+    pub document_type: String,
+    pub source_ref_key: String,
+    pub status: String,
+    pub failure_reason: Option<String>,
+    pub chunk_count: u32,
+    pub section_size: u32,
+    pub observations_extracted: u32,
+    pub threads_synthesized: u32,
+    pub insights_synthesized: u32,
+    pub generation_model_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequestMapBuildRequestDto {
     pub document_id: Uuid,
     pub document_version: u32,
