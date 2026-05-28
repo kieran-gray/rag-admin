@@ -39,7 +39,7 @@ impl LlamaServerApi {
         let body_opt = if body.is_empty() { None } else { Some(body) };
         let (status, body_text) = self
             .http
-            .request_text(method, url, headers, body_opt)
+            .request_text(method, url, headers, body_opt, None)
             .await?;
         if !(200..300).contains(&status) {
             return Err(AppError::Upstream(format!(

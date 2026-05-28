@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use reqwest::Method;
@@ -34,11 +35,37 @@ impl OllamaApi {
         content_type: &str,
         label: &str,
     ) -> Result<String, AppError> {
+        self.request_inner(method, url, body, content_type, label, None)
+            .await
+    }
+
+    pub async fn request_with_timeout(
+        &self,
+        method: Method,
+        url: &str,
+        body: Vec<u8>,
+        content_type: &str,
+        label: &str,
+        timeout: Duration,
+    ) -> Result<String, AppError> {
+        self.request_inner(method, url, body, content_type, label, Some(timeout))
+            .await
+    }
+
+    async fn request_inner(
+        &self,
+        method: Method,
+        url: &str,
+        body: Vec<u8>,
+        content_type: &str,
+        label: &str,
+        timeout: Option<Duration>,
+    ) -> Result<String, AppError> {
         let headers = Self::headers(content_type)?;
         let body_opt = if body.is_empty() { None } else { Some(body) };
         let (status, body_text) = self
             .http
-            .request_text(method, url, headers, body_opt)
+            .request_text(method, url, headers, body_opt, timeout)
             .await?;
         if !(200..300).contains(&status) {
             return Err(AppError::Upstream(format!(

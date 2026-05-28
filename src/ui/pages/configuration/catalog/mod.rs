@@ -1,3 +1,5 @@
+mod discovered_indexes_picker;
+mod discovered_models_picker;
 mod form_dialog;
 mod sections;
 mod widgets;

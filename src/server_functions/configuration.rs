@@ -2,13 +2,17 @@ use leptos::prelude::*;
 
 use crate::shared::contracts::{
     ChunkingConfigurationCommandDto, ChunkingConfigurationDto, ConfigurationDto,
-    EmbeddingModelCommandDto, GenerationModelCommandDto, IndexProfileCommandDto, IndexProfileDto,
-    RerankerModelCommandDto, RetrievalProfileCommandDto, RetrievalProfileDto,
-    SweepTemplateCommandDto, SweepTemplateDto, VectorIndexCommandDto,
+    DiscoveryResponseDto, EmbeddingModelCommandDto, GenerationModelCommandDto,
+    IndexDiscoveryResponseDto, IndexProfileCommandDto, IndexProfileDto, RerankerModelCommandDto,
+    RetrievalProfileCommandDto, RetrievalProfileDto, SweepTemplateCommandDto, SweepTemplateDto,
+    VectorIndexCommandDto,
 };
+use crate::shared::reference_data::{AiProviderKind, ModelCapability, VectorStoreKind};
 
 #[cfg(feature = "ssr")]
 use crate::server::setup::compose::catalog::CatalogServices;
+#[cfg(feature = "ssr")]
+use crate::server::setup::compose::discovery::DiscoveryServices;
 #[cfg(feature = "ssr")]
 use crate::server_functions::error::{ctx, map_app_error};
 #[cfg(feature = "ssr")]
@@ -197,4 +201,33 @@ pub async fn apply_sweep_template_command(
         .handle_dto(command)
         .await
         .map_err(|e| map_app_error(&e))
+}
+
+#[server(
+    name = DiscoverModels,
+    prefix = "/api",
+    endpoint = "discover_models"
+)]
+pub async fn discover_models(
+    provider: AiProviderKind,
+    capability: ModelCapability,
+) -> Result<DiscoveryResponseDto, ServerFnError> {
+    Ok(ctx::<Arc<DiscoveryServices>>()?
+        .discovery_query_service
+        .discover(provider, capability)
+        .await)
+}
+
+#[server(
+    name = DiscoverVectorIndexes,
+    prefix = "/api",
+    endpoint = "discover_vector_indexes"
+)]
+pub async fn discover_vector_indexes(
+    kind: VectorStoreKind,
+) -> Result<IndexDiscoveryResponseDto, ServerFnError> {
+    Ok(ctx::<Arc<DiscoveryServices>>()?
+        .index_discovery_query_service
+        .discover(kind)
+        .await)
 }

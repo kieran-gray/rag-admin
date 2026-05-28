@@ -102,12 +102,45 @@ pub(super) fn LabelledInput(
 }
 
 #[component]
+pub(super) fn DimensionsField(
+    hint: String,
+    value: ReadSignal<u32>,
+    set_value: WriteSignal<u32>,
+    from_discovery: ReadSignal<bool>,
+    override_on: ReadSignal<bool>,
+    set_override: WriteSignal<bool>,
+) -> impl IntoView {
+    view! {
+        <div class="space-y-1.5">
+            <LabelledNum
+                label="Dimensions".to_string()
+                hint=hint
+                value=value
+                set_value=set_value
+                min=1
+                disabled=Signal::derive(move || from_discovery.get() && !override_on.get())
+            />
+            {move || (from_discovery.get() && !override_on.get()).then(|| view! {
+                <button
+                    type="button"
+                    class="btn btn-ghost btn-xs"
+                    on:click=move |_| set_override.set(true)
+                >
+                    "Override dimensions"
+                </button>
+            })}
+        </div>
+    }
+}
+
+#[component]
 pub(super) fn LabelledNum(
     label: String,
     hint: String,
     value: ReadSignal<u32>,
     set_value: WriteSignal<u32>,
     #[prop(default = 0)] min: u32,
+    #[prop(into, optional)] disabled: Signal<bool>,
 ) -> impl IntoView {
     view! {
         <label class="block space-y-1.5">
@@ -116,6 +149,7 @@ pub(super) fn LabelledNum(
                 class="input"
                 type="number"
                 min=min
+                disabled=disabled
                 prop:value=move || value.get().to_string()
                 on:input=move |e| {
                     let v: u32 = event_target_value(&e).parse().unwrap_or(min);

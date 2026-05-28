@@ -94,6 +94,7 @@ impl GenerationClient for OllamaGenerationClient {
                 &format!("{base_url}/api/generate"),
                 json_headers(),
                 Some(body),
+                None,
             )
             .await?;
 

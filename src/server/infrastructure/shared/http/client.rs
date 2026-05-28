@@ -15,7 +15,7 @@ pub struct ReqwestHttpClient {
 #[async_trait]
 impl HttpClient for ReqwestHttpClient {
     async fn get_text(&self, url: &str) -> Result<(u16, String), AppError> {
-        self.request_text(Method::GET, url, HeaderMap::new(), None)
+        self.request_text(Method::GET, url, HeaderMap::new(), None, None)
             .await
     }
 }
@@ -39,10 +39,14 @@ impl ReqwestHttpClient {
         url: &str,
         headers: HeaderMap,
         body: Option<Vec<u8>>,
+        timeout: Option<Duration>,
     ) -> Result<(u16, String), AppError> {
         let mut builder = self.client.request(method, url).headers(headers);
         if let Some(b) = body {
             builder = builder.body(b);
+        }
+        if let Some(t) = timeout {
+            builder = builder.timeout(t);
         }
         let response = builder
             .send()

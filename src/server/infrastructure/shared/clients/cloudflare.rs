@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::Method;
@@ -51,16 +52,42 @@ impl CloudflareApi {
         content_type: &str,
         label: &str,
     ) -> Result<String, AppError> {
+        self.request_inner(method, url, body, content_type, label, None)
+            .await
+    }
+
+    pub async fn request_with_timeout(
+        &self,
+        method: Method,
+        url: &str,
+        body: Vec<u8>,
+        content_type: &str,
+        label: &str,
+        timeout: Duration,
+    ) -> Result<String, AppError> {
+        self.request_inner(method, url, body, content_type, label, Some(timeout))
+            .await
+    }
+
+    async fn request_inner(
+        &self,
+        method: Method,
+        url: &str,
+        body: Vec<u8>,
+        content_type: &str,
+        label: &str,
+        timeout: Option<Duration>,
+    ) -> Result<String, AppError> {
         let headers = Self::auth_headers(self.api_token(), content_type)?;
         let body_opt = if body.is_empty() { None } else { Some(body) };
         let (status, body_text) = self
             .http
-            .request_text(method, url, headers, body_opt)
+            .request_text(method, url, headers, body_opt, timeout)
             .await?;
         if !(200..300).contains(&status) {
             return Err(AppError::Upstream(format!(
                 "{label}: {status} — {}",
-                truncate(&body_text, 500)
+                redact(self.api_token(), &truncate(&body_text, 500))
             )));
         }
         Ok(body_text)
@@ -89,4 +116,12 @@ fn truncate(s: &str, n: usize) -> String {
     } else {
         s.chars().take(n).collect::<String>() + "…"
     }
+}
+
+fn redact(token: &str, text: &str) -> String {
+    if token.is_empty() {
+        return text.to_string();
+    }
+    text.replace(token, "<redacted>")
+        .replace(&format!("Bearer {token}"), "Bearer <redacted>")
 }

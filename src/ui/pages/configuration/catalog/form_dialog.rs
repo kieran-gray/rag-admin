@@ -7,10 +7,13 @@ use crate::shared::contracts::{
     RerankerModelCommandDto, UpdateEmbeddingModelDto, UpdateGenerationModelDto,
     UpdateRerankerModelDto, UpdateVectorIndexDto, VectorIndexCommandDto,
 };
-use crate::shared::reference_data::{AiProviderKind, VectorStoreKind};
+use crate::shared::contracts::{DiscoveredIndexDto, DiscoveredModelDto};
+use crate::shared::reference_data::{AiProviderKind, ModelCapability, VectorStoreKind};
 use crate::ui::components::primitives::{Dialog, InlineStatusMessage};
 
-use super::widgets::{AiKindSelect, LabelledInput, LabelledNum, VectorKindSelect};
+use super::discovered_indexes_picker::DiscoveredIndexesPicker;
+use super::discovered_models_picker::DiscoveredModelsPicker;
+use super::widgets::{AiKindSelect, DimensionsField, LabelledInput, VectorKindSelect};
 use super::{dispatch_catalog_command, CatalogCommand, DeleteTarget, RegistryForm};
 
 #[component]
@@ -29,9 +32,13 @@ pub(super) fn RegistryFormDialog(
     let (vector_kind, set_vector_kind) = signal(VectorStoreKind::CloudflareVectorize);
     let (model_id, set_model_id) = signal(String::new());
     let (dims, set_dims) = signal(1024u32);
+    let (dims_from_discovery, set_dims_from_discovery) = signal(false);
+    let (dims_override, set_dims_override) = signal(false);
 
     Effect::new(move |_| {
         set_dialog_error.set(None);
+        set_dims_from_discovery.set(false);
+        set_dims_override.set(false);
         match form.get() {
             None => {}
             Some(RegistryForm::AddEmbeddingModel) => {
@@ -72,6 +79,24 @@ pub(super) fn RegistryFormDialog(
     let close = Callback::new(move |_| {
         set_form.set(None);
         set_dialog_error.set(None);
+    });
+
+    let on_pick_with_dims = Callback::new(move |m: DiscoveredModelDto| {
+        set_model_id.set(m.id);
+        if let Some(d) = m.dimensions {
+            set_dims.set(d);
+            set_dims_from_discovery.set(true);
+            set_dims_override.set(false);
+        }
+    });
+    let on_pick_id_only = Callback::new(move |m: DiscoveredModelDto| {
+        set_model_id.set(m.id);
+    });
+    let on_pick_index = Callback::new(move |i: DiscoveredIndexDto| {
+        set_name.set(i.name);
+        set_dims.set(i.dimensions);
+        set_dims_from_discovery.set(true);
+        set_dims_override.set(false);
     });
 
     let submit = move |ev: leptos::ev::SubmitEvent| {
@@ -120,22 +145,37 @@ pub(super) fn RegistryFormDialog(
                     None => ().into_any(),
                     Some(RegistryForm::AddEmbeddingModel | RegistryForm::EditEmbeddingModel(_)) => view! {
                         <AiKindSelect value=ai_kind set_value=set_ai_kind />
+                        <DiscoveredModelsPicker
+                            provider=ai_kind
+                            capability=ModelCapability::Embedding
+                            show_dimensions=true
+                            model_id=model_id
+                            on_select=on_pick_with_dims
+                        />
                         <LabelledInput
                             label="Model ID".to_string()
                             hint="Provider-specific model identifier (e.g. @cf/baai/bge-base-en-v1.5)".to_string()
                             value=model_id
                             set_value=set_model_id
                         />
-                        <LabelledNum
-                            label="Dimensions".to_string()
+                        <DimensionsField
                             hint="Must match the target vector index".to_string()
                             value=dims
                             set_value=set_dims
-                            min=1
+                            from_discovery=dims_from_discovery
+                            override_on=dims_override
+                            set_override=set_dims_override
                         />
                     }.into_any(),
                     Some(RegistryForm::AddGenerationModel | RegistryForm::EditGenerationModel(_)) => view! {
                         <AiKindSelect value=ai_kind set_value=set_ai_kind />
+                        <DiscoveredModelsPicker
+                            provider=ai_kind
+                            capability=ModelCapability::Generation
+                            show_dimensions=false
+                            model_id=model_id
+                            on_select=on_pick_id_only
+                        />
                         <LabelledInput
                             label="Model ID".to_string()
                             hint="Chat/completion model identifier".to_string()
@@ -145,6 +185,13 @@ pub(super) fn RegistryFormDialog(
                     }.into_any(),
                     Some(RegistryForm::AddRerankerModel | RegistryForm::EditRerankerModel(_)) => view! {
                         <AiKindSelect value=ai_kind set_value=set_ai_kind />
+                        <DiscoveredModelsPicker
+                            provider=ai_kind
+                            capability=ModelCapability::Reranker
+                            show_dimensions=false
+                            model_id=model_id
+                            on_select=on_pick_id_only
+                        />
                         <LabelledInput
                             label="Model ID".to_string()
                             hint="Reranker model identifier".to_string()
@@ -154,18 +201,24 @@ pub(super) fn RegistryFormDialog(
                     }.into_any(),
                     Some(RegistryForm::AddVectorIndex | RegistryForm::EditVectorIndex(_)) => view! {
                         <VectorKindSelect value=vector_kind set_value=set_vector_kind />
+                        <DiscoveredIndexesPicker
+                            kind=vector_kind
+                            index_name=name
+                            on_select=on_pick_index
+                        />
                         <LabelledInput
                             label="Index name".to_string()
                             hint="External vector store identifier".to_string()
                             value=name
                             set_value=set_name
                         />
-                        <LabelledNum
-                            label="Dimensions".to_string()
+                        <DimensionsField
                             hint="Must match the embedding model output".to_string()
                             value=dims
                             set_value=set_dims
-                            min=1
+                            from_discovery=dims_from_discovery
+                            override_on=dims_override
+                            set_override=set_dims_override
                         />
                     }.into_any(),
                 }}

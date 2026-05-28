@@ -5,6 +5,7 @@ pub mod chunk_set;
 pub mod comprehension;
 pub mod configuration;
 pub mod connector;
+pub mod discovery;
 pub mod error;
 pub mod evaluation;
 pub mod events;
@@ -51,6 +52,10 @@ pub use connector::{
     ConnectorDiscoveredItemViewDto, ConnectorDto, ConnectorItemStatusDto, ConnectorKindDto,
     ConnectorSyncSummaryDto, RegisterConnectorDto, RenameConnectorDto, SetConnectorDefaultsDto,
     SitemapConfigDto, UnregisterConnectorDto, UpdateConnectorConfigDto,
+};
+pub use discovery::{
+    DiscoveredIndexDto, DiscoveredModelDto, DiscoveryOutcomeDto, DiscoveryResponseDto,
+    IndexDiscoveryOutcomeDto, IndexDiscoveryResponseDto,
 };
 pub use error::{ApiError, ApiErrorKind};
 pub use evaluation::{

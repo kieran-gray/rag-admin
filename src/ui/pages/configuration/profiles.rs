@@ -452,12 +452,62 @@ fn IndexProfileFormDialog(
         set_dialog_error.set(None);
     });
 
+    let selected_embedding_dims = Memo::new(move |_| {
+        embedding_id.get().and_then(|id| {
+            config.with_value(|c| {
+                c.embedding_models
+                    .iter()
+                    .find(|m| m.embedding_model_id == id)
+                    .map(|m| m.dimensions)
+            })
+        })
+    });
+
+    Effect::new(move |_| {
+        let Some(want) = selected_embedding_dims.get() else {
+            return;
+        };
+        let Some(idx_id) = vector_index_id.get_untracked() else {
+            return;
+        };
+        let idx_dims = config.with_value(|c| {
+            c.vector_indexes
+                .iter()
+                .find(|i| i.index_id == idx_id)
+                .map(|i| i.dimensions)
+        });
+        if idx_dims.is_some_and(|d| d != want) {
+            set_vector_index_id.set(None);
+        }
+    });
+
     let submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
         let (Some(emb), Some(idx)) = (embedding_id.get(), vector_index_id.get()) else {
             set_dialog_error.set(Some("Pick an embedding model and vector index.".into()));
             return;
         };
+        let dims = config.with_value(|c| {
+            let emb_dims = c
+                .embedding_models
+                .iter()
+                .find(|m| m.embedding_model_id == emb)
+                .map(|m| m.dimensions);
+            let idx_dims = c
+                .vector_indexes
+                .iter()
+                .find(|i| i.index_id == idx)
+                .map(|i| i.dimensions);
+            (emb_dims, idx_dims)
+        });
+        if let (Some(e), Some(i)) = dims {
+            if e != i {
+                set_dialog_error.set(Some(format!(
+                    "Embedding model is {e}d but vector index is {i}d — they must match."
+                )));
+                return;
+            }
+        }
         let name_val = name.get().trim().to_string();
         if name_val.is_empty() {
             set_dialog_error.set(Some("Index profile name is required.".into()));
@@ -525,7 +575,7 @@ fn IndexProfileFormDialog(
                     options=Memo::new(move |_| config.with_value(|c| {
                         c.embedding_models
                             .iter()
-                            .map(|m| (
+                            .map(|m| SelectOption::enabled(
                                 m.embedding_model_id,
                                 format!("{} · {} · {}d", m.kind.display_label(), m.model, m.dimensions),
                             ))
@@ -538,15 +588,30 @@ fn IndexProfileFormDialog(
                     placeholder="— select vector index —".to_string()
                     value=vector_index_id
                     set_value=set_vector_index_id
-                    options=Memo::new(move |_| config.with_value(|c| {
-                        c.vector_indexes
-                            .iter()
-                            .map(|i| (
-                                i.index_id,
-                                format!("{} · {} · {}d", i.kind.display_label(), i.name, i.dimensions),
-                            ))
-                            .collect::<Vec<_>>()
-                    }))
+                    options=Memo::new(move |_| {
+                        let want = selected_embedding_dims.get();
+                        config.with_value(|c| {
+                            c.vector_indexes
+                                .iter()
+                                .map(|i| {
+                                    let base = format!(
+                                        "{} · {} · {}d",
+                                        i.kind.display_label(),
+                                        i.name,
+                                        i.dimensions,
+                                    );
+                                    match want {
+                                        Some(w) if w != i.dimensions => SelectOption {
+                                            id: i.index_id,
+                                            label: format!("{base} ≠ {w}d"),
+                                            disabled: true,
+                                        },
+                                        _ => SelectOption::enabled(i.index_id, base),
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                    })
                 />
 
                 <label class="flex items-center gap-2 text-sm">
@@ -716,13 +781,9 @@ fn RetrievalProfileFormDialog(
                     set_value=set_index_profile_id
                     options=Memo::new(move |_| index_profiles.with_value(|ips| {
                         ips.iter()
-                            .map(|ip| (
+                            .map(|ip| SelectOption::enabled(
                                 ip.index_profile_id,
-                                format!(
-                                    "{} · {}d",
-                                    ip.name,
-                                    ip.dimensions,
-                                ),
+                                format!("{} · {}d", ip.name, ip.dimensions),
                             ))
                             .collect::<Vec<_>>()
                     }))
@@ -736,7 +797,7 @@ fn RetrievalProfileFormDialog(
                     options=Memo::new(move |_| config.with_value(|c| {
                         c.generation_models
                             .iter()
-                            .map(|m| (
+                            .map(|m| SelectOption::enabled(
                                 m.generation_model_id,
                                 format!("{} · {}", m.kind.display_label(), m.model),
                             ))
@@ -752,7 +813,7 @@ fn RetrievalProfileFormDialog(
                     options=Memo::new(move |_| config.with_value(|c| {
                         c.reranker_models
                             .iter()
-                            .map(|m| (
+                            .map(|m| SelectOption::enabled(
                                 m.reranker_model_id,
                                 format!("{} · {}", m.kind.display_label(), m.model),
                             ))
@@ -949,7 +1010,7 @@ fn LabelledSelect(
     placeholder: String,
     value: ReadSignal<Option<Uuid>>,
     set_value: WriteSignal<Option<Uuid>>,
-    options: Memo<Vec<(Uuid, String)>>,
+    options: Memo<Vec<SelectOption>>,
 ) -> impl IntoView {
     view! {
         <label class="block space-y-1.5">
@@ -959,12 +1020,33 @@ fn LabelledSelect(
                 on:change=move |e| set_value.set(parse_uuid_or_none(&event_target_value(&e)))
             >
                 <option value="">{placeholder.clone()}</option>
-                {move || options.get().into_iter().map(|(id, lab)| {
-                    let selected = value.get() == Some(id);
-                    view! { <option value=id.to_string() selected=selected>{lab}</option> }
+                {move || options.get().into_iter().map(|opt| {
+                    let selected = value.get() == Some(opt.id);
+                    view! {
+                        <option value=opt.id.to_string() selected=selected disabled=opt.disabled>
+                            {opt.label}
+                        </option>
+                    }
                 }).collect_view()}
             </select>
         </label>
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct SelectOption {
+    id: Uuid,
+    label: String,
+    disabled: bool,
+}
+
+impl SelectOption {
+    fn enabled(id: Uuid, label: String) -> Self {
+        Self {
+            id,
+            label,
+            disabled: false,
+        }
     }
 }
 

@@ -3,6 +3,7 @@ pub mod catalog;
 pub mod chat;
 pub mod comprehension;
 pub mod connector;
+pub mod discovery;
 pub mod evaluation;
 pub mod indexing;
 pub mod ingestion;
@@ -36,6 +37,7 @@ use self::catalog::{CatalogDeps, CatalogServices};
 use self::chat::{ChatDeps, ChatServices};
 use self::comprehension::{ComprehensionDeps, ComprehensionServices};
 use self::connector::{ConnectorDeps, ConnectorServices};
+use self::discovery::{DiscoveryDeps, DiscoveryServices};
 use self::evaluation::{EvaluationDeps, EvaluationServices};
 use self::indexing::{IndexingDeps, IndexingServices};
 use self::ingestion::{IngestionDeps, IngestionServices};
@@ -47,6 +49,7 @@ pub struct App {
     pub platform: Arc<PlatformServices>,
     pub catalog: Arc<CatalogServices>,
     pub connector: Arc<ConnectorServices>,
+    pub discovery: Arc<DiscoveryServices>,
     pub indexing: Arc<IndexingServices>,
     pub ingestion: Arc<IngestionServices>,
     pub retrieval: Arc<RetrievalServices>,
@@ -108,6 +111,11 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         rerank_service: Arc::clone(&platform.rerank_service),
         event_bus: Arc::clone(&platform.event_bus),
         wakeups: &mut wakeups,
+    })?;
+
+    let discovery = DiscoveryServices::build(DiscoveryDeps {
+        cf_api: Arc::clone(&cf_api),
+        ollama_api: Arc::clone(&ollama_api),
     })?;
 
     let connector = ConnectorServices::build(ConnectorDeps {
@@ -213,6 +221,7 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         platform: Arc::new(platform),
         catalog: Arc::new(catalog),
         connector: Arc::new(connector),
+        discovery: Arc::new(discovery),
         indexing: Arc::new(indexing),
         ingestion: Arc::new(ingestion),
         retrieval: Arc::new(retrieval),
@@ -230,6 +239,7 @@ impl App {
         provide_context(Arc::clone(&self.platform));
         provide_context(Arc::clone(&self.catalog));
         provide_context(Arc::clone(&self.connector));
+        provide_context(Arc::clone(&self.discovery));
         provide_context(Arc::clone(&self.indexing));
         provide_context(Arc::clone(&self.ingestion));
         provide_context(Arc::clone(&self.retrieval));
