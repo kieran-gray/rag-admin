@@ -17,6 +17,7 @@ use crate::ui::pages::{
     document_detail::{DocumentDetailPage, DocumentIngestPage, DocumentMapPage},
     documents::{DocumentByIdRedirect, DocumentsPage},
     evaluate::{EvaluateByIdRedirect, EvaluatePage},
+    home::HomePage,
     playground::{chat::ChatPage, embed::EmbedPage, retrieve::RetrievePage},
     workflows::{EvaluateWorkflowPage, IngestWorkflowPage, RunPage, RunsPage},
 };
@@ -109,7 +110,8 @@ pub fn App() -> impl IntoView {
         <Router>
             <AppShell>
                 <Routes fallback=|| view! { <p class="p-8 muted">"Page not found."</p> }>
-                    <Route path=StaticSegment("") view=DocumentsPage />
+                    <Route path=StaticSegment("") view=HomePage />
+                    <Route path=StaticSegment("documents") view=DocumentsPage />
                     <Route
                         path=(
                             StaticSegment("documents"),

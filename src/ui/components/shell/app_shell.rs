@@ -1,8 +1,10 @@
 use leptos::prelude::*;
+use leptos_router::hooks::use_location;
 
 use super::activity_tray::ActivityTray;
 use super::nav::AppNav;
 use crate::ui::state::activity::{clamp_tray_height, provide_activity_state, use_activity_state};
+use crate::ui::state::recent::record_location;
 
 #[component]
 pub fn AppShell(children: Children) -> impl IntoView {
@@ -10,6 +12,11 @@ pub fn AppShell(children: Children) -> impl IntoView {
     let state = use_activity_state();
     let open = state.open;
     let height = state.height;
+
+    let location = use_location();
+    Effect::new(move |_| {
+        record_location(&location.pathname.get());
+    });
 
     let main_style = move || {
         if open.get() {

@@ -96,7 +96,7 @@ pub fn AppNav() -> impl IntoView {
     let is_active = move |href: &'static str| {
         let path = location.pathname.get();
         if href == "/" {
-            path == "/" || path.starts_with("/documents")
+            path == "/"
         } else {
             path == href || path.starts_with(&format!("{href}/"))
         }
@@ -132,7 +132,7 @@ pub fn AppNav() -> impl IntoView {
                     "rag-admin"
                 </A>
                 <nav class="flex flex-grow justify-around gap-5 text-sm items-center">
-                    {[("/", "Documents")].iter().copied().map(|(href, label)| {
+                    {[("/", "Home"), ("/documents", "Documents")].iter().copied().map(|(href, label)| {
                         let active = move || is_active(href);
                         view! {
                             <A
