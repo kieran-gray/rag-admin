@@ -8,14 +8,12 @@ pub enum MapPhase {
     SynthesizingThreads,
     SynthesizingInsights,
     Ready,
-    Failed,
 }
 
 impl MapPhase {
     pub fn from_status(status: &str) -> Self {
         match status {
             "ready" => Self::Ready,
-            "failed" => Self::Failed,
             "typing_roles" => Self::TypingRoles,
             "extracting_observations" => Self::ExtractingObservations,
             "synthesizing_threads" => Self::SynthesizingThreads,
@@ -32,7 +30,6 @@ impl MapPhase {
             Self::SynthesizingThreads => 3,
             Self::SynthesizingInsights => 4,
             Self::Ready => 5,
-            Self::Failed => 99,
         }
     }
 
@@ -40,14 +37,9 @@ impl MapPhase {
         matches!(self, Self::Ready)
     }
 
-    pub fn is_failed(self) -> bool {
-        matches!(self, Self::Failed)
-    }
-
     pub fn pill(self, progress: MapProgress) -> (Status, String) {
         match self {
             Self::Ready => (Status::Ok, "Ready".to_string()),
-            Self::Failed => (Status::Fail, "Failed".to_string()),
             Self::Pending => (Status::Pending, "Queued".to_string()),
             Self::TypingRoles => (Status::Pending, "Typing roles".to_string()),
             Self::ExtractingObservations => (

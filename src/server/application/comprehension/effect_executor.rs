@@ -14,7 +14,7 @@ use crate::server::application::source_document::ports::BlobStore;
 use crate::server::application::{ActivityRegistry, AppError, Job, JobRegistry};
 use crate::server::domain::chunk_set::chunk::Chunk;
 use crate::server::domain::chunk_set::repository::ChunkSetRepository;
-use crate::server::domain::comprehension::map::aggregate::{section_count_for, section_for_chunk};
+use crate::server::domain::comprehension::map::aggregate::section_count_for;
 use crate::server::domain::comprehension::map::effects::{
     DocumentMapEffect, ExtractObservationsEffect, SuggestRolesEffect, SynthesizeInsightsEffect,
     SynthesizeThreadsEffect,
@@ -83,19 +83,24 @@ impl DocumentMapEffectExecutor {
         job
     }
 
-    async fn load_summary(&self, map_id: Uuid) -> Result<Option<DocumentMapReadModel>, AppError> {
-        Ok(self.repository.load_summary(map_id).await?)
+    async fn load_active_with_job(
+        &self,
+        map_id: Uuid,
+    ) -> Result<Option<(DocumentMapReadModel, Arc<Job>)>, AppError> {
+        let Some(summary) = self.repository.load_summary(map_id).await? else {
+            return Ok(None);
+        };
+        if summary.status == "ready" {
+            return Ok(None);
+        }
+        let job = self.open_job(map_id).await;
+        Ok(Some((summary, job)))
     }
 
     async fn execute_suggest_roles(&self, effect: &SuggestRolesEffect) -> Result<(), AppError> {
-        let map_id = effect.map_id;
-        let Some(summary) = self.load_summary(map_id).await? else {
+        let Some((summary, job)) = self.load_active_with_job(effect.map_id).await? else {
             return Ok(());
         };
-        if summary.status == "ready" || summary.status == "failed" {
-            return Ok(());
-        }
-        let job = self.open_job(map_id).await;
         job.info("Typing reader roles…").await;
 
         let document = self
@@ -112,21 +117,11 @@ impl DocumentMapEffectExecutor {
         })?;
         let sample = take_chars(&text, ROLE_SAMPLE_CHARS);
 
-        let roles = match self
+        let roles = self
             .role_typer
             .suggest(summary.generation_model_id, &sample)
             .await
-        {
-            Ok(r) => r,
-            Err(e) => {
-                job.error(&format!("Role suggestion failed: {e}")).await;
-                self.command_handler
-                    .fail_map(map_id, format!("role suggestion failed: {e}"))
-                    .await?;
-                job.finish().await;
-                return Ok(());
-            }
-        };
+            .map_err(|e| AppError::Upstream(format!("role suggestion failed: {e}")))?;
 
         let roles = if roles.is_empty() {
             vec![SuggestedRole {
@@ -144,7 +139,7 @@ impl DocumentMapEffectExecutor {
         ))
         .await;
         self.command_handler
-            .record_suggested_roles(map_id, roles)
+            .record_suggested_roles(summary.map_id, roles)
             .await?;
         Ok(())
     }
@@ -153,27 +148,23 @@ impl DocumentMapEffectExecutor {
         &self,
         effect: &ExtractObservationsEffect,
     ) -> Result<(), AppError> {
-        let map_id = effect.map_id;
-        let Some(summary) = self.load_summary(map_id).await? else {
+        let Some((summary, job)) = self.load_active_with_job(effect.map_id).await? else {
             return Ok(());
         };
-        if summary.status == "ready" || summary.status == "failed" {
-            return Ok(());
-        }
-        let job = self.open_job(map_id).await;
 
         let chunks = self
             .chunk_set_repository
             .load_chunks(summary.chunk_set_id)
             .await?;
-        let Some(chunk) = chunks.iter().find(|c| c.sequence == effect.chunk_sequence) else {
-            let msg = format!("chunk {} not found in chunk set", effect.chunk_sequence);
-            job.warn(&msg).await;
-            self.command_handler
-                .record_chunk_extraction_failure(map_id, effect.chunk_sequence, msg)
-                .await?;
-            return Ok(());
-        };
+        let chunk = chunks
+            .iter()
+            .find(|c| c.sequence == effect.chunk_sequence)
+            .ok_or_else(|| {
+                AppError::Internal(format!(
+                    "chunk {} not found in chunk set {}",
+                    effect.chunk_sequence, summary.chunk_set_id
+                ))
+            })?;
 
         let role_summary = render_role_summary(&summary.suggested_roles);
         let ctx = ObservationContext {
@@ -182,26 +173,18 @@ impl DocumentMapEffectExecutor {
             suggested_roles_summary: &role_summary,
         };
 
-        let observations = match self
+        let observations = self
             .observation_extractor
             .extract(summary.generation_model_id, ctx)
             .await
-        {
-            Ok(o) => o,
-            Err(e) => {
-                job.warn(&format!(
-                    "Chunk {} extraction failed: {e}",
+            .map_err(|e| {
+                AppError::Upstream(format!(
+                    "chunk {} extraction failed: {e}",
                     effect.chunk_sequence
                 ))
-                .await;
-                self.command_handler
-                    .record_chunk_extraction_failure(map_id, effect.chunk_sequence, e.to_string())
-                    .await?;
-                return Ok(());
-            }
-        };
+            })?;
 
-        let validated = validate_observations(&summary, chunk, observations);
+        let validated = validate_observations(chunk, observations);
         let completed = summary.observations_extracted.saturating_add(1);
         job.info(&format!(
             "Observations · chunk {chunk_seq} ({completed}/{total}) · {count} extracted",
@@ -211,7 +194,7 @@ impl DocumentMapEffectExecutor {
         ))
         .await;
         self.command_handler
-            .record_observations(map_id, effect.chunk_sequence, validated)
+            .record_observations(summary.map_id, effect.chunk_sequence, validated)
             .await?;
         Ok(())
     }
@@ -220,14 +203,9 @@ impl DocumentMapEffectExecutor {
         &self,
         effect: &SynthesizeThreadsEffect,
     ) -> Result<(), AppError> {
-        let map_id = effect.map_id;
-        let Some(summary) = self.load_summary(map_id).await? else {
+        let Some((summary, job)) = self.load_active_with_job(effect.map_id).await? else {
             return Ok(());
         };
-        if summary.status == "ready" || summary.status == "failed" {
-            return Ok(());
-        }
-        let job = self.open_job(map_id).await;
 
         let section_size = summary.section_size.max(1);
         let from = effect.section_sequence.saturating_mul(section_size);
@@ -235,38 +213,26 @@ impl DocumentMapEffectExecutor {
 
         let observations = self
             .repository
-            .load_observations_for_section(map_id, from, to_inclusive)
+            .load_observations_for_section(summary.map_id, from, to_inclusive)
             .await?;
-        let carried = self.repository.carried_summary(map_id).await?;
+        let carried = self.repository.carried_summary(summary.map_id).await?;
         let req = ThreadSynthRequest {
-            map_id,
+            map_id: summary.map_id,
             document_id: summary.document_id,
             section_sequence: effect.section_sequence,
             observations: &observations,
             carried_summary: &carried,
         };
-        let result = match self
+        let result = self
             .thread_synthesizer
             .synthesize(summary.generation_model_id, req)
             .await
-        {
-            Ok(r) => r,
-            Err(e) => {
-                job.warn(&format!(
-                    "Section {} synthesis failed: {e}",
+            .map_err(|e| {
+                AppError::Upstream(format!(
+                    "section {} synthesis failed: {e}",
                     effect.section_sequence
                 ))
-                .await;
-                self.command_handler
-                    .record_section_synthesis_failure(
-                        map_id,
-                        effect.section_sequence,
-                        e.to_string(),
-                    )
-                    .await?;
-                return Ok(());
-            }
-        };
+            })?;
         let section_total = section_count_for(summary.chunk_count, section_size);
         let completed = summary.threads_synthesized.saturating_add(1);
         job.info(&format!(
@@ -278,7 +244,7 @@ impl DocumentMapEffectExecutor {
         .await;
         self.command_handler
             .record_threads(
-                map_id,
+                summary.map_id,
                 effect.section_sequence,
                 result.updated_carried_summary,
                 result.threads,
@@ -291,42 +257,27 @@ impl DocumentMapEffectExecutor {
         &self,
         effect: &SynthesizeInsightsEffect,
     ) -> Result<(), AppError> {
-        let map_id = effect.map_id;
-        let Some(summary) = self.load_summary(map_id).await? else {
+        let Some((summary, job)) = self.load_active_with_job(effect.map_id).await? else {
             return Ok(());
         };
-        if summary.status == "ready" || summary.status == "failed" {
-            return Ok(());
-        }
-        let job = self.open_job(map_id).await;
         job.info("Synthesizing insights…").await;
-        let Some(detail) = self.repository.load_detail(map_id).await? else {
+        let Some(detail) = self.repository.load_detail(summary.map_id).await? else {
             return Ok(());
         };
         let req = InsightSynthRequest {
-            map_id,
+            map_id: summary.map_id,
             document_id: summary.document_id,
             observations: &detail.observations,
             threads: &detail.threads,
         };
-        let insights = match self
+        let insights = self
             .insight_synthesizer
             .synthesize(summary.generation_model_id, req)
             .await
-        {
-            Ok(i) => i,
-            Err(e) => {
-                job.error(&format!("Insight synthesis failed: {e}")).await;
-                self.command_handler
-                    .fail_map(map_id, format!("insight synthesis failed: {e}"))
-                    .await?;
-                job.finish().await;
-                return Ok(());
-            }
-        };
+            .map_err(|e| AppError::Upstream(format!("insight synthesis failed: {e}")))?;
         let count = insights.len();
         self.command_handler
-            .record_insights(map_id, insights)
+            .record_insights(summary.map_id, insights)
             .await?;
         let obs_count = detail.observations.len();
         let thread_count = detail.threads.len();
@@ -350,11 +301,7 @@ fn plural(n: usize) -> &'static str {
     }
 }
 
-fn validate_observations(
-    _summary: &DocumentMapReadModel,
-    chunk: &Chunk,
-    observations: Vec<Observation>,
-) -> Vec<Observation> {
+fn validate_observations(chunk: &Chunk, observations: Vec<Observation>) -> Vec<Observation> {
     observations
         .into_iter()
         .filter(|o| {
@@ -391,9 +338,4 @@ impl EffectExecutor<DocumentMapEffect> for DocumentMapEffectExecutor {
         };
         result.map_err(|e| Box::new(e) as EffectError)
     }
-}
-
-#[allow(dead_code)]
-pub fn section_for(chunk_sequence: u32, section_size: u32) -> u32 {
-    section_for_chunk(chunk_sequence, section_size)
 }

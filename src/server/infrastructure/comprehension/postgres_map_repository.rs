@@ -43,15 +43,14 @@ impl PostgresDocumentMapRepository {
         let Some(row) = self.fetch_row(map_id).await? else {
             return Ok(());
         };
-        if row.status == "failed" || row.status == "ready" {
+        if row.status == "ready" {
             return Ok(());
         }
 
         let next = derive_status(&row);
-        let (status_str, _) = status_to_db(&next);
         sqlx::query("UPDATE document_maps SET status = $2, updated_at = NOW() WHERE map_id = $1")
             .bind(map_id)
-            .bind(status_str)
+            .bind(next.as_str())
             .execute(&self.pool)
             .await
             .map_err(|e| DocumentMapRepositoryError::Internal(format!("recompute_status: {e}")))?;
@@ -98,20 +97,8 @@ fn derive_status(row: &DocumentMapRow) -> MapStatus {
     MapStatus::SynthesizingInsights
 }
 
-fn status_to_db(status: &MapStatus) -> (String, Option<String>) {
-    match status {
-        MapStatus::Pending => ("pending".into(), None),
-        MapStatus::TypingRoles => ("typing_roles".into(), None),
-        MapStatus::ExtractingObservations { .. } => ("extracting_observations".into(), None),
-        MapStatus::SynthesizingThreads { .. } => ("synthesizing_threads".into(), None),
-        MapStatus::SynthesizingInsights => ("synthesizing_insights".into(), None),
-        MapStatus::Ready => ("ready".into(), None),
-        MapStatus::Failed { reason } => ("failed".into(), Some(reason.clone())),
-    }
-}
-
 const SELECT_BASE: &str = "SELECT map_id, document_id, document_version, content_hash, \
-chunk_set_id, chunk_count, section_size, status, failure_reason, generation_model_id, \
+chunk_set_id, chunk_count, section_size, status, generation_model_id, \
 suggested_roles, carried_thread_summary, extracted_chunks, synthesized_sections \
 FROM document_maps WHERE map_id = $1";
 
@@ -125,7 +112,6 @@ struct DocumentMapRow {
     chunk_count: i32,
     section_size: i32,
     status: String,
-    failure_reason: Option<String>,
     generation_model_id: Uuid,
     suggested_roles: JsonValue,
     #[allow(dead_code)]
@@ -153,7 +139,6 @@ impl DocumentMapRow {
             chunk_count: self.chunk_count as u32,
             section_size: self.section_size as u32,
             status: self.status,
-            failure_reason: self.failure_reason,
             generation_model_id: self.generation_model_id,
             suggested_roles: roles,
             observations_extracted: self.extracted_chunks.len() as u32,
@@ -475,28 +460,6 @@ impl DocumentMapRepository for PostgresDocumentMapRepository {
         Ok(())
     }
 
-    async fn project_chunk_extraction_failure(
-        &self,
-        map_id: Uuid,
-        chunk_sequence: u32,
-    ) -> Result<(), DocumentMapRepositoryError> {
-        sqlx::query(
-            "UPDATE document_maps
-             SET extracted_chunks = array_append(extracted_chunks, $2),
-                 updated_at = NOW()
-             WHERE map_id = $1 AND NOT ($2 = ANY(extracted_chunks))",
-        )
-        .bind(map_id)
-        .bind(chunk_sequence as i32)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| {
-            DocumentMapRepositoryError::Internal(format!("project_chunk_extraction_failure: {e}"))
-        })?;
-        self.recompute_status(map_id).await?;
-        Ok(())
-    }
-
     async fn project_threads(
         &self,
         map_id: Uuid,
@@ -554,28 +517,6 @@ impl DocumentMapRepository for PostgresDocumentMapRepository {
         Ok(())
     }
 
-    async fn project_section_synthesis_failure(
-        &self,
-        map_id: Uuid,
-        section_sequence: u32,
-    ) -> Result<(), DocumentMapRepositoryError> {
-        sqlx::query(
-            "UPDATE document_maps
-             SET synthesized_sections = array_append(synthesized_sections, $2),
-                 updated_at = NOW()
-             WHERE map_id = $1 AND NOT ($2 = ANY(synthesized_sections))",
-        )
-        .bind(map_id)
-        .bind(section_sequence as i32)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| {
-            DocumentMapRepositoryError::Internal(format!("project_section_synthesis_failure: {e}"))
-        })?;
-        self.recompute_status(map_id).await?;
-        Ok(())
-    }
-
     async fn project_insights(
         &self,
         map_id: Uuid,
@@ -615,23 +556,6 @@ impl DocumentMapRepository for PostgresDocumentMapRepository {
         tx.commit().await.map_err(|e| {
             DocumentMapRepositoryError::Internal(format!("commit project_insights: {e}"))
         })?;
-        Ok(())
-    }
-
-    async fn project_failure(
-        &self,
-        map_id: Uuid,
-        reason: &str,
-    ) -> Result<(), DocumentMapRepositoryError> {
-        sqlx::query(
-            "UPDATE document_maps SET status = 'failed', failure_reason = $2, updated_at = NOW()
-             WHERE map_id = $1",
-        )
-        .bind(map_id)
-        .bind(reason)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| DocumentMapRepositoryError::Internal(format!("project_failure: {e}")))?;
         Ok(())
     }
 

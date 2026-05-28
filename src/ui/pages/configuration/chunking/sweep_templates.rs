@@ -217,7 +217,7 @@ pub(super) fn SweepTemplateFormDialog(
             title=Signal::derive(move || match form_mode.get() {
                 Some(SweepFormMode::Edit(_)) => "Edit sweep template".to_string(),
                 _ => "New sweep template".to_string(),
-            }).get()
+            })
             subtitle="Group chunking configurations under a name and use them as the variants axis on the evaluation launcher.".to_string()
             on_close=close
         >

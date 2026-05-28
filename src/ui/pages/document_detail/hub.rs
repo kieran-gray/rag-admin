@@ -479,7 +479,6 @@ enum NodeState {
     Empty,
     Active,
     Done,
-    Failed,
 }
 
 #[component]
@@ -497,10 +496,6 @@ fn WorkflowStrip(nodes: Vec<StepNode>) -> impl IntoView {
                     NodeState::Active => (
                         "●",
                         "bg-[var(--status-info)] text-[var(--color-page-bg)] border-[var(--status-info)] animate-pulse",
-                    ),
-                    NodeState::Failed => (
-                        "✗",
-                        "bg-[var(--color-page-bg)] text-[var(--status-fail)] border-[var(--status-fail)]",
                     ),
                     NodeState::Empty => (
                         "○",
@@ -668,8 +663,6 @@ fn summarize_evaluate(
             let phase = MapPhase::from_status(&m.status);
             let state = if phase.is_ready() {
                 NodeState::Done
-            } else if phase.is_failed() {
-                NodeState::Failed
             } else {
                 NodeState::Active
             };
@@ -678,8 +671,6 @@ fn summarize_evaluate(
                     "{}i · {}t · {}o",
                     m.insights_synthesized, m.threads_synthesized, m.observations_extracted,
                 )
-            } else if phase.is_failed() {
-                "failed".to_string()
             } else {
                 "building".to_string()
             };

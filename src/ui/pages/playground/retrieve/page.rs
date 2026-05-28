@@ -65,8 +65,8 @@ fn PlaygroundBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView
     let retrieval_profiles_stored = StoredValue::new(retrieval_profiles.clone());
     let playground = use_playground_context();
     let query_params = use_query_map();
-    let url_query = query_params.with(|q| q.get("q").unwrap_or_default().to_string());
-    let url_profile_param = query_params.with(|q| q.get("profile").unwrap_or_default().to_string());
+    let url_query = query_params.with_untracked(|q| q.get("q").unwrap_or_default().to_string());
+    let url_profile_param = query_params.with_untracked(|q| q.get("profile").unwrap_or_default().to_string());
     let url_profile_uuid = Uuid::parse_str(&url_profile_param).ok();
 
     let initial_query = if url_query.is_empty() {

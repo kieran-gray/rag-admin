@@ -501,7 +501,7 @@ fn IndexProfileFormDialog(
             title=Signal::derive(move || match form_mode.get() {
                 Some(IndexFormMode::Edit(_)) => "Edit index profile".to_string(),
                 _ => "New index profile".to_string(),
-            }).get()
+            })
             subtitle="Embedding model and vector index must share the same dimension.".to_string()
             on_close=close
         >
@@ -693,7 +693,7 @@ fn RetrievalProfileFormDialog(
             title=Signal::derive(move || match form_mode.get() {
                 Some(RetrievalFormMode::Edit(_)) => "Edit retrieval profile".to_string(),
                 _ => "New retrieval profile".to_string(),
-            }).get()
+            })
             subtitle="Select the index profile to query, the model to generate answers with, and the default retrieval knobs.".to_string()
             on_close=close
         >

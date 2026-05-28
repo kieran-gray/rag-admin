@@ -9,8 +9,8 @@ use super::super::role::SuggestedRole;
 use super::super::thread::Thread;
 use super::commands::DocumentMapCommand;
 use super::events::{
-    ChunkExtractionFailed, DocumentMapEvent, InsightsSynthesized, MapBuildRequested, MapFailed,
-    ObservationsExtracted, RolesSuggested, SectionSynthesisFailed, ThreadsSynthesized,
+    DocumentMapEvent, InsightsSynthesized, MapBuildRequested, ObservationsExtracted,
+    RolesSuggested, ThreadsSynthesized,
 };
 use super::exceptions::DocumentMapError;
 
@@ -43,7 +43,6 @@ pub enum MapStatus {
     SynthesizingThreads { remaining_sections: u32 },
     SynthesizingInsights,
     Ready,
-    Failed { reason: String },
 }
 
 impl MapStatus {
@@ -55,12 +54,11 @@ impl MapStatus {
             Self::SynthesizingThreads { .. } => "synthesizing_threads",
             Self::SynthesizingInsights => "synthesizing_insights",
             Self::Ready => "ready",
-            Self::Failed { .. } => "failed",
         }
     }
 
-    pub fn is_terminal(&self) -> bool {
-        matches!(self, Self::Ready | Self::Failed { .. })
+    pub fn is_ready(&self) -> bool {
+        matches!(self, Self::Ready)
     }
 }
 
@@ -79,7 +77,6 @@ pub struct DocumentMap {
     pub observations: Vec<Observation>,
     pub threads: Vec<Thread>,
     pub insights: Vec<Insight>,
-    pub failure_reason: Option<String>,
     pub completed_chunks: Vec<u32>,
     pub completed_sections: Vec<u32>,
 }
@@ -100,7 +97,6 @@ impl DocumentMap {
             observations: Vec::new(),
             threads: Vec::new(),
             insights: Vec::new(),
-            failure_reason: None,
             completed_chunks: Vec::new(),
             completed_sections: Vec::new(),
         }
@@ -110,24 +106,43 @@ impl DocumentMap {
         section_count_for(self.chunk_count, self.section_size)
     }
 
-    fn record_chunk_completion(&mut self, chunk_sequence: u32) {
+    fn advance_after_chunk(&mut self, chunk_sequence: u32) {
         if !self.completed_chunks.contains(&chunk_sequence) {
             self.completed_chunks.push(chunk_sequence);
         }
+        let remaining = self
+            .chunk_count
+            .saturating_sub(self.completed_chunks.len() as u32);
+        if remaining > 0 {
+            self.status = MapStatus::ExtractingObservations {
+                remaining_chunks: remaining,
+            };
+            return;
+        }
+        let sections = self.section_count();
+        self.status = if sections == 0 {
+            MapStatus::SynthesizingInsights
+        } else {
+            MapStatus::SynthesizingThreads {
+                remaining_sections: sections,
+            }
+        };
     }
 
-    fn record_section_completion(&mut self, section_sequence: u32) {
+    fn advance_after_section(&mut self, section_sequence: u32) {
         if !self.completed_sections.contains(&section_sequence) {
             self.completed_sections.push(section_sequence);
         }
-    }
-
-    fn last_carried_summary(&self) -> String {
-        self.threads
-            .iter()
-            .max_by_key(|t| t.section_sequence)
-            .map(|_t| String::new())
-            .unwrap_or_default()
+        let remaining = self
+            .section_count()
+            .saturating_sub(self.completed_sections.len() as u32);
+        self.status = if remaining == 0 {
+            MapStatus::SynthesizingInsights
+        } else {
+            MapStatus::SynthesizingThreads {
+                remaining_sections: remaining,
+            }
+        };
     }
 }
 
@@ -155,81 +170,15 @@ impl Aggregate for DocumentMap {
             }
             DocumentMapEvent::ObservationsExtracted(e) => {
                 self.observations.extend(e.observations.iter().cloned());
-                self.record_chunk_completion(e.chunk_sequence);
-                let remaining = self
-                    .chunk_count
-                    .saturating_sub(self.completed_chunks.len() as u32);
-                if remaining == 0 {
-                    let sections = self.section_count();
-                    if sections == 0 {
-                        self.status = MapStatus::SynthesizingInsights;
-                    } else {
-                        self.status = MapStatus::SynthesizingThreads {
-                            remaining_sections: sections,
-                        };
-                    }
-                } else {
-                    self.status = MapStatus::ExtractingObservations {
-                        remaining_chunks: remaining,
-                    };
-                }
-            }
-            DocumentMapEvent::ChunkExtractionFailed(e) => {
-                self.record_chunk_completion(e.chunk_sequence);
-                let remaining = self
-                    .chunk_count
-                    .saturating_sub(self.completed_chunks.len() as u32);
-                if remaining == 0 {
-                    let sections = self.section_count();
-                    if sections == 0 {
-                        self.status = MapStatus::SynthesizingInsights;
-                    } else {
-                        self.status = MapStatus::SynthesizingThreads {
-                            remaining_sections: sections,
-                        };
-                    }
-                } else {
-                    self.status = MapStatus::ExtractingObservations {
-                        remaining_chunks: remaining,
-                    };
-                }
+                self.advance_after_chunk(e.chunk_sequence);
             }
             DocumentMapEvent::ThreadsSynthesized(e) => {
                 self.threads.extend(e.threads.iter().cloned());
-                self.record_section_completion(e.section_sequence);
-                let remaining = self
-                    .section_count()
-                    .saturating_sub(self.completed_sections.len() as u32);
-                if remaining == 0 {
-                    self.status = MapStatus::SynthesizingInsights;
-                } else {
-                    self.status = MapStatus::SynthesizingThreads {
-                        remaining_sections: remaining,
-                    };
-                }
-            }
-            DocumentMapEvent::SectionSynthesisFailed(e) => {
-                self.record_section_completion(e.section_sequence);
-                let remaining = self
-                    .section_count()
-                    .saturating_sub(self.completed_sections.len() as u32);
-                if remaining == 0 {
-                    self.status = MapStatus::SynthesizingInsights;
-                } else {
-                    self.status = MapStatus::SynthesizingThreads {
-                        remaining_sections: remaining,
-                    };
-                }
+                self.advance_after_section(e.section_sequence);
             }
             DocumentMapEvent::InsightsSynthesized(e) => {
                 self.insights.extend(e.insights.iter().cloned());
                 self.status = MapStatus::Ready;
-            }
-            DocumentMapEvent::MapFailed(e) => {
-                self.failure_reason = Some(e.reason.clone());
-                self.status = MapStatus::Failed {
-                    reason: e.reason.clone(),
-                };
             }
         }
     }
@@ -259,7 +208,7 @@ impl Aggregate for DocumentMap {
             }
             DocumentMapCommand::RecordSuggestedRoles(cmd) => {
                 let map = state.ok_or(DocumentMapError::NotFound)?;
-                if map.status.is_terminal() {
+                if map.status.is_ready() {
                     return Ok(vec![]);
                 }
                 if !matches!(map.status, MapStatus::Pending | MapStatus::TypingRoles) {
@@ -272,7 +221,7 @@ impl Aggregate for DocumentMap {
             }
             DocumentMapCommand::RecordObservations(cmd) => {
                 let map = state.ok_or(DocumentMapError::NotFound)?;
-                if map.status.is_terminal() {
+                if map.status.is_ready() {
                     return Ok(vec![]);
                 }
                 if map.completed_chunks.contains(&cmd.chunk_sequence) {
@@ -286,25 +235,9 @@ impl Aggregate for DocumentMap {
                     },
                 )])
             }
-            DocumentMapCommand::RecordChunkExtractionFailure(cmd) => {
-                let map = state.ok_or(DocumentMapError::NotFound)?;
-                if map.status.is_terminal() {
-                    return Ok(vec![]);
-                }
-                if map.completed_chunks.contains(&cmd.chunk_sequence) {
-                    return Ok(vec![]);
-                }
-                Ok(vec![DocumentMapEvent::ChunkExtractionFailed(
-                    ChunkExtractionFailed {
-                        chunk_sequence: cmd.chunk_sequence,
-                        reason: cmd.reason,
-                        occurred_at: cmd.occurred_at,
-                    },
-                )])
-            }
             DocumentMapCommand::RecordThreads(cmd) => {
                 let map = state.ok_or(DocumentMapError::NotFound)?;
-                if map.status.is_terminal() {
+                if map.status.is_ready() {
                     return Ok(vec![]);
                 }
                 if map.completed_sections.contains(&cmd.section_sequence) {
@@ -319,25 +252,9 @@ impl Aggregate for DocumentMap {
                     },
                 )])
             }
-            DocumentMapCommand::RecordSectionSynthesisFailure(cmd) => {
-                let map = state.ok_or(DocumentMapError::NotFound)?;
-                if map.status.is_terminal() {
-                    return Ok(vec![]);
-                }
-                if map.completed_sections.contains(&cmd.section_sequence) {
-                    return Ok(vec![]);
-                }
-                Ok(vec![DocumentMapEvent::SectionSynthesisFailed(
-                    SectionSynthesisFailed {
-                        section_sequence: cmd.section_sequence,
-                        reason: cmd.reason,
-                        occurred_at: cmd.occurred_at,
-                    },
-                )])
-            }
             DocumentMapCommand::RecordInsights(cmd) => {
                 let map = state.ok_or(DocumentMapError::NotFound)?;
-                if map.status.is_terminal() {
+                if map.status.is_ready() {
                     return Ok(vec![]);
                 }
                 if !matches!(map.status, MapStatus::SynthesizingInsights) {
@@ -352,17 +269,6 @@ impl Aggregate for DocumentMap {
                         occurred_at: cmd.occurred_at,
                     },
                 )])
-            }
-            DocumentMapCommand::FailMap(cmd) => {
-                let map = state.ok_or(DocumentMapError::NotFound)?;
-                match &map.status {
-                    MapStatus::Ready => Err(DocumentMapError::AlreadyReady),
-                    MapStatus::Failed { .. } => Ok(vec![]),
-                    _ => Ok(vec![DocumentMapEvent::MapFailed(MapFailed {
-                        reason: cmd.reason,
-                        occurred_at: cmd.occurred_at,
-                    })]),
-                }
             }
         }
     }
@@ -382,17 +288,11 @@ impl Aggregate for DocumentMap {
     }
 }
 
-impl DocumentMap {
-    pub fn carried_summary(&self) -> String {
-        self.last_carried_summary()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::server::domain::comprehension::map::commands::{
-        FailMap, RecordInsights, RecordObservations, RecordSuggestedRoles, RequestMapBuild,
+        RecordInsights, RecordObservations, RecordSuggestedRoles, RequestMapBuild,
     };
     use crate::server::domain::comprehension::role::SuggestedRole;
     use crate::server::domain::shared::Timestamp;
@@ -573,7 +473,7 @@ mod tests {
     }
 
     #[test]
-    fn fail_map_after_ready_errors() {
+    fn record_insights_after_ready_is_noop() {
         let mut events = DocumentMap::handle_command(None, request_cmd(0)).unwrap();
         let state = DocumentMap::from_events(&events).unwrap();
         events.extend(
@@ -601,17 +501,17 @@ mod tests {
             .unwrap(),
         );
         let state = DocumentMap::from_events(&events).unwrap();
-        assert!(matches!(state.status, MapStatus::Ready));
-        let err = DocumentMap::handle_command(
+        assert!(state.status.is_ready());
+        let again = DocumentMap::handle_command(
             Some(&state),
-            DocumentMapCommand::FailMap(FailMap {
+            DocumentMapCommand::RecordInsights(RecordInsights {
                 map_id: state.map_id,
-                reason: "x".into(),
+                insights: vec![],
                 occurred_at: ts(),
             }),
         )
-        .unwrap_err();
-        assert!(matches!(err, DocumentMapError::AlreadyReady));
+        .unwrap();
+        assert!(again.is_empty());
     }
 
     #[test]

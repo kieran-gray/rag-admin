@@ -144,13 +144,8 @@ impl EvaluationDatasetEffectExecutor {
             .await
             .map_err(|e| AppError::Internal(format!("find_awaiting_for_map: {e}")))?;
         for dataset_id in awaiting {
-            self.resolve_map(
-                dataset_id,
-                effect.map_id,
-                effect.ready,
-                effect.failure_reason.clone(),
-            )
-            .await?;
+            self.resolve_map(dataset_id, effect.map_id, true, None)
+                .await?;
         }
         Ok(())
     }
@@ -166,15 +161,8 @@ impl EvaluationDatasetEffectExecutor {
         else {
             return Ok(());
         };
-        match map.status.as_str() {
-            "ready" => {
-                self.resolve_map(dataset_id, map.map_id, true, None).await?;
-            }
-            "failed" => {
-                self.resolve_map(dataset_id, map.map_id, false, map.failure_reason)
-                    .await?;
-            }
-            _ => {}
+        if map.status == "ready" {
+            self.resolve_map(dataset_id, map.map_id, true, None).await?;
         }
         Ok(())
     }

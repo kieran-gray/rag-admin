@@ -14,8 +14,8 @@ use crate::server::domain::chunk_set::aggregate::derive_chunk_set_id;
 use crate::server::domain::chunk_set::chunk::Chunk;
 use crate::server::domain::comprehension::map::aggregate::{derive_map_id, DocumentMap, MapStatus};
 use crate::server::domain::comprehension::map::commands::{
-    DocumentMapCommand, FailMap, RecordChunkExtractionFailure, RecordInsights, RecordObservations,
-    RecordSectionSynthesisFailure, RecordSuggestedRoles, RecordThreads, RequestMapBuild,
+    DocumentMapCommand, RecordInsights, RecordObservations, RecordSuggestedRoles, RecordThreads,
+    RequestMapBuild,
 };
 use crate::server::domain::comprehension::map::events::DEFAULT_SECTION_SIZE;
 use crate::server::domain::comprehension::map::exceptions::DocumentMapError;
@@ -123,7 +123,7 @@ impl DocumentMapCommandHandler {
                 self.repository.delete(existing.map_id).await?;
                 self.repository.delete_event_stream(existing.map_id).await?;
             } else {
-                let status = parse_status_str(&existing.status, existing.failure_reason.clone());
+                let status = parse_status_str(&existing.status);
                 return Ok(MapBuildHandle {
                     map_id: existing.map_id,
                     chunk_set_id: existing.chunk_set_id,
@@ -234,25 +234,6 @@ impl DocumentMapCommandHandler {
         Ok(())
     }
 
-    pub async fn record_chunk_extraction_failure(
-        &self,
-        map_id: Uuid,
-        chunk_sequence: u32,
-        reason: String,
-    ) -> Result<(), AppError> {
-        let cmd = DocumentMapCommand::RecordChunkExtractionFailure(RecordChunkExtractionFailure {
-            map_id,
-            chunk_sequence,
-            reason,
-            occurred_at: self.clock.now(),
-        });
-        self.processor
-            .handle(map_id, cmd)
-            .await
-            .map_err(map_command_error)?;
-        Ok(())
-    }
-
     pub async fn record_threads(
         &self,
         map_id: Uuid,
@@ -267,26 +248,6 @@ impl DocumentMapCommandHandler {
             carried_summary,
             occurred_at: self.clock.now(),
         });
-        self.processor
-            .handle(map_id, cmd)
-            .await
-            .map_err(map_command_error)?;
-        Ok(())
-    }
-
-    pub async fn record_section_synthesis_failure(
-        &self,
-        map_id: Uuid,
-        section_sequence: u32,
-        reason: String,
-    ) -> Result<(), AppError> {
-        let cmd =
-            DocumentMapCommand::RecordSectionSynthesisFailure(RecordSectionSynthesisFailure {
-                map_id,
-                section_sequence,
-                reason,
-                occurred_at: self.clock.now(),
-            });
         self.processor
             .handle(map_id, cmd)
             .await
@@ -310,22 +271,9 @@ impl DocumentMapCommandHandler {
             .map_err(map_command_error)?;
         Ok(())
     }
-
-    pub async fn fail_map(&self, map_id: Uuid, reason: String) -> Result<(), AppError> {
-        let cmd = DocumentMapCommand::FailMap(FailMap {
-            map_id,
-            reason,
-            occurred_at: self.clock.now(),
-        });
-        self.processor
-            .handle(map_id, cmd)
-            .await
-            .map_err(map_command_error)?;
-        Ok(())
-    }
 }
 
-fn parse_status_str(status: &str, failure_reason: Option<String>) -> MapStatus {
+fn parse_status_str(status: &str) -> MapStatus {
     match status {
         "typing_roles" => MapStatus::TypingRoles,
         "extracting_observations" => MapStatus::ExtractingObservations {
@@ -336,9 +284,6 @@ fn parse_status_str(status: &str, failure_reason: Option<String>) -> MapStatus {
         },
         "synthesizing_insights" => MapStatus::SynthesizingInsights,
         "ready" => MapStatus::Ready,
-        "failed" => MapStatus::Failed {
-            reason: failure_reason.unwrap_or_default(),
-        },
         _ => MapStatus::Pending,
     }
 }

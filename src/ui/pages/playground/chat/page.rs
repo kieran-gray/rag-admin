@@ -52,8 +52,8 @@ fn ChatBody(retrieval_profiles: Vec<RetrievalProfileDto>) -> impl IntoView {
     let retrieval_profiles_stored = StoredValue::new(retrieval_profiles.clone());
     let playground = use_playground_context();
     let query_params = use_query_map();
-    let url_question = query_params.with(|q| q.get("q").unwrap_or_default().to_string());
-    let url_profile_param = query_params.with(|q| q.get("profile").unwrap_or_default().to_string());
+    let url_question = query_params.with_untracked(|q| q.get("q").unwrap_or_default().to_string());
+    let url_profile_param = query_params.with_untracked(|q| q.get("profile").unwrap_or_default().to_string());
 
     let initial_question = if url_question.is_empty() {
         playground.last_query.get_untracked()

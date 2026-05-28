@@ -17,17 +17,15 @@ use crate::ui::state::event_bus::use_invalidator;
 enum MapStatusFilter {
     Ready,
     Building,
-    Failed,
 }
 
 impl MapStatusFilter {
-    const ALL: [Self; 3] = [Self::Ready, Self::Building, Self::Failed];
+    const ALL: [Self; 2] = [Self::Ready, Self::Building];
 
     fn label(self) -> &'static str {
         match self {
             Self::Ready => "Ready",
             Self::Building => "Building",
-            Self::Failed => "Failed",
         }
     }
 
@@ -35,7 +33,6 @@ impl MapStatusFilter {
         match self {
             Self::Ready => "ready",
             Self::Building => "building",
-            Self::Failed => "failed",
         }
     }
 
@@ -43,7 +40,6 @@ impl MapStatusFilter {
         match slug {
             "ready" => Some(Self::Ready),
             "building" => Some(Self::Building),
-            "failed" => Some(Self::Failed),
             _ => None,
         }
     }
@@ -52,15 +48,13 @@ impl MapStatusFilter {
         match self {
             Self::Ready => "var(--status-ok)",
             Self::Building => "var(--status-pending)",
-            Self::Failed => "var(--status-fail)",
         }
     }
 
     fn matches(self, phase: MapPhase) -> bool {
         match self {
             Self::Ready => phase.is_ready(),
-            Self::Failed => phase.is_failed(),
-            Self::Building => !phase.is_ready() && !phase.is_failed(),
+            Self::Building => !phase.is_ready(),
         }
     }
 }
@@ -195,7 +189,7 @@ fn FilterBar(
                 {MapStatusFilter::ALL.iter().map(|status| {
                     let status = *status;
                     let count = counts.iter().find(|(s, _)| *s == status).map(|(_, c)| *c).unwrap_or(0);
-                    let is_active = active_statuses.with(|s| s.contains(&status));
+                    let is_active = active_statuses.with_untracked(|s| s.contains(&status));
                     if count == 0 && !is_active {
                         return ().into_any();
                     }
@@ -255,13 +249,10 @@ fn ActiveFilters(
 fn status_counts(items: &[DocumentMapListItemDto]) -> Vec<(MapStatusFilter, usize)> {
     let mut ready = 0usize;
     let mut building = 0usize;
-    let mut failed = 0usize;
     for item in items {
         let phase = MapPhase::from_status(&item.status);
         if phase.is_ready() {
             ready += 1;
-        } else if phase.is_failed() {
-            failed += 1;
         } else {
             building += 1;
         }
@@ -269,7 +260,6 @@ fn status_counts(items: &[DocumentMapListItemDto]) -> Vec<(MapStatusFilter, usiz
     vec![
         (MapStatusFilter::Ready, ready),
         (MapStatusFilter::Building, building),
-        (MapStatusFilter::Failed, failed),
     ]
 }
 
@@ -352,8 +342,6 @@ fn MapRow(item: DocumentMapListItemDto) -> impl IntoView {
             plural(item.threads_synthesized),
             item.observations_extracted,
         )
-    } else if phase.is_failed() {
-        item.failure_reason.clone().unwrap_or_default()
     } else {
         format!(
             "obs {}/{} · threads {}/{}",
@@ -361,11 +349,7 @@ fn MapRow(item: DocumentMapListItemDto) -> impl IntoView {
         )
     };
 
-    let synthesis_class = if phase.is_failed() {
-        "log-line-error text-xs"
-    } else {
-        "text-xs muted font-mono"
-    };
+    let synthesis_class = "text-xs muted font-mono";
 
     let nav_href = map_href.clone();
     let on_row_click = move |ev: leptos::ev::MouseEvent| {

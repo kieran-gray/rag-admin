@@ -45,28 +45,15 @@ impl Projector<DocumentMapEvent> for DocumentMapProjector {
                         .project_observations(map_id, e.chunk_sequence, &e.observations)
                         .await?;
                 }
-                DocumentMapEvent::ChunkExtractionFailed(e) => {
-                    self.repository
-                        .project_chunk_extraction_failure(map_id, e.chunk_sequence)
-                        .await?;
-                }
                 DocumentMapEvent::ThreadsSynthesized(e) => {
                     self.repository
                         .project_threads(map_id, e.section_sequence, &e.carried_summary, &e.threads)
-                        .await?;
-                }
-                DocumentMapEvent::SectionSynthesisFailed(e) => {
-                    self.repository
-                        .project_section_synthesis_failure(map_id, e.section_sequence)
                         .await?;
                 }
                 DocumentMapEvent::InsightsSynthesized(e) => {
                     self.repository
                         .project_insights(map_id, &e.insights)
                         .await?;
-                }
-                DocumentMapEvent::MapFailed(e) => {
-                    self.repository.project_failure(map_id, &e.reason).await?;
                 }
             }
         }

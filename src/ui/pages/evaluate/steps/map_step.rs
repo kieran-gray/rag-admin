@@ -116,8 +116,7 @@ fn MapStepReady(summary: DocumentMapSummaryDto, href: String) -> impl IntoView {
         sections,
         plural(sections),
     );
-    let show_progress = !phase.is_ready() && !phase.is_failed();
-    let failure_reason = summary.failure_reason.clone();
+    let show_progress = !phase.is_ready();
     let link_label = if show_progress {
         "View progress →"
     } else {
@@ -136,10 +135,6 @@ fn MapStepReady(summary: DocumentMapSummaryDto, href: String) -> impl IntoView {
             })}
 
             <div class="text-[11px] muted font-mono">{meta_line}</div>
-
-            {failure_reason.map(|r| view! {
-                <div class="log-line-error text-xs">{r}</div>
-            })}
         </div>
     }
 }

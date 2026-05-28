@@ -137,7 +137,7 @@ pub(super) fn ChunkingFormDialog(
             title=Signal::derive(move || match form_mode.get() {
                 Some(FormMode::Edit(_)) => "Edit chunking configuration".to_string(),
                 _ => "New chunking configuration".to_string(),
-            }).get()
+            })
             subtitle="Pick a strategy and tune its parameters. Used at ingest time and as the Variants axis in evaluation sweeps.".to_string()
             on_close=close
         >

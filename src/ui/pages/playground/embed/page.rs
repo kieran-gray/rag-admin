@@ -59,9 +59,9 @@ pub fn EmbedPage() -> impl IntoView {
 #[component]
 fn EmbedBody(models: Vec<EmbeddingModelDto>) -> impl IntoView {
     let query_params = use_query_map();
-    let initial_a = query_params.with(|q| q.get("a").unwrap_or_default().to_string());
-    let initial_b = query_params.with(|q| q.get("b").unwrap_or_default().to_string());
-    let initial_model_param = query_params.with(|q| q.get("model").unwrap_or_default().to_string());
+    let initial_a = query_params.with_untracked(|q| q.get("a").unwrap_or_default().to_string());
+    let initial_b = query_params.with_untracked(|q| q.get("b").unwrap_or_default().to_string());
+    let initial_model_param = query_params.with_untracked(|q| q.get("model").unwrap_or_default().to_string());
 
     let initial_model = if !initial_model_param.is_empty()
         && models.iter().any(|m| m.model == initial_model_param)

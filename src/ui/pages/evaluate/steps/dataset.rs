@@ -166,7 +166,7 @@ pub fn DatasetStep(
                             return view! {
                                 <EmptyState
                                     title="No datasets yet"
-                                    body="Open the 'Generate new dataset' panel below to create your first one.".to_string()
+                                    body="Use the 'Generate new dataset' panel below to create your first one.".to_string()
                                 />
                             }.into_any();
                         }
@@ -189,7 +189,7 @@ pub fn DatasetStep(
                 </Transition>
             </Surface>
 
-            <details class="surface collapsible-card">
+            <details class="surface collapsible-card" open={move || {datasets.get().unwrap_or_default().is_empty()}}>
                 <summary class="collapsible-card-summary">
                     <span class="section-title">"Generate new dataset"</span>
                     <span class="collapsible-card-chevron">"▾"</span>

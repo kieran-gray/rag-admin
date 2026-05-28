@@ -270,7 +270,6 @@ impl From<DocumentMapError> for AppError {
             DocumentMapError::NotFound => AppError::NotFound(value.to_string()),
             DocumentMapError::AlreadyExists
             | DocumentMapError::AlreadyReady
-            | DocumentMapError::AlreadyFailed
             | DocumentMapError::InvalidTransition(_)
             | DocumentMapError::ValidationError(_) => AppError::Validation(value.to_string()),
         }

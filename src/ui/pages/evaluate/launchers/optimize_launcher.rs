@@ -258,7 +258,7 @@ fn ScopeButton(
             on:click=move |ev| on_click.with_value(|f| f(ev))
         >
             {label}
-            {(is_default && !active.with_value(|a| a())).then(|| view! {
+            {move || (is_default && !active.with_value(|a| a())).then(|| view! {
                 <span class="faint text-[10px] ml-1">"(default)"</span>
             })}
         </button>

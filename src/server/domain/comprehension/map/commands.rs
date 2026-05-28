@@ -32,25 +32,11 @@ pub struct RecordObservations {
     pub occurred_at: Timestamp,
 }
 
-pub struct RecordChunkExtractionFailure {
-    pub map_id: Uuid,
-    pub chunk_sequence: u32,
-    pub reason: String,
-    pub occurred_at: Timestamp,
-}
-
 pub struct RecordThreads {
     pub map_id: Uuid,
     pub section_sequence: u32,
     pub threads: Vec<Thread>,
     pub carried_summary: String,
-    pub occurred_at: Timestamp,
-}
-
-pub struct RecordSectionSynthesisFailure {
-    pub map_id: Uuid,
-    pub section_sequence: u32,
-    pub reason: String,
     pub occurred_at: Timestamp,
 }
 
@@ -60,21 +46,12 @@ pub struct RecordInsights {
     pub occurred_at: Timestamp,
 }
 
-pub struct FailMap {
-    pub map_id: Uuid,
-    pub reason: String,
-    pub occurred_at: Timestamp,
-}
-
 pub enum DocumentMapCommand {
     RequestMapBuild(RequestMapBuild),
     RecordSuggestedRoles(RecordSuggestedRoles),
     RecordObservations(RecordObservations),
-    RecordChunkExtractionFailure(RecordChunkExtractionFailure),
     RecordThreads(RecordThreads),
-    RecordSectionSynthesisFailure(RecordSectionSynthesisFailure),
     RecordInsights(RecordInsights),
-    FailMap(FailMap),
 }
 
 impl DocumentMapCommand {
@@ -83,11 +60,8 @@ impl DocumentMapCommand {
             Self::RequestMapBuild(c) => c.map_id,
             Self::RecordSuggestedRoles(c) => c.map_id,
             Self::RecordObservations(c) => c.map_id,
-            Self::RecordChunkExtractionFailure(c) => c.map_id,
             Self::RecordThreads(c) => c.map_id,
-            Self::RecordSectionSynthesisFailure(c) => c.map_id,
             Self::RecordInsights(c) => c.map_id,
-            Self::FailMap(c) => c.map_id,
         }
     }
 }

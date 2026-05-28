@@ -17,21 +17,15 @@ fn notify_awaiting_datasets(
     event: &DocumentMapEvent,
     ctx: &PolicyContext<'_, DocumentMap, DocumentMapEvent>,
 ) -> Vec<NewJob<EvaluationDatasetEffect>> {
-    let (ready, failure_reason) = match event {
-        DocumentMapEvent::InsightsSynthesized(_) => (true, None),
-        DocumentMapEvent::MapFailed(e) => (false, Some(e.reason.clone())),
-        _ => return Vec::new(),
-    };
+    if !matches!(event, DocumentMapEvent::InsightsSynthesized(_)) {
+        return Vec::new();
+    }
     let map_id = ctx.state.map_id;
     let log_position = ctx.envelope.metadata.log_position;
     vec![NewJob {
         partition_key: map_id,
         job_type: NOTIFY_MAP_READY,
         idempotency_key: IdempotencyKey::new(map_id, log_position, NOTIFY_MAP_READY),
-        payload: EvaluationDatasetEffect::NotifyMapReady(NotifyMapReadyEffect {
-            map_id,
-            ready,
-            failure_reason,
-        }),
+        payload: EvaluationDatasetEffect::NotifyMapReady(NotifyMapReadyEffect { map_id }),
     }]
 }

@@ -146,10 +146,29 @@ pub fn set_tray_open(open: bool) {
     let state = use_activity_state();
     state.open.set(open);
     if open && state.selected.get_untracked().is_none() {
-        if let Some(first) = state.running_jobs().into_iter().next() {
-            state.selected.set(Some(first.stream_id));
-        } else if let Some(first) = state.ordered_jobs().into_iter().next() {
-            state.selected.set(Some(first.stream_id));
+        let chosen = state.rows.with_untracked(|rows| {
+            rows.iter()
+                .filter(|r| r.status == ActivityStatus::Running)
+                .min_by(|a, b| a.started_at.cmp(&b.started_at))
+                .map(|r| r.stream_id)
+                .or_else(|| {
+                    let mut list: Vec<&ActivityJobDto> = rows.iter().collect();
+                    list.sort_by(|a, b| match (a.status, b.status) {
+                        (ActivityStatus::Running, ActivityStatus::Running) => {
+                            a.started_at.cmp(&b.started_at)
+                        }
+                        (ActivityStatus::Running, _) => Ordering::Less,
+                        (_, ActivityStatus::Running) => Ordering::Greater,
+                        _ => b
+                            .finished_at
+                            .cmp(&a.finished_at)
+                            .then_with(|| b.started_at.cmp(&a.started_at)),
+                    });
+                    list.first().map(|r| r.stream_id)
+                })
+        });
+        if let Some(stream_id) = chosen {
+            state.selected.set(Some(stream_id));
         }
     }
 }

@@ -280,7 +280,6 @@ fn MapDetailView(
     let threads_synthesized = summary.threads_synthesized;
     let insights_synthesized = summary.insights_synthesized;
     let suggested_roles = summary.suggested_roles.clone();
-    let failure_reason = summary.failure_reason.clone();
 
     let observation_count = observations.len();
     let thread_count = threads.len();
@@ -334,7 +333,7 @@ fn MapDetailView(
             />
 
             <div class="space-y-4">
-                {(!phase.is_ready() && !phase.is_failed()).then(|| view! {
+                {(!phase.is_ready()).then(|| view! {
                     <PipelineStrip
                         phase=phase
                         chunk_count=chunk_count
@@ -343,18 +342,6 @@ fn MapDetailView(
                         threads_synthesized=threads_synthesized
                         insights_synthesized=insights_synthesized
                     />
-                })}
-
-                {failure_reason.clone().map(|r| view! {
-                    <Surface>
-                        <div class="text-sm">
-                            <div class="eyebrow mb-1">"Build failed"</div>
-                            <div class="log-line-error">{r}</div>
-                            <p class="muted mt-2 text-xs">
-                                "Open the actions menu and choose Rebuild map to try again."
-                            </p>
-                        </div>
-                    </Surface>
                 })}
 
                 {(!carried_summary.trim().is_empty() || !suggested_roles.is_empty()).then(|| view! {
@@ -1002,9 +989,6 @@ struct Stage {
 
 fn phase_stage_state(phase: MapPhase, stage: MapPhase) -> StageState {
     use std::cmp::Ordering;
-    if phase.is_failed() {
-        return StageState::Pending;
-    }
     match phase.order().cmp(&stage.order()) {
         Ordering::Greater => StageState::Done,
         Ordering::Equal => StageState::Active,

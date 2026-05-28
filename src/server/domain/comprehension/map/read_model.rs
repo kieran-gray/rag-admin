@@ -16,7 +16,6 @@ pub struct DocumentMapReadModel {
     pub chunk_count: u32,
     pub section_size: u32,
     pub status: String,
-    pub failure_reason: Option<String>,
     pub generation_model_id: Uuid,
     pub suggested_roles: Vec<SuggestedRole>,
     pub observations_extracted: u32,

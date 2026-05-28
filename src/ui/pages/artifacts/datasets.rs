@@ -137,8 +137,12 @@ pub fn DatasetsPage() -> impl IntoView {
         <div>
             <PageHeader
                 title="Datasets"
-                eyebrow="Evaluations".to_string()
                 subtitle="Question datasets generated for evaluation runs.".to_string()
+                actions=Box::new(move || view! {
+                    <A href="/workflows/evaluate" attr:class="btn btn-primary">
+                        "+ New dataset"
+                    </A>
+                }.into_any())
             />
 
             <Surface flush=true>

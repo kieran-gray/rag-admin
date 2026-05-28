@@ -99,11 +99,12 @@ pub fn classify(
         }),
         (aggregate_type::INDEXING, "IngestionFailed")
         | (aggregate_type::EVALUATION_RUN, "RunFailed")
-        | (aggregate_type::EVALUATION_DATASET, "DatasetGenerationFailed")
-        | (aggregate_type::DOCUMENT_MAP, "MapFailed") => Some(ActivityDelta::Fail {
-            stream_id,
-            occurred_at: occurred_at.to_string(),
-        }),
+        | (aggregate_type::EVALUATION_DATASET, "DatasetGenerationFailed") => {
+            Some(ActivityDelta::Fail {
+                stream_id,
+                occurred_at: occurred_at.to_string(),
+            })
+        }
         (aggregate_type::INDEXING, "IndexingRemoved") => Some(ActivityDelta::Remove { stream_id }),
         (aggregate_type::INDEXING, "ChunkingCompleted" | "EmbeddingCompleted") => {
             let auto_advance = event_payload(event_data)

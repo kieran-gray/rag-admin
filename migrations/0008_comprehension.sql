@@ -8,7 +8,6 @@ CREATE TABLE document_maps (
     section_size INT NOT NULL,
     generation_model_id UUID NOT NULL,
     status TEXT NOT NULL,
-    failure_reason TEXT,
     suggested_roles JSONB NOT NULL DEFAULT '[]'::jsonb,
     carried_thread_summary TEXT NOT NULL DEFAULT '',
     extracted_chunks INT[] NOT NULL DEFAULT ARRAY[]::INT[],

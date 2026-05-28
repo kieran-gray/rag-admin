@@ -69,12 +69,6 @@ pub trait DocumentMapRepository: Send + Sync {
         observations: &[Observation],
     ) -> Result<(), DocumentMapRepositoryError>;
 
-    async fn project_chunk_extraction_failure(
-        &self,
-        map_id: Uuid,
-        chunk_sequence: u32,
-    ) -> Result<(), DocumentMapRepositoryError>;
-
     async fn project_threads(
         &self,
         map_id: Uuid,
@@ -83,22 +77,10 @@ pub trait DocumentMapRepository: Send + Sync {
         threads: &[Thread],
     ) -> Result<(), DocumentMapRepositoryError>;
 
-    async fn project_section_synthesis_failure(
-        &self,
-        map_id: Uuid,
-        section_sequence: u32,
-    ) -> Result<(), DocumentMapRepositoryError>;
-
     async fn project_insights(
         &self,
         map_id: Uuid,
         insights: &[Insight],
-    ) -> Result<(), DocumentMapRepositoryError>;
-
-    async fn project_failure(
-        &self,
-        map_id: Uuid,
-        reason: &str,
     ) -> Result<(), DocumentMapRepositoryError>;
 
     async fn delete(&self, map_id: Uuid) -> Result<(), DocumentMapRepositoryError>;

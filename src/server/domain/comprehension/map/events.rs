@@ -37,24 +37,10 @@ pub struct ObservationsExtracted {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ChunkExtractionFailed {
-    pub chunk_sequence: u32,
-    pub reason: String,
-    pub occurred_at: Timestamp,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ThreadsSynthesized {
     pub section_sequence: u32,
     pub threads: Vec<Thread>,
     pub carried_summary: String,
-    pub occurred_at: Timestamp,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct SectionSynthesisFailed {
-    pub section_sequence: u32,
-    pub reason: String,
     pub occurred_at: Timestamp,
 }
 
@@ -65,20 +51,11 @@ pub struct InsightsSynthesized {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MapFailed {
-    pub reason: String,
-    pub occurred_at: Timestamp,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", content = "data")]
 pub enum DocumentMapEvent {
     MapBuildRequested(MapBuildRequested),
     RolesSuggested(RolesSuggested),
     ObservationsExtracted(ObservationsExtracted),
-    ChunkExtractionFailed(ChunkExtractionFailed),
     ThreadsSynthesized(ThreadsSynthesized),
-    SectionSynthesisFailed(SectionSynthesisFailed),
     InsightsSynthesized(InsightsSynthesized),
-    MapFailed(MapFailed),
 }

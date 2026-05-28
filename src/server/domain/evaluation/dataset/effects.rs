@@ -19,8 +19,6 @@ pub struct PollMapStatusEffect {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotifyMapReadyEffect {
     pub map_id: Uuid,
-    pub ready: bool,
-    pub failure_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
