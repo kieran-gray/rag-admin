@@ -217,6 +217,50 @@
     font-variant-numeric: tabular-nums;
 }
 
+/* ── Index coverage (segmented track, one segment per profile) ─────────── */
+
+.coverage-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.coverage-track {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.coverage-seg {
+    width: 0.875rem;
+    height: 0.625rem;
+    border-radius: 2px;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-surface-2);
+}
+
+.coverage-seg-ok {
+    background-color: var(--status-ok);
+    border-color: color-mix(in srgb, var(--status-ok) 60%, var(--color-border));
+}
+
+.coverage-seg-pending {
+    background-color: var(--status-pending);
+    border-color: color-mix(in srgb, var(--status-pending) 60%, var(--color-border));
+    animation: pill-pulse 1.4s ease-in-out infinite;
+}
+
+.coverage-seg-fail {
+    background-color: var(--status-fail);
+    border-color: color-mix(in srgb, var(--status-fail) 60%, var(--color-border));
+}
+
+.coverage-count {
+    font-size: 0.6875rem;
+    color: var(--color-text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
 .list-page-title-cell {
     display: flex;
     flex-direction: column;

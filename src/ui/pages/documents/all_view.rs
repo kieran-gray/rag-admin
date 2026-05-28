@@ -5,17 +5,18 @@ use leptos_router::components::A;
 use leptos_router::hooks::{query_signal, use_navigate};
 use leptos_router::NavigateOptions;
 
+use crate::server_functions::configuration::get_index_profiles;
 use crate::server_functions::source_document::list_documents_page;
 use crate::shared::contracts::{
     aggregate_type, DocumentListItemDto, DocumentListQueryDto, DocumentStatusFilterDto,
-    SourceDescriptorDto, SourceFilterDto,
+    IndexProfileDto, SourceDescriptorDto, SourceFilterDto,
 };
 use crate::ui::components::primitives::{
     use_cursor_pagination, EmptyFilterState, EmptyState, PaginationBar, PaginationSummary,
-    SkeletonColumn, SkeletonRows, Status, StatusPill, Surface, TitleCell,
+    SkeletonColumn, SkeletonRows, Surface, TitleCell,
 };
+use crate::ui::pages::documents::coverage::CoverageCell;
 use crate::ui::pages::documents::source_mark::SourceMark;
-use crate::ui::pages::shared::indexing_summary;
 use crate::ui::state::event_bus::use_invalidator;
 
 use super::smart_filter::{ChipsState, SmartFilterBar};
@@ -123,6 +124,11 @@ pub fn AllDocumentsView(open_import: Callback<()>) -> impl IntoView {
     let page = Resource::new(
         move || (filter_state.get(), current_cursor.get(), invalidator.get()),
         |(state, cursor, _)| async move { list_documents_page(state.to_query(cursor)).await },
+    );
+
+    let index_profiles = Resource::new(
+        move || invalidator.get(),
+        |_| async move { get_index_profiles().await.unwrap_or_default() },
     );
 
     let toggle_source = Callback::<String>::new(move |key: String| {
@@ -236,7 +242,9 @@ pub fn AllDocumentsView(open_import: Callback<()>) -> impl IntoView {
             />
 
             <Transition fallback=move || view! { <SkeletonTable /> }>
-                {move || page.get().map(|res| match res {
+                {move || {
+                  let profiles = index_profiles.get().unwrap_or_default();
+                  page.get().map(|res| match res {
                     Err(e) => Either::Left(view! {
                         <div class="p-6 log-line-error text-sm">{format!("Failed to load: {e}")}</div>
                     }),
@@ -246,14 +254,14 @@ pub fn AllDocumentsView(open_import: Callback<()>) -> impl IntoView {
                                 <div class="p-6">
                                     <EmptyState
                                         title="No documents yet"
-                                        body="Import a document from a URL or an upload, or sync a configured connector.".to_string()
+                                        body="Add a document from an upload or a URL, or pull from a configured connector.".to_string()
                                         action=Box::new(move || view! {
                                             <button
                                                 type="button"
                                                 class="btn btn-primary"
                                                 on:click=move |_| open_import.run(())
                                             >
-                                                "Import document"
+                                                "+ Add documents"
                                             </button>
                                         }.into_any())
                                     />
@@ -268,10 +276,11 @@ pub fn AllDocumentsView(open_import: Callback<()>) -> impl IntoView {
                                 />
                             }.into_any()
                         } else {
-                            view! { <DocumentsTable docs=page_data.items.clone() /> }.into_any()
+                            view! { <DocumentsTable docs=page_data.items.clone() profiles=profiles.clone() /> }.into_any()
                         }
                     })
-                })}
+                  })
+                }}
             </Transition>
 
             <Suspense>
@@ -293,7 +302,7 @@ fn DocumentsTableHead() -> impl IntoView {
                 <th class="w-[42%]">"Title"</th>
                 <th class="w-[14%]">"Source"</th>
                 <th class="w-[18%]">"Connector"</th>
-                <th class="w-[14%]">"Status"</th>
+                <th class="w-[14%]">"Coverage"</th>
                 <th class="w-[8%] text-right">"Version"</th>
                 <th class="w-[4%] text-right"></th>
             </tr>
@@ -302,25 +311,26 @@ fn DocumentsTableHead() -> impl IntoView {
 }
 
 #[component]
-fn DocumentsTable(docs: Vec<DocumentListItemDto>) -> impl IntoView {
+fn DocumentsTable(docs: Vec<DocumentListItemDto>, profiles: Vec<IndexProfileDto>) -> impl IntoView {
     view! {
         <table class="data-table">
             <DocumentsTableHead />
             <tbody>
-                {docs.into_iter().map(|doc| view! { <DocumentRow doc /> }).collect_view()}
+                {docs.into_iter().map(|doc| view! { <DocumentRow doc profiles=profiles.clone() /> }).collect_view()}
             </tbody>
         </table>
     }
 }
 
 #[component]
-fn DocumentRow(doc: DocumentListItemDto) -> impl IntoView {
+fn DocumentRow(doc: DocumentListItemDto, profiles: Vec<IndexProfileDto>) -> impl IntoView {
     let href = format!(
         "/documents/{}/{}",
         doc.document_type.to_lowercase(),
         urlencoding::encode(&doc.source_ref_key),
     );
-    let (status_label, status_kind) = ingest_status(&doc);
+    let has_document = doc.document_id.is_some();
+    let indexings = doc.indexings.clone();
     let version_label = doc
         .latest_version
         .map(|v| format!("v{v}"))
@@ -364,7 +374,7 @@ fn DocumentRow(doc: DocumentListItemDto) -> impl IntoView {
                     }.into_any()
                 }}
             </td>
-            <td><StatusPill label=status_label kind=status_kind /></td>
+            <td><CoverageCell has_document=has_document indexings=indexings profiles=profiles /></td>
             <td class="text-right text-xs muted">{version_label}</td>
             <td class="text-right faint">"›"</td>
         </tr>
@@ -381,12 +391,4 @@ fn SkeletonTable() -> impl IntoView {
             </tbody>
         </table>
     }
-}
-
-fn ingest_status(doc: &DocumentListItemDto) -> (String, Status) {
-    if doc.document_id.is_none() {
-        return ("Not ingested".to_string(), Status::Stale);
-    }
-    let summary = indexing_summary(&doc.indexings, doc.latest_version);
-    (summary.label, summary.status)
 }

@@ -162,7 +162,6 @@ pub fn RunsPage() -> impl IntoView {
         <div>
             <PageHeader
                 title="Runs"
-                eyebrow="Evaluations".to_string()
                 subtitle="Evaluation runs across this workspace.".to_string()
                 actions=Box::new(move || view! {
                     <A href="/workflows/evaluate" attr:class="btn btn-primary">

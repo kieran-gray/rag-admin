@@ -144,7 +144,7 @@ fn IngestWorkspace(
     source_ref: String,
     initial_tab: Option<WorkflowStep>,
 ) -> impl IntoView {
-    let (header_eyebrow, header_title, header_subtitle, header_status) =
+    let (header_title, header_subtitle, header_status) =
         derive_header(&detail.document, &detail.indexings);
     let (status_kind, status_label) = header_status;
 
@@ -212,7 +212,6 @@ fn IngestWorkspace(
         <div>
             <PageHeader
                 title=header_title
-                eyebrow=header_eyebrow
                 subtitle=header_subtitle
                 actions=Box::new(move || view! {
                     <StatusPill label=status_label.clone() kind=status_kind />
@@ -380,12 +379,8 @@ fn initial_step(indexings: &[IndexingDto]) -> WorkflowStep {
 fn derive_header(
     doc: &SourceDocumentDto,
     indexings: &[IndexingDto],
-) -> (String, String, Option<String>, (Status, String)) {
+) -> (String, Option<String>, (Status, String)) {
     let type_label = document_type_label(&doc.document_type);
-    let eyebrow = format!(
-        "Documents / {} / {} / Ingest",
-        type_label, doc.source_ref_key,
-    );
     let title = doc.title.clone();
     let subtitle = Some(format!(
         "{type_label} · v{} · {}",
@@ -393,7 +388,7 @@ fn derive_header(
         short_hash(&doc.latest_content_hash),
     ));
     let summary = indexing_summary(indexings, Some(doc.latest_version));
-    (eyebrow, title, subtitle, (summary.status, summary.label))
+    (title, subtitle, (summary.status, summary.label))
 }
 
 #[component]
@@ -402,7 +397,6 @@ fn NotFound(source_ref: String) -> impl IntoView {
         <div>
             <PageHeader
                 title=source_ref.clone()
-                eyebrow=format!("Documents / {source_ref} / Ingest")
                 subtitle="No document is registered at this source ref.".to_string()
             />
             <Surface>

@@ -72,7 +72,6 @@ fn MapWorkspace(detail: SourceDocumentDetailDto) -> impl IntoView {
     let document = detail.document.clone();
     let document_id = document.document_id;
     let document_version = document.latest_version;
-    let source_ref_key = document.source_ref_key.clone();
     let document_title = document.title.clone();
 
     let map_invalidator = use_invalidator(|e| e.from_any(&["document_map"]));
@@ -154,23 +153,18 @@ fn MapWorkspace(detail: SourceDocumentDetailDto) -> impl IntoView {
         });
     };
 
-    let eyebrow_label = format!("Documents / {source_ref_key} / Map");
-
     view! {
         <div>
             <Transition fallback=|| view! { <p class="muted">"Loading map…"</p> }>
                 {
                     let title = document_title.clone();
-                    let eyebrow = eyebrow_label.clone();
                     move || map_resource.get().map(|res| {
                         let title = title.clone();
-                        let eyebrow = eyebrow.clone();
                         match res {
                             Err(e) => view! {
                                 <div>
                                     <PageHeader
                                         title=title
-                                        eyebrow=eyebrow
                                         subtitle=format!("Version {document_version}")
                                     />
                                     <Surface>
@@ -182,7 +176,6 @@ fn MapWorkspace(detail: SourceDocumentDetailDto) -> impl IntoView {
                                 <div>
                                     <PageHeader
                                         title=title
-                                        eyebrow=eyebrow
                                         subtitle=format!("Version {document_version} · no map yet")
                                     />
                                     <MapMissingPanel
@@ -199,7 +192,6 @@ fn MapWorkspace(detail: SourceDocumentDetailDto) -> impl IntoView {
                                 <MapDetailView
                                     detail=detail
                                     document_title=title
-                                    eyebrow=eyebrow
                                     document_version=document_version
                                     configuration_loader=configuration
                                     selected_model=selected_model
@@ -251,7 +243,6 @@ fn MapMissingPanel(
 fn MapDetailView(
     detail: DocumentMapDetailDto,
     document_title: String,
-    eyebrow: String,
     document_version: u32,
     configuration_loader: Resource<Result<ConfigurationDto, String>>,
     selected_model: ReadSignal<Option<Uuid>>,
@@ -311,7 +302,6 @@ fn MapDetailView(
         <div>
             <PageHeader
                 title=document_title
-                eyebrow=eyebrow
                 subtitle=subtitle_text
                 actions=Box::new(move || view! {
                     <div class="flex items-center gap-2">

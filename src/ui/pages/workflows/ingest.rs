@@ -26,7 +26,6 @@ pub fn IngestWorkflowPage() -> impl IntoView {
         <div>
             <PageHeader
                 title="Pick a document"
-                eyebrow="Workflows / Ingest".to_string()
                 subtitle="Chunk, embed, and index a document for retrieval.".to_string()
             />
 

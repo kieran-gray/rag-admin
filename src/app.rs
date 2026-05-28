@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 use leptos_meta::{provide_meta_context, MetaTags, Title};
-use leptos_router::hooks::{use_navigate, use_params_map, use_query_map};
+use leptos_router::hooks::use_navigate;
 use leptos_router::{
     components::{Route, Router, Routes},
     NavigateOptions, ParamSegment, StaticSegment,
@@ -15,7 +15,7 @@ use crate::ui::pages::{
         profiles::ProfilesPage,
     },
     document_detail::{DocumentDetailPage, DocumentIngestPage, DocumentMapPage},
-    documents::{DocumentByIdRedirect, DocumentsPage},
+    documents::{ConnectorPullPage, DocumentByIdRedirect, DocumentsPage},
     evaluate::{EvaluateByIdRedirect, EvaluatePage},
     home::HomePage,
     playground::{chat::ChatPage, embed::EmbedPage, retrieve::RetrievePage},
@@ -35,44 +35,6 @@ fn RedirectTo(to: &'static str) -> impl IntoView {
         );
     });
 
-    view! { <p class="muted">"Redirecting…"</p> }
-}
-
-#[component]
-fn LegacyRunRedirect() -> impl IntoView {
-    let params = use_params_map();
-    let query = use_query_map();
-    Effect::new(move |_| {
-        let run_id = params.with(|p| p.get("run_id").unwrap_or_default().to_string());
-        let with = query.with(|q| q.get("with").map(|t| t.to_string()));
-        let target = match with {
-            Some(w) => format!("/workflows/runs/{run_id}?with={w}"),
-            None => format!("/workflows/runs/{run_id}"),
-        };
-        use_navigate()(
-            &target,
-            NavigateOptions {
-                replace: true,
-                ..Default::default()
-            },
-        );
-    });
-    view! { <p class="muted">"Redirecting…"</p> }
-}
-
-#[component]
-fn LegacyDatasetRedirect() -> impl IntoView {
-    let params = use_params_map();
-    Effect::new(move |_| {
-        let dataset_id = params.with(|p| p.get("dataset_id").unwrap_or_default().to_string());
-        use_navigate()(
-            &format!("/artifacts/datasets/{dataset_id}"),
-            NavigateOptions {
-                replace: true,
-                ..Default::default()
-            },
-        );
-    });
     view! { <p class="muted">"Redirecting…"</p> }
 }
 
@@ -146,6 +108,43 @@ pub fn App() -> impl IntoView {
                         )
                         view=DocumentMapPage
                     />
+                    <Route path=StaticSegment("connectors") view=ConnectorsPage />
+                    <Route
+                        path=(StaticSegment("connectors"), ParamSegment("connector_id"))
+                        view=ConnectorPullPage
+                    />
+                    <Route
+                        path=(StaticSegment("evaluation"), StaticSegment("runs"))
+                        view=RunsPage
+                    />
+                    <Route
+                        path=(
+                            StaticSegment("evaluation"),
+                            StaticSegment("runs"),
+                            ParamSegment("run_id"),
+                        )
+                        view=RunPage
+                    />
+                    <Route
+                        path=(StaticSegment("evaluation"), StaticSegment("datasets"))
+                        view=DatasetsPage
+                    />
+                    <Route
+                        path=(
+                            StaticSegment("evaluation"),
+                            StaticSegment("datasets"),
+                            ParamSegment("dataset_id"),
+                        )
+                        view=DatasetDetailPage
+                    />
+                    <Route
+                        path=(StaticSegment("evaluation"), StaticSegment("maps"))
+                        view=MapsPage
+                    />
+                    <Route
+                        path=StaticSegment("evaluation")
+                        view=|| view! { <RedirectTo to="/evaluation/runs" /> }
+                    />
                     <Route
                         path=(
                             StaticSegment("evaluate"),
@@ -161,102 +160,6 @@ pub fn App() -> impl IntoView {
                             ParamSegment("source_ref"),
                         )
                         view=EvaluatePage
-                    />
-                    <Route
-                        path=(StaticSegment("workflows"), StaticSegment("runs"))
-                        view=RunsPage
-                    />
-                    <Route
-                        path=(
-                            StaticSegment("workflows"),
-                            StaticSegment("runs"),
-                            ParamSegment("run_id"),
-                        )
-                        view=RunPage
-                    />
-                    <Route
-                        path=(StaticSegment("runs"), ParamSegment("run_id"))
-                        view=LegacyRunRedirect
-                    />
-                    <Route
-                        path=(
-                            StaticSegment("runs"),
-                            ParamSegment("run_id"),
-                            StaticSegment("optimize"),
-                        )
-                        view=LegacyRunRedirect
-                    />
-                    <Route
-                        path=(
-                            StaticSegment("runs"),
-                            ParamSegment("run_id"),
-                            StaticSegment("replicate"),
-                        )
-                        view=LegacyRunRedirect
-                    />
-                    <Route
-                        path=(StaticSegment("datasets"), ParamSegment("dataset_id"))
-                        view=LegacyDatasetRedirect
-                    />
-                    <Route
-                        path=(StaticSegment("configuration"), StaticSegment("catalog"))
-                        view=CatalogPage
-                    />
-                    <Route
-                        path=(StaticSegment("configuration"), StaticSegment("profiles"))
-                        view=ProfilesPage
-                    />
-                    <Route
-                        path=(StaticSegment("configuration"), StaticSegment("index-profiles"))
-                        view=|| view! { <RedirectTo to="/configuration/profiles" /> }
-                    />
-                    <Route
-                        path=(StaticSegment("configuration"), StaticSegment("retrieval-profiles"))
-                        view=|| view! { <RedirectTo to="/configuration/profiles" /> }
-                    />
-                    <Route
-                        path=(StaticSegment("configuration"), StaticSegment("chunking"))
-                        view=ChunkingPage
-                    />
-                    <Route
-                        path=(StaticSegment("configuration"), StaticSegment("connectors"))
-                        view=ConnectorsPage
-                    />
-                    <Route
-                        path=(StaticSegment("artifacts"), StaticSegment("chunk-sets"))
-                        view=ChunkSetsPage
-                    />
-                    <Route
-                        path=(StaticSegment("workflows"), StaticSegment("ingest"))
-                        view=IngestWorkflowPage
-                    />
-                    <Route
-                        path=(StaticSegment("workflows"), StaticSegment("evaluate"))
-                        view=EvaluateWorkflowPage
-                    />
-                    <Route
-                        path=(StaticSegment("artifacts"), StaticSegment("maps"))
-                        view=MapsPage
-                    />
-                    <Route
-                        path=(StaticSegment("artifacts"), StaticSegment("datasets"))
-                        view=DatasetsPage
-                    />
-                    <Route
-                        path=(
-                            StaticSegment("artifacts"),
-                            StaticSegment("datasets"),
-                            ParamSegment("dataset_id"),
-                        )
-                        view=DatasetDetailPage
-                    />
-                    <Route
-                        path=StaticSegment("artifacts")
-                        view=|| view! { <RedirectTo to="/artifacts/chunk-sets" /> }
-                    />
-                    <Route
-                        path=StaticSegment("configuration")
-                        view=|| view! { <RedirectTo to="/configuration/catalog" /> }
                     />
                     <Route
                         path=(StaticSegment("playground"), StaticSegment("embed"))
@@ -275,20 +178,36 @@ pub fn App() -> impl IntoView {
                         view=|| view! { <RedirectTo to="/playground/retrieve" /> }
                     />
                     <Route
-                        path=StaticSegment("settings")
-                        view=|| view! { <RedirectTo to="/configuration/catalog" /> }
+                        path=(StaticSegment("pipeline"), StaticSegment("profiles"))
+                        view=ProfilesPage
                     />
                     <Route
-                        path=StaticSegment("pipelines")
-                        view=|| view! { <RedirectTo to="/configuration/profiles" /> }
+                        path=(StaticSegment("pipeline"), StaticSegment("chunking"))
+                        view=ChunkingPage
                     />
                     <Route
-                        path=StaticSegment("chunking")
-                        view=|| view! { <RedirectTo to="/configuration/chunking" /> }
+                        path=(StaticSegment("pipeline"), StaticSegment("catalog"))
+                        view=CatalogPage
                     />
                     <Route
-                        path=StaticSegment("embed")
-                        view=|| view! { <RedirectTo to="/playground/embed" /> }
+                        path=StaticSegment("pipeline")
+                        view=|| view! { <RedirectTo to="/pipeline/profiles" /> }
+                    />
+                    <Route
+                        path=(StaticSegment("maintenance"), StaticSegment("chunk-sets"))
+                        view=ChunkSetsPage
+                    />
+                    <Route
+                        path=StaticSegment("maintenance")
+                        view=|| view! { <RedirectTo to="/maintenance/chunk-sets" /> }
+                    />
+                    <Route
+                        path=(StaticSegment("workflows"), StaticSegment("ingest"))
+                        view=IngestWorkflowPage
+                    />
+                    <Route
+                        path=(StaticSegment("workflows"), StaticSegment("evaluate"))
+                        view=EvaluateWorkflowPage
                     />
                 </Routes>
             </AppShell>

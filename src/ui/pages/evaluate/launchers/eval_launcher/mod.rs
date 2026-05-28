@@ -143,7 +143,7 @@ pub fn EvaluationLauncher(
             if templates.is_empty() {
                 let seeded = default_sweep_variants(&configs);
                 if seeded.is_empty() {
-                    Err("No sweep templates or chunking configurations in the registry. Create some on /configuration/chunking.".into())
+                    Err("No sweep templates or chunking configurations in the registry. Create some on /pipeline/chunking.".into())
                 } else {
                     Ok(seeded)
                 }
@@ -159,7 +159,7 @@ pub fn EvaluationLauncher(
                 let variants = template_variants(template, &configs);
                 if variants.is_empty() {
                     Err(format!(
-                        "Sweep template '{}' has no resolvable chunking configurations. Edit it on /configuration/chunking.",
+                        "Sweep template '{}' has no resolvable chunking configurations. Edit it on /pipeline/chunking.",
                         template.name
                     ))
                 } else {

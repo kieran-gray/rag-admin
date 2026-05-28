@@ -131,7 +131,7 @@ fn ConnectorCard(
             <div class="flex gap-2 shrink-0">
                 <a
                     class="btn"
-                    href=format!("/documents?tab=connector:{}", connector.connector_id)
+                    href=format!("/connectors/{}", connector.connector_id)
                 >
                     "Browse"
                 </a>

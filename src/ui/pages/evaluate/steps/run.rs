@@ -58,7 +58,7 @@ pub fn RunStep<'a>(
     let go_to_run = move |run_id: Uuid, _kind: RunKindDto| {
         selection.run_id.set(Some(run_id));
         use_navigate()(
-            &format!("/workflows/runs/{run_id}"),
+            &format!("/evaluation/runs/{run_id}"),
             NavigateOptions {
                 replace: true,
                 ..Default::default()
@@ -217,7 +217,7 @@ fn RunRow(run: EvaluationRunSummaryDto) -> impl IntoView {
 
     view! {
         <A
-            href=format!("/workflows/runs/{run_id}")
+            href=format!("/evaluation/runs/{run_id}")
             attr:class="w-full flex items-center justify-between gap-3 px-3 py-2 rounded border border-[var(--color-border)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-2)] transition-colors no-underline"
         >
             <span class="flex-1 flex items-center gap-3">

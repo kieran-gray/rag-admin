@@ -164,7 +164,7 @@ fn EvaluateWorkspace(
     let document_id = detail.document.document_id;
     let document_version = detail.document.latest_version;
     let document_type = detail.document.document_type.clone();
-    let (header_eyebrow, header_title, header_subtitle) = derive_header(&detail.document);
+    let (header_title, header_subtitle) = derive_header(&detail.document);
 
     let selection = EvaluateSelection::new(&index_profiles, initial_dataset, initial_run);
 
@@ -236,7 +236,6 @@ fn EvaluateWorkspace(
         <div>
             <PageHeader
                 title=header_title
-                eyebrow=header_eyebrow
                 subtitle=header_subtitle.unwrap_or_default()
             />
 
@@ -372,15 +371,14 @@ fn step_from_query(s: &str) -> Option<WorkflowStep> {
     }
 }
 
-fn derive_header(doc: &SourceDocumentDto) -> (String, String, Option<String>) {
+fn derive_header(doc: &SourceDocumentDto) -> (String, Option<String>) {
     let type_label = document_type_label(&doc.document_type);
-    let eyebrow = format!("Evaluate / {} / {}", type_label, doc.source_ref_key);
     let title = doc.title.clone();
     let subtitle = Some(format!(
         "{type_label} · v{} · evaluate this document",
         doc.latest_version,
     ));
-    (eyebrow, title, subtitle)
+    (title, subtitle)
 }
 
 #[component]
@@ -389,7 +387,6 @@ fn UnregisteredDocument(source_ref: String) -> impl IntoView {
         <div>
             <PageHeader
                 title=source_ref.clone()
-                eyebrow=format!("Evaluate / {source_ref}")
                 subtitle="No document is registered at this source ref.".to_string()
             />
             <Surface>

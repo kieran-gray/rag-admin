@@ -54,26 +54,29 @@ pub fn title_for_path(path: &str) -> String {
         "/documents" => "Documents".into(),
         "/workflows/ingest" => "Ingest".into(),
         "/workflows/evaluate" => "Evaluate".into(),
-        "/workflows/runs" => "Runs".into(),
+        "/evaluation/runs" => "Runs".into(),
         "/playground/embed" => "Playground · Embed".into(),
         "/playground/retrieve" => "Playground · Retrieve".into(),
         "/playground/chat" => "Playground · Chat".into(),
-        "/configuration/catalog" => "Catalog".into(),
-        "/configuration/profiles" => "Profiles".into(),
-        "/configuration/chunking" => "Chunking".into(),
-        "/configuration/connectors" => "Connectors".into(),
-        "/artifacts/chunk-sets" => "Chunk sets".into(),
-        "/artifacts/maps" => "Maps".into(),
-        "/artifacts/datasets" => "Datasets".into(),
+        "/pipeline/catalog" => "Catalog".into(),
+        "/pipeline/profiles" => "Profiles".into(),
+        "/pipeline/chunking" => "Chunking".into(),
+        "/connectors" => "Connectors".into(),
+        "/maintenance/chunk-sets" => "Chunk sets".into(),
+        "/evaluation/maps" => "Maps".into(),
+        "/evaluation/datasets" => "Datasets".into(),
         other => prefix_title(other),
     }
 }
 
 fn prefix_title(path: &str) -> String {
-    if let Some(rest) = path.strip_prefix("/workflows/runs/") {
+    if path.starts_with("/connectors/") {
+        return "Connector".into();
+    }
+    if let Some(rest) = path.strip_prefix("/evaluation/runs/") {
         return format!("Run {}", short(rest));
     }
-    if let Some(rest) = path.strip_prefix("/artifacts/datasets/") {
+    if let Some(rest) = path.strip_prefix("/evaluation/datasets/") {
         return format!("Dataset {}", short(rest));
     }
     if let Some(rest) = path.strip_prefix("/documents/") {

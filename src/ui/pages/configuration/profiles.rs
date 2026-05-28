@@ -255,7 +255,7 @@ fn IndexProfileList(
                         "Index profiles bake an embedding model and vector index together for ingestion and retrieval.".to_string()
                     }
                     action=Box::new(|| view! {
-                        <A href="/configuration/catalog" attr:class="btn">"Open Catalog"</A>
+                        <A href="/pipeline/catalog" attr:class="btn">"Open Catalog"</A>
                     }.into_any())
                 />
             </Surface>

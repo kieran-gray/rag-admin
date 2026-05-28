@@ -61,7 +61,7 @@ pub(super) fn SetupPanel() -> impl IntoView {
                                 done=index_profile
                                 label="Set up an index profile"
                                 hint="embedding + vector index"
-                                href="/configuration/profiles"
+                                href="/pipeline/profiles"
                             />
                             <SetupRow
                                 done=documents

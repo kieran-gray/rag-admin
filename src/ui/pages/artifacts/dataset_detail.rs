@@ -73,7 +73,6 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
     let dataset_id = dataset.dataset_id;
     let dataset_short = dataset_id.to_string().chars().take(8).collect::<String>();
     let document_id = dataset.document_id;
-    let document_title = dataset.document_title.clone();
     let document_version = dataset.document_version;
     let content_hash_short = short_hash(&dataset.content_hash).to_string();
     let generation_model = dataset.generation_model.clone();
@@ -85,11 +84,6 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
     let failure_reason = dataset.failure_reason.clone();
     let questions = dataset.questions;
     let label = dataset.label;
-
-    let eyebrow = match document_title.as_deref() {
-        Some(title) if !title.is_empty() => format!("Evaluations / Dataset · {title}"),
-        _ => "Evaluations / Dataset".to_string(),
-    };
 
     let (editing, set_editing) = signal(false);
     let (label_input, set_label_input) = signal(label.clone());
@@ -171,7 +165,7 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
             match delete_dataset(dataset_id).await {
                 Ok(_) => {
                     use_navigate()(
-                        "/artifacts/datasets",
+                        "/evaluation/datasets",
                         NavigateOptions {
                             replace: true,
                             ..Default::default()
@@ -191,7 +185,6 @@ fn DatasetView(dataset: EvaluationDatasetDto) -> impl IntoView {
         <div>
             <PageHeader
                 title=format!("Dataset {dataset_short}")
-                eyebrow=eyebrow
                 subtitle=format!("{actual}/{target} questions · {created_at}")
                 actions=Box::new(move || view! {
                     <StatusPill label=status_label.to_string() kind=status_kind />

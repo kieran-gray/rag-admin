@@ -18,7 +18,7 @@ pub fn RunHeader(run: EvaluationRunDto, compare_with: Option<uuid::Uuid>) -> imp
     let kind_chip = kind_chip_label(&run);
     let context_line = context_line(&run);
 
-    let dataset_href = format!("/artifacts/datasets/{}", run.dataset_id);
+    let dataset_href = format!("/evaluation/datasets/{}", run.dataset_id);
     let workflow_href = run
         .document_id
         .map(|id| format!("/evaluate/by-id/{id}?dataset={}&step=run", run.dataset_id));
@@ -37,15 +37,14 @@ pub fn RunHeader(run: EvaluationRunDto, compare_with: Option<uuid::Uuid>) -> imp
     };
 
     let compare_link = compare_with.map(|other| {
-        let in_compare = format!("/workflows/runs/{run_id}?with={other}");
-        let leave_compare = format!("/workflows/runs/{run_id}");
+        let in_compare = format!("/evaluation/runs/{run_id}?with={other}");
+        let leave_compare = format!("/evaluation/runs/{run_id}");
         (in_compare, leave_compare, other)
     });
 
     view! {
         <PageHeader
             title=title
-            eyebrow="Evaluations / Run".to_string()
             subtitle=context_line
             actions=header_actions
         />
@@ -55,7 +54,7 @@ pub fn RunHeader(run: EvaluationRunDto, compare_with: Option<uuid::Uuid>) -> imp
                 <A href=href attr:class="muted hover:text-text">"← Back to workflow"</A>
             })}
             <A href=dataset_href attr:class="muted hover:text-text">"Open dataset"</A>
-            <A href="/workflows/runs" attr:class="muted hover:text-text">"All evaluations"</A>
+            <A href="/evaluation/runs" attr:class="muted hover:text-text">"All evaluations"</A>
             {compare_link.map(|(_in_compare, leave, other)| {
                 let other_short = other.to_string().chars().take(8).collect::<String>();
                 view! {

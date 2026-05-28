@@ -44,7 +44,7 @@ pub fn EmbedPage() -> impl IntoView {
                                 title="No embedding models registered"
                                 body="Add an embedding model to the Catalog before running similarity probes.".to_string()
                                 action=Box::new(|| view! {
-                                    <a class="btn" href="/configuration/catalog">"Open Catalog"</a>
+                                    <a class="btn" href="/pipeline/catalog">"Open Catalog"</a>
                                 }.into_any())
                             />
                         </Surface>

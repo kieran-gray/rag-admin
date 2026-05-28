@@ -76,11 +76,6 @@ fn HubLayout(detail: SourceDocumentDetailDto, source_ref: String) -> impl IntoVi
     let document_type = document.document_type.clone();
     let source_ref_key = document.source_ref_key.clone();
 
-    let header_eyebrow = format!(
-        "Documents / {} / {}",
-        document_type_label(&document.document_type),
-        document.source_ref_key,
-    );
     let header_subtitle = format!(
         "{} · v{} · {}",
         document_type_label(&document.document_type),
@@ -135,7 +130,6 @@ fn HubLayout(detail: SourceDocumentDetailDto, source_ref: String) -> impl IntoVi
         <div>
             <PageHeader
                 title=title
-                eyebrow=header_eyebrow
                 subtitle=header_subtitle
                 actions=Box::new(move || view! {
                     <div class="flex items-center gap-2">
@@ -434,7 +428,7 @@ fn EvaluateCard(
 #[component]
 fn RecentRunRow(run: EvaluationRunSummaryDto) -> impl IntoView {
     let run_id = run.run_id;
-    let href = format!("/workflows/runs/{run_id}");
+    let href = format!("/evaluation/runs/{run_id}");
     let when = format_when(&run.created_at);
     let label = run_short_label(run_id);
     let (status_kind, status_label) = run_status_pill(&run.status);
@@ -737,7 +731,6 @@ fn NotFound(source_ref: String) -> impl IntoView {
         <div>
             <PageHeader
                 title=source_ref.clone()
-                eyebrow=format!("Documents / {source_ref}")
                 subtitle="No document is registered at this source ref.".to_string()
             />
             <Surface>
@@ -756,7 +749,6 @@ fn Deleted(source_ref: String) -> impl IntoView {
         <div>
             <PageHeader
                 title=source_ref.clone()
-                eyebrow=format!("Documents / {source_ref}")
                 subtitle="This document has been deleted.".to_string()
             />
             <Surface>

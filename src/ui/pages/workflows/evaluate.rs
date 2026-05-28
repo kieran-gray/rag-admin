@@ -26,7 +26,6 @@ pub fn EvaluateWorkflowPage() -> impl IntoView {
         <div>
             <PageHeader
                 title="Pick a document"
-                eyebrow="Workflows / Evaluate".to_string()
                 subtitle="Build a map, generate questions, run evaluations.".to_string()
             />
 

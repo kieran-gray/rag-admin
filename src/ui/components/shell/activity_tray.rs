@@ -282,8 +282,8 @@ fn kind_label(kind: ActivityKind) -> &'static str {
 
 fn detail_href(kind: ActivityKind, stream_id: Uuid) -> Option<String> {
     match kind {
-        ActivityKind::EvaluationDataset => Some(format!("/artifacts/datasets/{stream_id}")),
-        ActivityKind::EvaluationRun => Some(format!("/workflows/runs/{stream_id}")),
+        ActivityKind::EvaluationDataset => Some(format!("/evaluation/datasets/{stream_id}")),
+        ActivityKind::EvaluationRun => Some(format!("/evaluation/runs/{stream_id}")),
         ActivityKind::Indexing | ActivityKind::DocumentMap => None,
     }
 }

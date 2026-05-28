@@ -370,7 +370,7 @@ fn SweepTemplatePicker(
     if templates.is_empty() {
         return view! {
             <p class="text-sm muted">
-                "No sweep templates defined. Falling back to every chunking configuration in the registry. Create a template on /configuration/chunking to scope the sweep."
+                "No sweep templates defined. Falling back to every chunking configuration in the registry. Create a template on /pipeline/chunking to scope the sweep."
             </p>
         }
         .into_any();

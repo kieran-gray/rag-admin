@@ -16,7 +16,7 @@ const LINKS: &[StartLink] = &[
         glyph: "＋",
     },
     StartLink {
-        href: "/configuration/profiles",
+        href: "/pipeline/profiles",
         label: "New index profile",
         hint: "embedding + vector index",
         glyph: "▦",
@@ -34,7 +34,7 @@ const LINKS: &[StartLink] = &[
         glyph: "▷",
     },
     StartLink {
-        href: "/workflows/runs",
+        href: "/evaluation/runs",
         label: "Browse runs",
         hint: "past evaluations",
         glyph: "≣",
