@@ -122,16 +122,3 @@ pub struct ConnectorDiscoveredItemViewDto {
     pub status: ConnectorItemStatusDto,
     pub available: bool,
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BulkImportFailureDto {
-    pub source_ref_key: String,
-    pub error: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BulkImportResultDto {
-    pub imported: u32,
-    pub indexed: u32,
-    pub failures: Vec<BulkImportFailureDto>,
-}

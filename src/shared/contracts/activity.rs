@@ -22,6 +22,7 @@ pub enum ActivityKind {
     EvaluationDataset,
     EvaluationRun,
     DocumentMap,
+    ConnectorImport,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -170,6 +171,30 @@ pub fn classify(
             }))
         }
 
+        (aggregate_type::CONNECTOR_IMPORT, "ConnectorImportStarted") => {
+            let count = event_payload(event_data)
+                .get("source_ref_keys")
+                .and_then(serde_json::Value::as_array)
+                .map_or(0, Vec::len);
+            Some(ActivityDelta::Start(ActivityStart {
+                stream_id,
+                aggregate_type: aggregate_type_str.to_string(),
+                kind: ActivityKind::ConnectorImport,
+                label: format!("Importing {count} item(s)"),
+                started_at: occurred_at.to_string(),
+            }))
+        }
+        (aggregate_type::CONNECTOR_IMPORT, "ConnectorImportCompleted") => {
+            Some(ActivityDelta::Complete {
+                stream_id,
+                occurred_at: occurred_at.to_string(),
+            })
+        }
+        (aggregate_type::CONNECTOR_IMPORT, "ConnectorImportFailed") => Some(ActivityDelta::Fail {
+            stream_id,
+            occurred_at: occurred_at.to_string(),
+        }),
+
         _ => None,
     }
 }
@@ -240,5 +265,47 @@ mod tests {
             &payload,
         );
         assert!(matches!(delta, Some(ActivityDelta::Refresh { .. })));
+    }
+
+    #[test]
+    fn connector_import_started_begins_activity_with_item_count() {
+        let payload = json!({
+            "type": "ConnectorImportStarted",
+            "data": {
+                "import_id": Uuid::nil(),
+                "connector_id": Uuid::nil(),
+                "source_ref_keys": ["url:a", "url:b"],
+                "index_after_import": true,
+                "occurred_at": "2024-01-01T00:00:00Z",
+            }
+        });
+        let delta = classify(
+            stream_id(),
+            aggregate_type::CONNECTOR_IMPORT,
+            "ConnectorImportStarted",
+            "2024-01-01T00:00:01Z",
+            &payload,
+        );
+        let Some(ActivityDelta::Start(start)) = delta else {
+            panic!("expected start delta");
+        };
+        assert_eq!(start.kind, ActivityKind::ConnectorImport);
+        assert_eq!(start.label, "Importing 2 item(s)");
+    }
+
+    #[test]
+    fn connector_import_completed_marks_complete() {
+        let payload = json!({
+            "type": "ConnectorImportCompleted",
+            "data": { "import_id": Uuid::nil(), "imported": 2, "failed": 0, "occurred_at": "x" }
+        });
+        let delta = classify(
+            stream_id(),
+            aggregate_type::CONNECTOR_IMPORT,
+            "ConnectorImportCompleted",
+            "2024-01-01T00:00:01Z",
+            &payload,
+        );
+        assert!(matches!(delta, Some(ActivityDelta::Complete { .. })));
     }
 }

@@ -149,12 +149,15 @@ pub async fn bootstrap() -> Result<App, SetupError> {
     })?;
 
     let ingestion = IngestionServices::build(IngestionDeps {
+        pool: pool.clone(),
         clock: Arc::clone(&clock),
         id_generator: Arc::clone(&id_generator),
         http: Arc::clone(&http),
         repos: &repos,
         wirings: &wirings,
         event_bus: Arc::clone(&platform.event_bus),
+        job_registry: Arc::clone(&platform.job_registry),
+        activity_registry: Arc::clone(&platform.activity_registry),
         markdown_parser: Arc::clone(&platform.markdown_parser),
         index_profile_resolver: Arc::clone(&catalog.index_profile_resolver),
         chunking_configuration_query_service: Arc::clone(

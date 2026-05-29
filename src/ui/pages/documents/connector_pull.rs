@@ -13,7 +13,7 @@ use crate::server_functions::connector_sync::{
     bulk_import_from_connector, list_connector_discovered, list_connector_syncs, run_connector_sync,
 };
 use crate::shared::contracts::{
-    aggregate_type, BulkImportResultDto, ConnectorDiscoveredItemViewDto, ConnectorItemStatusDto,
+    aggregate_type, ConnectorDiscoveredItemViewDto, ConnectorItemStatusDto,
     ConnectorSyncSummaryDto, IndexProfileDto,
 };
 use crate::ui::components::primitives::{
@@ -121,22 +121,19 @@ pub fn ConnectorPullPage() -> impl IntoView {
             return;
         }
         let id = connector_id.get_untracked();
+        let count = keys.len();
         set_busy.set(true);
         set_status.set(None);
         spawn_local(async move {
             match bulk_import_from_connector(id, keys, index_after).await {
-                Ok(result) => {
-                    if result.failures.is_empty() {
-                        let msg = if index_after {
-                            format!("Added {} · indexing {}", result.imported, result.indexed)
-                        } else {
-                            format!("Added {} to corpus", result.imported)
-                        };
-                        set_status.set(Some(InlineStatusMessage::ok(msg)));
-                        set_selected.set(HashSet::new());
+                Ok(_) => {
+                    let msg = if index_after {
+                        format!("Importing {count} item(s) — see Activity for progress")
                     } else {
-                        set_status.set(Some(InlineStatusMessage::err(summarize_failures(&result))));
-                    }
+                        format!("Adding {count} item(s) to corpus — see Activity for progress")
+                    };
+                    set_status.set(Some(InlineStatusMessage::ok(msg)));
+                    set_selected.set(HashSet::new());
                     set_refresh.update(|v| *v += 1);
                 }
                 Err(e) => {
@@ -444,25 +441,6 @@ fn resolve_target(
         .find(|p| p.is_default)
         .cloned()
         .map(|p| (p, false))
-}
-
-fn summarize_failures(result: &BulkImportResultDto) -> String {
-    let first = result
-        .failures
-        .first()
-        .map(|f| f.error.clone())
-        .unwrap_or_default();
-    let more = result.failures.len().saturating_sub(1);
-    let suffix = if more > 0 {
-        format!(" (+{more} more)")
-    } else {
-        String::new()
-    };
-    format!(
-        "Added {} to corpus, {} failed: {first}{suffix}",
-        result.imported,
-        result.failures.len()
-    )
 }
 
 #[component]

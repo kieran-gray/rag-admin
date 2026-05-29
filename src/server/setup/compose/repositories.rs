@@ -16,6 +16,7 @@ use crate::server::domain::configuration::retrieval_profile::RetrievalProfileRep
 use crate::server::domain::configuration::sweep_template::SweepTemplateRepository;
 use crate::server::domain::configuration::vector_index::VectorIndexRepository;
 use crate::server::domain::connector::ConnectorRepository;
+use crate::server::domain::connector_import::ConnectorImportRepository;
 use crate::server::domain::connector_sync::{
     ConnectorDiscoveredItemRepository, ConnectorSyncRepository,
 };
@@ -34,6 +35,7 @@ use crate::server::infrastructure::configuration::{
     PostgresVectorIndexRepository,
 };
 use crate::server::infrastructure::connector::PostgresConnectorRepository;
+use crate::server::infrastructure::connector_import::PostgresConnectorImportRepository;
 use crate::server::infrastructure::connector_sync::{
     PostgresConnectorDiscoveredItemRepository, PostgresConnectorSyncRepository,
 };
@@ -65,6 +67,7 @@ pub struct Repositories {
     pub connector: Arc<dyn ConnectorRepository>,
     pub connector_sync: Arc<dyn ConnectorSyncRepository>,
     pub connector_discovered_item: Arc<dyn ConnectorDiscoveredItemRepository>,
+    pub connector_import: Arc<dyn ConnectorImportRepository>,
     pub source_document: Arc<dyn SourceDocumentRepository>,
     pub indexing: Arc<dyn IndexingRepository>,
     pub evaluation_dataset: Arc<dyn EvaluationDatasetRepository>,
@@ -113,6 +116,7 @@ pub fn build_repositories(
         connector_discovered_item: Arc::new(PostgresConnectorDiscoveredItemRepository::new(
             pool.clone(),
         )),
+        connector_import: Arc::new(PostgresConnectorImportRepository::new(pool.clone())),
         source_document: Arc::new(PostgresSourceDocumentRepository::new(pool.clone())),
         indexing: Arc::new(PostgresIndexingRepository::new(pool.clone())),
         evaluation_dataset: Arc::new(PostgresEvaluationDatasetRepository::new(pool.clone())),

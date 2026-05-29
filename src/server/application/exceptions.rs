@@ -23,6 +23,7 @@ use crate::server::domain::configuration::{
     vector_index::VectorIndexRepositoryError,
 };
 use crate::server::domain::connector::{ConnectorError, ConnectorRepositoryError};
+use crate::server::domain::connector_import::ConnectorImportError;
 use crate::server::domain::connector_sync::{
     ConnectorDiscoveredItemRepositoryError, ConnectorSyncError, ConnectorSyncRepositoryError,
 };
@@ -191,6 +192,18 @@ impl From<ConnectorSyncError> for AppError {
             | ConnectorSyncError::AlreadyTerminal
             | ConnectorSyncError::InvalidCommand(_) => AppError::Validation(value.to_string()),
             ConnectorSyncError::Internal(_) => AppError::Internal(value.to_string()),
+        }
+    }
+}
+
+impl From<ConnectorImportError> for AppError {
+    fn from(value: ConnectorImportError) -> Self {
+        match value {
+            ConnectorImportError::NotFound => AppError::NotFound(value.to_string()),
+            ConnectorImportError::AlreadyStarted
+            | ConnectorImportError::AlreadyTerminal
+            | ConnectorImportError::InvalidCommand(_) => AppError::Validation(value.to_string()),
+            ConnectorImportError::Internal(_) => AppError::Internal(value.to_string()),
         }
     }
 }

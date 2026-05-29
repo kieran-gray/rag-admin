@@ -1,8 +1,6 @@
 use leptos::prelude::*;
 
-use crate::shared::contracts::{
-    BulkImportResultDto, ConnectorDiscoveredItemViewDto, ConnectorSyncSummaryDto,
-};
+use crate::shared::contracts::{ConnectorDiscoveredItemViewDto, ConnectorSyncSummaryDto};
 
 #[cfg(feature = "ssr")]
 use crate::server::application::connector_sync::ItemStatus;
@@ -13,7 +11,7 @@ use crate::server::setup::compose::ingestion::IngestionServices;
 #[cfg(feature = "ssr")]
 use crate::server_functions::error::{ctx, map_app_error};
 #[cfg(feature = "ssr")]
-use crate::shared::contracts::{BulkImportFailureDto, ConnectorItemStatusDto};
+use crate::shared::contracts::ConnectorItemStatusDto;
 #[cfg(feature = "ssr")]
 use std::sync::Arc;
 
@@ -101,22 +99,10 @@ pub async fn bulk_import_from_connector(
     connector_id: uuid::Uuid,
     source_ref_keys: Vec<String>,
     index_after_import: bool,
-) -> Result<BulkImportResultDto, ServerFnError> {
-    let result = ctx::<Arc<IngestionServices>>()?
-        .bulk_import_service
-        .bulk_import(connector_id, source_ref_keys, index_after_import)
+) -> Result<uuid::Uuid, ServerFnError> {
+    ctx::<Arc<IngestionServices>>()?
+        .connector_import_service
+        .start(connector_id, source_ref_keys, index_after_import)
         .await
-        .map_err(|e| map_app_error(&e))?;
-    Ok(BulkImportResultDto {
-        imported: result.imported,
-        indexed: result.indexed,
-        failures: result
-            .failures
-            .into_iter()
-            .map(|f| BulkImportFailureDto {
-                source_ref_key: f.source_ref_key,
-                error: f.error,
-            })
-            .collect(),
-    })
+        .map_err(|e| map_app_error(&e))
 }

@@ -2,6 +2,7 @@ pub mod chunk_set;
 pub mod comprehension;
 pub mod configuration;
 pub mod connector;
+pub mod connector_import;
 pub mod connector_sync;
 pub mod embedding_set;
 pub mod evaluation;

@@ -49,10 +49,10 @@ pub use configuration::{
     UpdateSweepTemplateDto, UpdateVectorIndexDto, VectorIndexCommandDto, VectorIndexDto,
 };
 pub use connector::{
-    BulkImportFailureDto, BulkImportResultDto, ConnectorCommandDto, ConnectorConfigDto,
-    ConnectorDiscoveredItemViewDto, ConnectorDto, ConnectorItemStatusDto, ConnectorKindDto,
-    ConnectorSyncSummaryDto, RegisterConnectorDto, RenameConnectorDto, SetConnectorDefaultsDto,
-    SitemapConfigDto, UnregisterConnectorDto, UpdateConnectorConfigDto,
+    ConnectorCommandDto, ConnectorConfigDto, ConnectorDiscoveredItemViewDto, ConnectorDto,
+    ConnectorItemStatusDto, ConnectorKindDto, ConnectorSyncSummaryDto, RegisterConnectorDto,
+    RenameConnectorDto, SetConnectorDefaultsDto, SitemapConfigDto, UnregisterConnectorDto,
+    UpdateConnectorConfigDto,
 };
 pub use discovery::{
     DiscoveredIndexDto, DiscoveredModelDto, DiscoveryOutcomeDto, DiscoveryResponseDto,

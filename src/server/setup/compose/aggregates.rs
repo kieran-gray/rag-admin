@@ -19,6 +19,7 @@ use crate::server::domain::configuration::retrieval_profile::RetrievalProfileCat
 use crate::server::domain::configuration::sweep_template::SweepTemplate;
 use crate::server::domain::configuration::vector_index::VectorIndexCatalog;
 use crate::server::domain::connector::Connector;
+use crate::server::domain::connector_import::ConnectorImport;
 use crate::server::domain::connector_sync::ConnectorSync;
 use crate::server::domain::evaluation::dataset::aggregate::EvaluationDataset;
 use crate::server::domain::evaluation::run::aggregate::EvaluationRun;
@@ -57,6 +58,7 @@ pub struct AggregateWirings {
     pub defaults: AggregateWiring<ConfigurationDefaults>,
     pub connector: AggregateWiring<Connector>,
     pub connector_sync: AggregateWiring<ConnectorSync>,
+    pub connector_import: AggregateWiring<ConnectorImport>,
     pub source_document: AggregateWiring<SourceDocument>,
     pub indexing: AggregateWiring<Indexing>,
     pub chunk_set: AggregateWiring<ChunkSet>,
@@ -78,6 +80,7 @@ pub fn build_aggregate_wirings(pool: &PgPool) -> AggregateWirings {
         defaults: build_aggregate_wiring::<ConfigurationDefaults>(pool),
         connector: build_aggregate_wiring::<Connector>(pool),
         connector_sync: build_aggregate_wiring::<ConnectorSync>(pool),
+        connector_import: build_aggregate_wiring::<ConnectorImport>(pool),
         source_document: build_aggregate_wiring::<SourceDocument>(pool),
         indexing: build_aggregate_wiring::<Indexing>(pool),
         chunk_set: build_aggregate_wiring::<ChunkSet>(pool),

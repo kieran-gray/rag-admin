@@ -94,6 +94,7 @@ fn kind_label(kind: ActivityKind) -> &'static str {
         ActivityKind::EvaluationDataset => "Dataset",
         ActivityKind::EvaluationRun => "Run",
         ActivityKind::DocumentMap => "Map",
+        ActivityKind::ConnectorImport => "Import",
     }
 }
 
