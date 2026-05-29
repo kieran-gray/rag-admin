@@ -39,6 +39,11 @@ pub trait ConnectorSyncRepository: Send + Sync {
         connector_id: Uuid,
     ) -> Result<Option<ConnectorSyncSummary>, ConnectorSyncRepositoryError>;
 
+    async fn latest_completed_for_connector(
+        &self,
+        connector_id: Uuid,
+    ) -> Result<Option<ConnectorSyncSummary>, ConnectorSyncRepositoryError>;
+
     async fn find_by_sync_id(
         &self,
         sync_id: Uuid,

@@ -219,16 +219,33 @@ fn matches_pattern(url: &str, pattern: &str) -> bool {
     if pattern.is_empty() {
         return false;
     }
-    if let Some(stripped) = pattern.strip_prefix('*') {
-        if let Some(stripped) = stripped.strip_suffix('*') {
-            return url.contains(stripped);
+    if !pattern.contains('*') {
+        return url.contains(pattern);
+    }
+    let segments: Vec<&str> = pattern.split('*').collect();
+    glob_match(url, &segments)
+}
+
+fn glob_match(url: &str, segments: &[&str]) -> bool {
+    let last = segments.len() - 1;
+    let mut cursor = 0usize;
+    let mut need_gap = false;
+    for (i, segment) in segments.iter().enumerate() {
+        if segment.is_empty() {
+            if i == last {
+                return !need_gap || cursor < url.len();
+            }
+            need_gap = true;
+            continue;
         }
-        return url.ends_with(stripped);
+        let from = cursor + usize::from(need_gap);
+        let Some(rel) = url.get(from..).and_then(|tail| tail.find(segment)) else {
+            return false;
+        };
+        cursor = from + rel + segment.len();
+        need_gap = true;
     }
-    if let Some(stripped) = pattern.strip_suffix('*') {
-        return url.starts_with(stripped);
-    }
-    url.contains(pattern)
+    true
 }
 
 #[cfg(test)]
@@ -312,5 +329,50 @@ mod tests {
             "https://other.com/a",
             "https://example.com/*"
         ));
+    }
+
+    #[test]
+    fn trailing_glob_requires_a_character_after_the_fragment() {
+        assert!(matches_pattern("https://example.com/posts/foo", "/posts/*"));
+        assert!(matches_pattern(
+            "https://example.com/posts/foo/bar",
+            "/posts/*"
+        ));
+        assert!(!matches_pattern("https://example.com/posts/", "/posts/*"));
+        assert!(!matches_pattern("https://example.com/posts", "/posts/*"));
+    }
+
+    #[test]
+    fn trailing_glob_filters_index_page_via_include() {
+        let include = vec!["/posts/*".to_string()];
+        assert!(matches_patterns(
+            "https://example.com/posts/hello-world",
+            &include,
+            &[]
+        ));
+        assert!(!matches_patterns(
+            "https://example.com/posts/",
+            &include,
+            &[]
+        ));
+        assert!(!matches_patterns(
+            "https://example.com/posts",
+            &include,
+            &[]
+        ));
+    }
+
+    #[test]
+    fn middle_glob_requires_characters_between_segments() {
+        assert!(matches_pattern("https://example.com/a/x/b", "/a/*/b"));
+        assert!(!matches_pattern("https://example.com/a/b", "/a/*/b"));
+        assert!(matches_pattern("https://example.com/a/x/b", "/a*b"));
+        assert!(!matches_pattern("https://example.com/ab", "/a*b"));
+    }
+
+    #[test]
+    fn non_glob_pattern_is_substring_match() {
+        assert!(matches_pattern("https://example.com/posts/", "/posts/"));
+        assert!(matches_pattern("https://example.com/posts/foo", "/posts/"));
     }
 }

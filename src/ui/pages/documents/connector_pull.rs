@@ -20,7 +20,9 @@ use crate::ui::components::primitives::{
     ActionItem, ActionsMenu, Dialog, EmptyState, InlineStatus, InlineStatusMessage, PageHeader,
     Status, StatusPill, Surface, TitleCell,
 };
-use crate::ui::pages::configuration::connectors::form_dialog::{ConnectorForm, ConnectorFormDialog};
+use crate::ui::pages::configuration::connectors::form_dialog::{
+    ConnectorForm, ConnectorFormDialog,
+};
 use crate::ui::pages::shared::format_when;
 use crate::ui::state::event_bus::use_invalidator;
 
@@ -36,6 +38,7 @@ pub fn ConnectorPullPage() -> impl IntoView {
     let invalidator = use_invalidator(|e| {
         e.from_any(&[
             aggregate_type::CONNECTOR,
+            aggregate_type::CONNECTOR_SYNC,
             aggregate_type::SOURCE_DOCUMENT,
             aggregate_type::INDEXING,
         ])
@@ -150,6 +153,7 @@ pub fn ConnectorPullPage() -> impl IntoView {
             .and_then(Result::ok)
             .map(|list| {
                 list.into_iter()
+                    .filter(|i| i.available)
                     .filter(|i| matches!(i.status, ConnectorItemStatusDto::Discovered))
                     .map(|i| i.source_ref_key)
                     .collect()
@@ -185,29 +189,43 @@ pub fn ConnectorPullPage() -> impl IntoView {
         ]
     };
 
+    let subtitle = "Sync, browse discovered items, and pull them into your corpus.";
+    let header_actions = move || {
+        view! {
+            <button type="button" class="btn" disabled=busy on:click=open_edit>
+                "Edit"
+            </button>
+            <button type="button" class="btn" disabled=busy on:click=on_sync>
+                {move || if busy.get() { "Syncing…" } else { "Sync now" }}
+            </button>
+        }
+        .into_any()
+    };
+
     view! {
         <div>
-            {move || {
-                let name = connector
-                    .get()
-                    .flatten()
-                    .map(|c| c.name)
-                    .unwrap_or_else(|| "Connector".into());
-                view! {
-                    <PageHeader
-                        title=name
-                        subtitle="Sync, browse discovered items, and pull them into your corpus.".to_string()
-                        actions=Box::new(move || view! {
-                            <button type="button" class="btn" disabled=busy on:click=open_edit>
-                                "Edit"
-                            </button>
-                            <button type="button" class="btn" disabled=busy on:click=on_sync>
-                                {move || if busy.get() { "Syncing…" } else { "Sync now" }}
-                            </button>
-                        }.into_any())
-                    />
-                }
-            }}
+            <Transition fallback=move || view! {
+                <PageHeader
+                    title="Connector"
+                    subtitle=subtitle.to_string()
+                    actions=Box::new(header_actions)
+                />
+            }>
+                {move || {
+                    let name = connector
+                        .get()
+                        .flatten()
+                        .map(|c| c.name)
+                        .unwrap_or_else(|| "Connector".into());
+                    view! {
+                        <PageHeader
+                            title=name
+                            subtitle=subtitle.to_string()
+                            actions=Box::new(header_actions)
+                        />
+                    }
+                }}
+            </Transition>
 
             <div class="flex flex-col gap-3">
                 <Transition fallback=|| ()>
@@ -221,7 +239,7 @@ pub fn ConnectorPullPage() -> impl IntoView {
                 <InlineStatus status=status />
 
                 <Surface>
-                    <div class="p-4 flex flex-col gap-3">
+                    <div class="p-2 flex flex-col gap-3">
                         <div class="flex items-center justify-between flex-wrap gap-2">
                             <h3 class="section-title">"Most recent sync"</h3>
                             <button
@@ -287,14 +305,97 @@ pub fn ConnectorPullPage() -> impl IntoView {
                                     />
                                 </div>
                             })),
-                            Ok(list) => Either::Right(Either::Right(view! {
-                                <DiscoveredTable items=list selected=selected set_selected=set_selected />
-                            })),
+                            Ok(list) => {
+                                let available: Vec<_> = list.into_iter().filter(|i| i.available).collect();
+                                Either::Right(Either::Right(if available.is_empty() {
+                                    Either::Left(view! {
+                                        <div class="p-6 muted text-sm">
+                                            "Nothing is currently available from this source. See items no longer available below."
+                                        </div>
+                                    })
+                                } else {
+                                    Either::Right(view! {
+                                        <DiscoveredTable items=available selected=selected set_selected=set_selected />
+                                    })
+                                }))
+                            }
                         })}
                     </Transition>
                 </Surface>
+
+                <UnavailableItems discovered=discovered />
             </div>
         </div>
+    }
+}
+
+#[component]
+fn UnavailableItems(
+    discovered: Resource<Result<Vec<ConnectorDiscoveredItemViewDto>, String>>,
+) -> impl IntoView {
+    view! {
+        <Transition fallback=|| ()>
+            {move || {
+                let unavailable: Vec<_> = discovered
+                    .get()
+                    .and_then(Result::ok)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|i| !i.available)
+                    .collect();
+                (!unavailable.is_empty()).then(|| {
+                    let count = unavailable.len();
+                    view! {
+                        <details class="surface collapsible-card">
+                            <summary class="collapsible-card-summary">
+                                <span class="collapsible-card-hint">
+                                    <span class="section-title">"No longer available"</span>
+                                    <span class="pill pill-neutral">{count}</span>
+                                </span>
+                                <span class="collapsible-card-chevron">"▾"</span>
+                            </summary>
+                            <div class="collapsible-card-body flex flex-col gap-3">
+                                <p class="text-xs muted">
+                                    "Found in an earlier sync but missing from the latest one; removed from the source or excluded by the current filters."
+                                </p>
+                                <UnavailableTable items=unavailable />
+                            </div>
+                        </details>
+                    }
+                })
+            }}
+        </Transition>
+    }
+}
+
+#[component]
+fn UnavailableTable(items: Vec<ConnectorDiscoveredItemViewDto>) -> impl IntoView {
+    view! {
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th class="w-[52%]">"Title"</th>
+                    <th>"Status"</th>
+                    <th>"Last seen"</th>
+                </tr>
+            </thead>
+            <tbody>
+                {items.into_iter().map(|item| {
+                    let title = item.title.clone();
+                    let sub = item.source_ref_key.clone();
+                    let (label, kind) = status_for(item.status);
+                    let last_seen = format_when(&item.last_seen);
+                    let last_seen_full = item.last_seen.clone();
+                    view! {
+                        <tr>
+                            <td><TitleCell title=title sub=sub /></td>
+                            <td><StatusPill label=label.to_string() kind=kind /></td>
+                            <td class="text-xs muted" title=last_seen_full>{last_seen}</td>
+                        </tr>
+                    }
+                }).collect_view()}
+            </tbody>
+        </table>
     }
 }
 

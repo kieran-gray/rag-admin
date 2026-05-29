@@ -1,5 +1,6 @@
 pub const SOURCE_DOCUMENT: &str = "source_document";
 pub const CONNECTOR: &str = "connector";
+pub const CONNECTOR_SYNC: &str = "connector_sync";
 pub const INDEXING: &str = "indexing";
 pub const EMBEDDING_MODEL_CATALOG: &str = "embedding_model_catalog";
 pub const GENERATION_MODEL_CATALOG: &str = "generation_model_catalog";

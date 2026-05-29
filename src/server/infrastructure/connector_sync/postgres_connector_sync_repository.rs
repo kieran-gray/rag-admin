@@ -101,6 +101,30 @@ impl ConnectorSyncRepository for PostgresConnectorSyncRepository {
         Ok(row.map(Into::into))
     }
 
+    async fn latest_completed_for_connector(
+        &self,
+        connector_id: Uuid,
+    ) -> Result<Option<ConnectorSyncSummary>, ConnectorSyncRepositoryError> {
+        let row: Option<SyncRow> = sqlx::query_as(
+            "
+            SELECT sync_id, connector_id, status, discovered_count,
+                   started_at, completed_at, error
+            FROM connector_syncs
+            WHERE connector_id = $1 AND status = 'completed'
+            ORDER BY started_at DESC
+            LIMIT 1
+            ",
+        )
+        .bind(connector_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| {
+            ConnectorSyncRepositoryError::Internal(format!("latest_completed_for_connector: {e}"))
+        })?;
+
+        Ok(row.map(Into::into))
+    }
+
     async fn find_by_sync_id(
         &self,
         sync_id: Uuid,

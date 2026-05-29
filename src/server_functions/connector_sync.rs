@@ -87,6 +87,7 @@ pub async fn list_connector_discovered(
                 ItemStatus::Imported => ConnectorItemStatusDto::Imported,
                 ItemStatus::Indexed => ConnectorItemStatusDto::Indexed,
             },
+            available: i.available,
         })
         .collect())
 }

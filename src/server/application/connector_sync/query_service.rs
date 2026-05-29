@@ -30,6 +30,7 @@ pub struct ConnectorDiscoveredItemView {
     pub latest_sync_id: Uuid,
     pub imported_document_id: Option<Uuid>,
     pub status: ItemStatus,
+    pub available: bool,
 }
 
 pub struct ConnectorSyncQueryService {
@@ -85,6 +86,12 @@ impl ConnectorSyncQueryService {
             .list_for_connector(connector_id)
             .await?;
 
+        let current_sync_id = self
+            .sync_repository
+            .latest_completed_for_connector(connector_id)
+            .await?
+            .map(|s| s.sync_id);
+
         let mut document_by_key: HashMap<String, Uuid> = HashMap::new();
         for item in &items {
             let Some(source_ref) = SourceRef::parse_route_key(&item.source_ref_key) else {
@@ -124,6 +131,8 @@ impl ConnectorSyncQueryService {
                     Some(id) if indexed_docs.contains(&id) => ItemStatus::Indexed,
                     Some(_) => ItemStatus::Imported,
                 };
+                let available =
+                    current_sync_id.is_none_or(|current| item.latest_sync_id == current);
                 ConnectorDiscoveredItemView {
                     connector_id: item.connector_id,
                     source_ref_key: item.source_ref_key,
@@ -133,6 +142,7 @@ impl ConnectorSyncQueryService {
                     latest_sync_id: item.latest_sync_id,
                     imported_document_id: document_id,
                     status,
+                    available,
                 }
             })
             .collect())

@@ -120,6 +120,7 @@ pub struct ConnectorDiscoveredItemViewDto {
     pub latest_sync_id: Uuid,
     pub imported_document_id: Option<Uuid>,
     pub status: ConnectorItemStatusDto,
+    pub available: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

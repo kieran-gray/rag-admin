@@ -216,6 +216,13 @@ mod tests {
             Ok(None)
         }
 
+        async fn latest_completed_for_connector(
+            &self,
+            _connector_id: Uuid,
+        ) -> Result<Option<ConnectorSyncSummary>, ConnectorSyncRepositoryError> {
+            Ok(None)
+        }
+
         async fn find_by_sync_id(
             &self,
             sync_id: Uuid,
