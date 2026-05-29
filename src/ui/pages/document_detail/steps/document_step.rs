@@ -5,8 +5,9 @@ use uuid::Uuid;
 
 use crate::server_functions::source_document::{get_document_source, request_indexing};
 use crate::shared::contracts::{
-    ChunkingConfigurationDto, IndexProfileDto, IndexingDto, MarkdownBlockDto, MarkdownBlockKindDto,
+    ChunkingConfigurationDto, IndexProfileDto, IndexingDto, MarkdownBlockDto,
 };
+use crate::ui::components::markdown_body::block_kind_class;
 use crate::ui::components::primitives::{EmptyState, Help, Status, StatusPill, Surface};
 use crate::ui::pages::document_detail::steps::ConfigSelection;
 
@@ -322,7 +323,7 @@ fn RenderedMarkdown(
                 if is_anchor {
                     anchor_assigned = true;
                 }
-                let mut class = format!("md-block md-{}", kind_class(block.kind));
+                let mut class = format!("md-block md-{}", block_kind_class(block.kind));
                 if highlighted {
                     class.push_str(" is-highlighted");
                 }
@@ -345,20 +346,6 @@ fn RenderedMarkdown(
         <div class="md-document">
             {rows}
         </div>
-    }
-}
-
-fn kind_class(kind: MarkdownBlockKindDto) -> &'static str {
-    match kind {
-        MarkdownBlockKindDto::Heading => "heading",
-        MarkdownBlockKindDto::Paragraph => "paragraph",
-        MarkdownBlockKindDto::List => "list",
-        MarkdownBlockKindDto::CodeFence => "code",
-        MarkdownBlockKindDto::BlockQuote => "blockquote",
-        MarkdownBlockKindDto::Table => "table",
-        MarkdownBlockKindDto::Html => "html",
-        MarkdownBlockKindDto::ThematicBreak => "rule",
-        MarkdownBlockKindDto::Other => "other",
     }
 }
 

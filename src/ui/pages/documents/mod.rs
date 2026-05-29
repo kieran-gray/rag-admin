@@ -1,6 +1,5 @@
 pub mod add_dialog;
 pub mod all_view;
-pub mod connector_browse;
 pub mod connector_pull;
 pub mod coverage;
 pub mod redirect_by_id;

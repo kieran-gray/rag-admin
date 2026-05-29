@@ -13,8 +13,9 @@ use crate::server_functions::source_document::{
 };
 use crate::shared::contracts::{
     aggregate_type, DocumentMapSummaryDto, EvaluationDatasetSummaryDto, EvaluationRunSummaryDto,
-    IndexingDto, MarkdownBlockDto, MarkdownBlockKindDto, SourceDocumentDetailDto,
+    IndexingDto, SourceDocumentDetailDto,
 };
+use crate::ui::components::markdown_body::MarkdownBody;
 use crate::ui::components::primitives::{
     ActionItem, ActionsMenu, ConfirmDialog, EmptyState, PageHeader, Status, StatusPill, Surface,
 };
@@ -227,34 +228,6 @@ fn SourceLoader(source_ref_key: String) -> impl IntoView {
                 }.into_any(),
             })}
         </Transition>
-    }
-}
-
-#[component]
-fn MarkdownBody(blocks: Vec<MarkdownBlockDto>) -> impl IntoView {
-    view! {
-        <div class="md-document">
-            {blocks.into_iter().map(|block| view! {
-                <div
-                    class=format!("md-block md-{}", block_kind_class(block.kind))
-                    inner_html=block.html
-                ></div>
-            }).collect_view()}
-        </div>
-    }
-}
-
-fn block_kind_class(kind: MarkdownBlockKindDto) -> &'static str {
-    match kind {
-        MarkdownBlockKindDto::Heading => "heading",
-        MarkdownBlockKindDto::Paragraph => "paragraph",
-        MarkdownBlockKindDto::List => "list",
-        MarkdownBlockKindDto::CodeFence => "code",
-        MarkdownBlockKindDto::BlockQuote => "blockquote",
-        MarkdownBlockKindDto::Table => "table",
-        MarkdownBlockKindDto::Html => "html",
-        MarkdownBlockKindDto::ThematicBreak => "rule",
-        MarkdownBlockKindDto::Other => "other",
     }
 }
 

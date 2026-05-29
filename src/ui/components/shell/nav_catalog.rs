@@ -32,6 +32,7 @@ pub enum NavIcon {
     Chunking,
     Catalog,
     ChunkSets,
+    Docs,
 }
 
 pub const SECTIONS: &[NavSection] = &[
@@ -149,6 +150,16 @@ pub const SECTIONS: &[NavSection] = &[
             label: "Chunk sets",
             hint: "cached chunks · GC",
             icon: NavIcon::ChunkSets,
+            watch: None,
+        }],
+    },
+    NavSection {
+        label: Some("Help"),
+        items: &[NavItem {
+            href: "/docs",
+            label: "Docs",
+            hint: "guides",
+            icon: NavIcon::Docs,
             watch: None,
         }],
     },
@@ -298,6 +309,15 @@ pub fn nav_icon(icon: NavIcon) -> AnyView {
                 <rect x="2" y="3" width="20" height="5" rx="1" />
                 <path d="M4 8v11a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V8" />
                 <path d="M10 12h4" />
+            }
+            .into_any(),
+        ),
+        NavIcon::Docs => icon_svg(
+            view! {
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                <path d="M9 7h7" />
+                <path d="M9 11h7" />
             }
             .into_any(),
         ),

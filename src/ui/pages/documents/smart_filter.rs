@@ -34,6 +34,54 @@ enum AutocompleteKind {
     Connector,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct FilterKeyDef {
+    key: &'static str,
+    hint: &'static str,
+}
+
+const FILTER_KEYS: &[FilterKeyDef] = &[
+    FilterKeyDef {
+        key: STATUS_KEY,
+        hint: "indexed, failed, in progress…",
+    },
+    FilterKeyDef {
+        key: SOURCE_KEY,
+        hint: "host or upload",
+    },
+    FilterKeyDef {
+        key: CONNECTOR_KEY,
+        hint: "connector that ingested it",
+    },
+];
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Panel {
+    Keys(Vec<FilterKeyDef>),
+    Values(AutocompleteKind, Vec<Suggestion>),
+}
+
+impl Panel {
+    fn len(&self) -> usize {
+        match self {
+            Panel::Keys(keys) => keys.len(),
+            Panel::Values(_, items) => items.len(),
+        }
+    }
+}
+
+fn matching_keys(draft: &str) -> Vec<FilterKeyDef> {
+    let needle = draft.trim().to_lowercase();
+    if needle.is_empty() || needle.contains(':') {
+        return Vec::new();
+    }
+    FILTER_KEYS
+        .iter()
+        .copied()
+        .filter(|def| def.key.starts_with(&needle))
+        .collect()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Suggestion {
     Status(DocumentStatusFilterDto),
@@ -121,9 +169,12 @@ pub fn SmartFilterBar(
 
     let status_options_for_match = status_options.clone();
 
-    let suggestions = Memo::new(move |_| {
+    let panel = Memo::new(move |_| {
         let draft_value = draft.get();
-        let (kind, rest) = classify_draft(&draft_value)?;
+        let Some((kind, rest)) = classify_draft(&draft_value) else {
+            let keys = matching_keys(&draft_value);
+            return (!keys.is_empty()).then_some(Panel::Keys(keys));
+        };
         let needle = rest.to_lowercase();
         let chips_now = chips.get();
 
@@ -170,11 +221,11 @@ pub fn SmartFilterBar(
             }
         };
 
-        Some((kind, items))
+        Some(Panel::Values(kind, items))
     });
 
     Effect::new(move |_| {
-        let _ = suggestions.get();
+        let _ = panel.get();
         set_highlighted.set(0);
     });
 
@@ -204,6 +255,12 @@ pub fn SmartFilterBar(
         set_highlighted.set(0);
     };
 
+    let complete_key = move |key: &str| {
+        set_draft.set(format!("{key}:"));
+        on_search_change.run(None);
+        set_highlighted.set(0);
+    };
+
     let remove_last_chip = move || {
         let c = chips_now_for_input.get_untracked();
         if let Some(last_connector) = c.connectors.last().copied() {
@@ -218,20 +275,25 @@ pub fn SmartFilterBar(
     let on_keydown = move |ev: KeyboardEvent| {
         let key = ev.key();
         let key_str = key.as_str();
-        let current_suggestions: Vec<Suggestion> = suggestions
-            .get()
-            .map(|(_, items)| items)
-            .unwrap_or_default();
+        let current_panel = panel.get();
+        let len = current_panel.as_ref().map_or(0, Panel::len);
 
         let commit_highlighted = |ev: &KeyboardEvent| {
-            if let Some(idx) = current_suggestions
-                .len()
-                .checked_sub(1)
-                .map(|max| highlighted.get_untracked().min(max))
-            {
-                if let Some(s) = current_suggestions.get(idx).cloned() {
-                    ev.prevent_default();
-                    commit_suggestion(s);
+            let Some(panel) = current_panel.as_ref() else {
+                return;
+            };
+            let idx = highlighted.get_untracked().min(len.saturating_sub(1));
+            ev.prevent_default();
+            match panel {
+                Panel::Keys(keys) => {
+                    if let Some(def) = keys.get(idx) {
+                        complete_key(def.key);
+                    }
+                }
+                Panel::Values(_, items) => {
+                    if let Some(s) = items.get(idx).cloned() {
+                        commit_suggestion(s);
+                    }
                 }
             }
         };
@@ -241,23 +303,23 @@ pub fn SmartFilterBar(
                 ev.prevent_default();
                 remove_last_chip();
             }
-            "Enter" | "Tab" if !current_suggestions.is_empty() => {
+            "Enter" | "Tab" if len > 0 => {
                 commit_highlighted(&ev);
             }
             "Escape" => {
                 set_draft.set(String::new());
                 on_search_change.run(None);
             }
-            "ArrowDown" if !current_suggestions.is_empty() => {
+            "ArrowDown" if len > 0 => {
                 ev.prevent_default();
-                let max = current_suggestions.len().saturating_sub(1);
+                let max = len.saturating_sub(1);
                 set_highlighted.update(|i| {
                     *i = if *i >= max { 0 } else { *i + 1 };
                 });
             }
-            "ArrowUp" if !current_suggestions.is_empty() => {
+            "ArrowUp" if len > 0 => {
                 ev.prevent_default();
-                let max = current_suggestions.len().saturating_sub(1);
+                let max = len.saturating_sub(1);
                 set_highlighted.update(|i| {
                     *i = if *i == 0 { max } else { *i - 1 };
                 });
@@ -315,13 +377,22 @@ pub fn SmartFilterBar(
                 })}
             </div>
 
-            {move || suggestions.get().map(|(kind, items)| view! {
-                <AutocompletePopover
-                    kind=kind
-                    items=items
-                    highlighted=highlighted
-                    on_pick=Callback::new(move |s: Suggestion| commit_suggestion(s))
-                />
+            {move || panel.get().map(|p| match p {
+                Panel::Keys(keys) => view! {
+                    <KeyPopover
+                        keys=keys
+                        highlighted=highlighted
+                        on_pick=Callback::new(move |def: FilterKeyDef| complete_key(def.key))
+                    />
+                }.into_any(),
+                Panel::Values(kind, items) => view! {
+                    <AutocompletePopover
+                        kind=kind
+                        items=items
+                        highlighted=highlighted
+                        on_pick=Callback::new(move |s: Suggestion| commit_suggestion(s))
+                    />
+                }.into_any(),
             })}
         </div>
 
@@ -420,6 +491,35 @@ fn SmartChip(key_label: String, value_label: String, on_remove: Callback<()>) ->
                 "×"
             </button>
         </span>
+    }
+}
+
+#[component]
+fn KeyPopover(
+    keys: Vec<FilterKeyDef>,
+    highlighted: ReadSignal<usize>,
+    on_pick: Callback<FilterKeyDef>,
+) -> impl IntoView {
+    view! {
+        <div class="smart-filter-popover" role="listbox">
+            <div class="smart-filter-popover-header">"Add filter"</div>
+            {keys.into_iter().enumerate().map(|(idx, def)| {
+                view! {
+                    <div
+                        class="smart-filter-popover-item"
+                        role="option"
+                        data-highlighted=move || (highlighted.get() == idx).to_string()
+                        on:mousedown=move |ev| {
+                            ev.prevent_default();
+                            on_pick.run(def);
+                        }
+                    >
+                        <span class="smart-filter-popover-item-label">{format!("{}:", def.key)}</span>
+                        <span class="smart-filter-popover-item-hint">{def.hint}</span>
+                    </div>
+                }
+            }).collect_view()}
+        </div>
     }
 }
 

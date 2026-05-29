@@ -1,5 +1,6 @@
 @import "tailwindcss";
 
+@import "./configuration.css";
 @import "./workflows.css";
 @import "./activity.css";
 @import "./source.css";
@@ -7,6 +8,7 @@
 @import "./ingest.css";
 @import "./documents.css";
 @import "./launcher.css";
+@import "./docs.css";
 
 @theme {
     --color-page-bg: #0b0d10;

@@ -13,6 +13,7 @@ pub struct Config {
     pub ollama: OllamaConfig,
     pub llama_server: LlamaServerConfig,
     pub kv_backend: KvBackend,
+    pub docs_guides_dir: String,
 }
 
 #[derive(Clone)]
@@ -101,6 +102,8 @@ impl Config {
             ollama: OllamaConfig::from_env()?,
             llama_server: LlamaServerConfig::from_env()?,
             kv_backend,
+            docs_guides_dir: Self::parse_optional("DOCS_GUIDES_DIR")
+                .unwrap_or_else(|| "docs/guides".to_owned()),
         })
     }
 

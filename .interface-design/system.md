@@ -216,6 +216,24 @@ Underline-on-active. 1px transparent bottom border that becomes `--color-accent`
 
 The `▍` glyph is **brand-locked**. It appears nowhere else — not as a bullet, not as a divider, not as decoration. Treating it as reusable dilutes the wordmark.
 
+### Collections (not tables)
+
+Tables are for **scanning many rows of the same shape** (documents, runs). When a collection is a handful of richer objects — each with its own sub-fields and actions — reach for one of these instead of a table or a full-width row. Defined in `src/ui/styles/configuration.css`.
+
+#### Status-strip tile grid — `.connector-tile`
+For a small set of configured objects where each carries a few binary/status facts. Responsive grid `repeat(auto-fill, minmax(18rem, 1fr))`, gap 0.75rem. Each tile is a `surface-1` card with a 2px transparent left border that turns accent on hover (the selection-marker idiom, used here as an affordance hint).
+
+Tile anatomy, top to bottom: **head row** (nav icon + name, name `ellipsis`, trailing `pill-neutral` kind tag) → one-line descriptor in `text-muted` → a **defaults strip** pushed to the bottom with `margin-top: auto`. The strip is the signature: an `eyebrow` label followed by chips (`.connector-default`), each a 6px dot + uppercase word. Dot is `text-faint` when unset, `--status-ok` when configured (`.is-set`). This reads "what's wired up" at a glance without spending a column per fact. Actions are equal-width `btn-compact` across the footer.
+
+Use when the object count is low (≤ a few dozen) and each has 2–4 status facts worth surfacing. Don't use for homogeneous scannable data — that's still a table.
+
+#### Strategy-grouped spec cards — `.chunking-card`
+For configs that fall into a fixed set of **kinds**, where the params differ per kind (so a single table would have ragged columns). Group by kind under `eyebrow` section labels (`.chunking-group-label`), each group a grid `repeat(auto-fill, minmax(15rem, 1fr))`.
+
+Each card is a `surface-1` spec sheet: head (name + optional `default` eyebrow in accent) → a `<dl>` of param rows (`.chunking-spec`, `dt` uppercase faint key / `dd` tabular-nums value) → equal-width `btn-compact` actions. **Drive the spec rows from the data model, not literals** — the chunking cards read each strategy's `ChunkerDefinition.params` and call `config.param_value(key)`, so a new param appears automatically and never goes stale. The default member carries the 2px accent left border (`.is-default`) — that *is* the page's one accent.
+
+Group ordering follows the canonical definition order (`ChunkStrategy::all()`), not insertion order, so the layout is stable across reloads. Empty groups are filtered out, not rendered as empty headers.
+
 ## Anti-patterns
 
 - `shadow-*` Tailwind utility on anything that isn't a floating overlay

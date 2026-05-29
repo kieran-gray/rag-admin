@@ -1,6 +1,8 @@
-mod form_dialog;
+pub mod form_dialog;
 
 use leptos::prelude::*;
+use leptos_router::hooks::use_navigate;
+use leptos_router::NavigateOptions;
 
 use crate::server_functions::connector::list_connectors;
 use crate::shared::contracts::{
@@ -9,6 +11,7 @@ use crate::shared::contracts::{
 use crate::ui::components::primitives::{
     Dialog, EmptyState, InlineStatus, InlineStatusMessage, PageHeader, Surface,
 };
+use crate::ui::components::shell::nav_catalog::{chevron_svg, nav_icon, NavIcon};
 use crate::ui::state::event_bus::use_invalidator;
 
 use self::form_dialog::{ConnectorForm, ConnectorFormDialog};
@@ -69,9 +72,9 @@ pub fn ConnectorsPage() -> impl IntoView {
                         </Surface>
                     }.into_any(),
                     Ok(list) => view! {
-                        <div class="space-y-3">
+                        <div class="connector-grid">
                             {list.into_iter().map(|c| view! {
-                                <ConnectorCard
+                                <ConnectorTile
                                     connector=c
                                     on_edit=open_edit
                                     on_delete=open_delete
@@ -105,7 +108,7 @@ pub fn ConnectorsPage() -> impl IntoView {
 }
 
 #[component]
-fn ConnectorCard(
+fn ConnectorTile(
     connector: ConnectorDto,
     on_edit: Callback<ConnectorDto>,
     on_delete: Callback<ConnectorDto>,
@@ -118,36 +121,79 @@ fn ConnectorCard(
     let descriptor = match &connector.config {
         ConnectorConfigDto::Sitemap(c) => c.url.clone(),
     };
+    let browse_href = format!("/connectors/{}", connector.connector_id);
+    let name_attr = name.clone();
+    let url_attr = descriptor.clone();
+
+    let defaults = [
+        ("Index", connector.default_index_profile_id.is_some()),
+        (
+            "Chunking",
+            connector.default_chunking_configuration_id.is_some(),
+        ),
+        (
+            "Retrieval",
+            connector.default_retrieval_profile_id.is_some(),
+        ),
+    ];
+
+    let navigate = StoredValue::new(use_navigate());
+    let browse = StoredValue::new(browse_href);
+    let go_browse = move || navigate.get_value()(&browse.get_value(), NavigateOptions::default());
 
     view! {
-        <div class="surface p-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div class="space-y-2 min-w-0">
-                <h3 class="section-title flex items-center gap-2">{name}</h3>
-                <div class="flex gap-1.5 flex-wrap text-sm muted">
-                    <span class="pill pill-neutral">{kind_label}</span>
-                    <span class="pill pill-neutral truncate max-w-md">{descriptor}</span>
-                </div>
+        <div
+            class="connector-tile"
+            role="link"
+            tabindex="0"
+            on:click=move |_| go_browse()
+            on:keydown=move |ev| {
+                if matches!(ev.key().as_str(), "Enter" | " ") {
+                    ev.prevent_default();
+                    go_browse();
+                }
+            }
+        >
+            <div class="connector-tile-head">
+                <span class="connector-tile-icon" aria-hidden="true">
+                    {nav_icon(NavIcon::Connectors)}
+                </span>
+                <span class="connector-tile-name" title=name_attr>{name}</span>
+                <span class="pill pill-neutral connector-tile-kind">{kind_label}</span>
+                <span class="connector-tile-chevron" aria-hidden="true">
+                    {chevron_svg()}
+                </span>
             </div>
-            <div class="flex gap-2 shrink-0">
-                <a
-                    class="btn"
-                    href=format!("/connectors/{}", connector.connector_id)
-                >
-                    "Browse"
-                </a>
+            <p class="connector-tile-url" title=url_attr>{descriptor}</p>
+            <div class="connector-tile-defaults">
+                <span class="eyebrow">"Defaults"</span>
+                {defaults.into_iter().map(|(label, set)| {
+                    let class = if set { "connector-default is-set" } else { "connector-default" };
+                    view! {
+                        <span class=class title=if set { "configured" } else { "not set" }>{label}</span>
+                    }
+                }).collect_view()}
+            </div>
+            <div class="connector-tile-actions">
                 <button
                     type="button"
-                    class="btn"
+                    class="btn btn-compact"
                     disabled=busy
-                    on:click=move |_| on_edit.run(edit_clone.clone())
+                    on:click=move |ev| {
+                        ev.stop_propagation();
+                        on_edit.run(edit_clone.clone());
+                    }
                 >
                     "Edit"
                 </button>
                 <button
                     type="button"
-                    class="btn"
+                    class="btn btn-compact"
                     disabled=busy
-                    on:click=move |_| on_delete.run(delete_clone.clone())
+                    on:click=move |ev| {
+                        ev.stop_propagation();
+                        on_delete.run(delete_clone.clone());
+                    }
                 >
                     "Delete"
                 </button>

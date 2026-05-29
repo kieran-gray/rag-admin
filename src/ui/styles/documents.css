@@ -519,6 +519,11 @@
     font-size: 0.6875rem;
 }
 
+.smart-filter-popover-item-hint {
+    color: var(--color-text-faint);
+    font-size: 0.6875rem;
+}
+
 .smart-filter-popover-empty {
     padding: 0.55rem;
     color: var(--color-text-faint);

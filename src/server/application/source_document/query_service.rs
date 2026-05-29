@@ -4,7 +4,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::server::application::connector::ConnectorQueryService;
-use crate::server::application::markdown::{Block, BlockKind};
+use crate::server::application::markdown::block_to_dto;
 use crate::server::application::ports::MarkdownParser;
 use crate::server::application::source_document::ports::BlobStore;
 use crate::server::application::AppError;
@@ -19,9 +19,9 @@ use crate::server::domain::source_document::repository::{
 use crate::server::domain::source_document::source_ref::SourceRef;
 use crate::shared::contracts::{
     ChunkDto, ConnectorFacetDto, DocumentConnectorDto, DocumentListItemDto, DocumentListPageDto,
-    DocumentListQueryDto, DocumentStatusFilterDto, IndexingDto, MarkdownBlockDto,
-    MarkdownBlockKindDto, SourceDescriptorDto, SourceDocumentDetailDto, SourceDocumentDto,
-    SourceDocumentMarkdownDto, SourceFacetDto, SourceFilterDto,
+    DocumentListQueryDto, DocumentStatusFilterDto, IndexingDto, SourceDescriptorDto,
+    SourceDocumentDetailDto, SourceDocumentDto, SourceDocumentMarkdownDto, SourceFacetDto,
+    SourceFilterDto,
 };
 
 pub struct SourceDocumentQueryService {
@@ -322,27 +322,6 @@ impl SourceDocumentQueryService {
                 char_end: c.char_end,
             })
             .collect())
-    }
-}
-
-fn block_to_dto(block: &Block) -> MarkdownBlockDto {
-    let (kind, heading_depth) = match &block.kind {
-        BlockKind::Heading(h) => (MarkdownBlockKindDto::Heading, Some(h.depth)),
-        BlockKind::Paragraph => (MarkdownBlockKindDto::Paragraph, None),
-        BlockKind::List => (MarkdownBlockKindDto::List, None),
-        BlockKind::CodeFence => (MarkdownBlockKindDto::CodeFence, None),
-        BlockKind::BlockQuote => (MarkdownBlockKindDto::BlockQuote, None),
-        BlockKind::Table => (MarkdownBlockKindDto::Table, None),
-        BlockKind::Html => (MarkdownBlockKindDto::Html, None),
-        BlockKind::ThematicBreak => (MarkdownBlockKindDto::ThematicBreak, None),
-        BlockKind::Other => (MarkdownBlockKindDto::Other, None),
-    };
-    MarkdownBlockDto {
-        kind,
-        html: markdown::to_html(&block.text),
-        char_start: block.span.char_start as u32,
-        char_end: block.span.char_end as u32,
-        heading_depth,
     }
 }
 

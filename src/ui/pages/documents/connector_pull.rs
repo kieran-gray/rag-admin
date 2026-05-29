@@ -10,16 +10,17 @@ use uuid::Uuid;
 use crate::server_functions::configuration::get_index_profiles;
 use crate::server_functions::connector::list_connectors;
 use crate::server_functions::connector_sync::{
-    bulk_import_from_connector, list_connector_discovered, run_connector_sync,
+    bulk_import_from_connector, list_connector_discovered, list_connector_syncs, run_connector_sync,
 };
 use crate::shared::contracts::{
     aggregate_type, BulkImportResultDto, ConnectorDiscoveredItemViewDto, ConnectorItemStatusDto,
-    IndexProfileDto,
+    ConnectorSyncSummaryDto, IndexProfileDto,
 };
 use crate::ui::components::primitives::{
-    ActionItem, ActionsMenu, EmptyState, InlineStatus, InlineStatusMessage, PageHeader, Status,
-    StatusPill, Surface, TitleCell,
+    ActionItem, ActionsMenu, Dialog, EmptyState, InlineStatus, InlineStatusMessage, PageHeader,
+    Status, StatusPill, Surface, TitleCell,
 };
+use crate::ui::pages::configuration::connectors::form_dialog::{ConnectorForm, ConnectorFormDialog};
 use crate::ui::pages::shared::format_when;
 use crate::ui::state::event_bus::use_invalidator;
 
@@ -42,12 +43,22 @@ pub fn ConnectorPullPage() -> impl IntoView {
     let (refresh, set_refresh) = signal(0u32);
 
     let connector = Resource::new(
-        move || (connector_id.get(), invalidator.get()),
-        |(id, _)| async move {
+        move || (connector_id.get(), refresh.get(), invalidator.get()),
+        |(id, _, _)| async move {
             list_connectors()
                 .await
                 .ok()
                 .and_then(|list| list.into_iter().find(|c| c.connector_id == id))
+        },
+    );
+
+    let latest_sync = Resource::new(
+        move || (connector_id.get(), refresh.get(), invalidator.get()),
+        |(id, _, _)| async move {
+            list_connector_syncs(id, 1, 0)
+                .await
+                .map(|mut list| list.pop())
+                .map_err(|e| e.to_string())
         },
     );
 
@@ -68,6 +79,14 @@ pub fn ConnectorPullPage() -> impl IntoView {
     let (busy, set_busy) = signal(false);
     let (status, set_status) = signal::<Option<InlineStatusMessage>>(None);
     let (selected, set_selected) = signal::<HashSet<String>>(HashSet::new());
+    let (form, set_form) = signal::<Option<ConnectorForm>>(None);
+    let (history_open, set_history_open) = signal(false);
+
+    let open_edit = move |_| {
+        if let Some(c) = connector.get_untracked().flatten() {
+            set_form.set(Some(ConnectorForm::Edit(c)));
+        }
+    };
 
     let on_sync = move |_| {
         if busy.get_untracked() {
@@ -179,6 +198,9 @@ pub fn ConnectorPullPage() -> impl IntoView {
                         title=name
                         subtitle="Sync, browse discovered items, and pull them into your corpus.".to_string()
                         actions=Box::new(move || view! {
+                            <button type="button" class="btn" disabled=busy on:click=open_edit>
+                                "Edit"
+                            </button>
                             <button type="button" class="btn" disabled=busy on:click=on_sync>
                                 {move || if busy.get() { "Syncing…" } else { "Sync now" }}
                             </button>
@@ -197,6 +219,43 @@ pub fn ConnectorPullPage() -> impl IntoView {
                 </Transition>
 
                 <InlineStatus status=status />
+
+                <Surface>
+                    <div class="p-4 flex flex-col gap-3">
+                        <div class="flex items-center justify-between flex-wrap gap-2">
+                            <h3 class="section-title">"Most recent sync"</h3>
+                            <button
+                                type="button"
+                                class="btn"
+                                on:click=move |_| set_history_open.set(true)
+                            >
+                                "View history"
+                            </button>
+                        </div>
+                        <Transition fallback=|| view! { <div class="muted text-sm p-2">"Loading…"</div> }>
+                            {move || latest_sync.get().map(|res| match res {
+                                Err(e) => view! { <div class="log-line-error text-sm">{format!("Failed: {e}")}</div> }.into_any(),
+                                Ok(None) => view! { <div class="muted text-sm">"No syncs yet"</div> }.into_any(),
+                                Ok(Some(sync)) => view! { <SyncRow sync=sync /> }.into_any(),
+                            })}
+                        </Transition>
+                    </div>
+                </Surface>
+
+                <SyncHistoryDialog
+                    connector_id=Signal::derive(move || connector_id.get())
+                    open=history_open
+                    set_open=set_history_open
+                />
+
+                <ConnectorFormDialog
+                    form=form
+                    set_form=set_form
+                    busy=busy
+                    set_busy=set_busy
+                    set_status=set_status
+                    set_refresh=set_refresh
+                />
 
                 <Surface flush=true>
                     <div class="list-page-toolbar">
@@ -362,5 +421,158 @@ fn status_for(status: ConnectorItemStatusDto) -> (&'static str, Status) {
         ConnectorItemStatusDto::Discovered => ("Available", Status::Stale),
         ConnectorItemStatusDto::Imported => ("In corpus", Status::Info),
         ConnectorItemStatusDto::Indexed => ("Indexed", Status::Ok),
+    }
+}
+
+fn sync_status_kind(status: &str) -> Status {
+    match status {
+        "completed" => Status::Ok,
+        "failed" => Status::Fail,
+        "started" => Status::Pending,
+        _ => Status::Info,
+    }
+}
+
+#[component]
+fn SyncRow(sync: ConnectorSyncSummaryDto) -> impl IntoView {
+    let status_kind = sync_status_kind(&sync.status);
+    let completed_label = sync
+        .completed_at
+        .as_deref()
+        .map(format_when)
+        .unwrap_or_else(|| "—".into());
+    let completed_title = sync.completed_at.clone().unwrap_or_default();
+    let discovered_count = sync.discovered_count;
+    let error = sync.error.clone();
+
+    view! {
+        <div class="flex flex-col gap-2">
+            <div class="flex items-center gap-4 flex-wrap text-sm">
+                <StatusPill label=sync.status.clone() kind=status_kind />
+                <span class="muted" title=completed_title>{format!("Completed {completed_label}")}</span>
+                <span class="muted">{format!("{discovered_count} discovered")}</span>
+            </div>
+            {error.map(|msg| view! {
+                <div class="log-line-error text-xs">{msg}</div>
+            })}
+        </div>
+    }
+}
+
+const HISTORY_PAGE_SIZE: u32 = 10;
+
+#[component]
+fn SyncHistoryDialog(
+    connector_id: Signal<Uuid>,
+    open: ReadSignal<bool>,
+    set_open: WriteSignal<bool>,
+) -> impl IntoView {
+    let (page, set_page) = signal(0u32);
+
+    Effect::new(move |_| {
+        if open.get() {
+            set_page.set(0);
+        }
+    });
+
+    let history = Resource::new(
+        move || (open.get(), connector_id.get(), page.get()),
+        |(is_open, id, p)| async move {
+            if !is_open {
+                return Ok(Vec::new());
+            }
+            list_connector_syncs(id, HISTORY_PAGE_SIZE, p * HISTORY_PAGE_SIZE)
+                .await
+                .map_err(|e| e.to_string())
+        },
+    );
+
+    let close = Callback::new(move |_| set_open.set(false));
+    let on_prev = move |_| set_page.update(|p| *p = p.saturating_sub(1));
+    let on_next = move |_| set_page.update(|p| *p += 1);
+
+    view! {
+        <Dialog
+            open=Signal::derive(move || open.get())
+            title="Sync history".to_string()
+            subtitle="Paginated history of connector syncs, newest first.".to_string()
+            on_close=close
+        >
+            <div class="flex flex-col gap-3">
+                <Suspense fallback=|| view! { <div class="muted text-sm p-2">"Loading…"</div> }>
+                    {move || history.get().map(|res| match res {
+                        Err(e) => view! { <div class="log-line-error text-sm">{format!("Failed: {e}")}</div> }.into_any(),
+                        Ok(list) if list.is_empty() && page.get() == 0 => view! {
+                            <div class="muted text-sm">"No syncs yet"</div>
+                        }.into_any(),
+                        Ok(list) => view! {
+                            <SyncHistoryTable rows=list />
+                        }.into_any(),
+                    })}
+                </Suspense>
+
+                <div class="flex items-center justify-between pt-2 border-t border-[var(--color-border)]">
+                    <span class="text-sm muted">{move || format!("Page {}", page.get() + 1)}</span>
+                    <div class="flex gap-2">
+                        <button
+                            type="button"
+                            class="btn"
+                            disabled=move || page.get() == 0
+                            on:click=on_prev
+                        >
+                            "← Previous"
+                        </button>
+                        <button
+                            type="button"
+                            class="btn"
+                            disabled=move || {
+                                history.get()
+                                    .and_then(Result::ok)
+                                    .map(|l| (l.len() as u32) < HISTORY_PAGE_SIZE)
+                                    .unwrap_or(true)
+                            }
+                            on:click=on_next
+                        >
+                            "Next →"
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </Dialog>
+    }
+}
+
+#[component]
+fn SyncHistoryTable(rows: Vec<ConnectorSyncSummaryDto>) -> impl IntoView {
+    view! {
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>"Started"</th>
+                    <th>"Status"</th>
+                    <th class="text-right">"Discovered"</th>
+                    <th>"Completed"</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows.into_iter().map(|s| {
+                    let status_kind = sync_status_kind(&s.status);
+                    let started = format_when(&s.started_at);
+                    let completed = s
+                        .completed_at
+                        .as_deref()
+                        .map(format_when)
+                        .unwrap_or_else(|| "—".into());
+                    view! {
+                        <tr>
+                            <td class="text-xs muted" title=s.started_at.clone()>{started}</td>
+                            <td><StatusPill label=s.status.clone() kind=status_kind /></td>
+                            <td class="text-right text-sm">{s.discovered_count.to_string()}</td>
+                            <td class="text-xs muted" title=s.completed_at.clone().unwrap_or_default()>{completed}</td>
+                        </tr>
+                    }
+                }).collect_view()}
+            </tbody>
+        </table>
     }
 }

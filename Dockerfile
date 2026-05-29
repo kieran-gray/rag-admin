@@ -1,4 +1,4 @@
-FROM rustlang/rust:nightly-trixie AS base
+FROM rust:1.96-trixie AS base
 
 RUN rm -f /etc/apt/apt.conf.d/docker-clean \
     && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' \
@@ -52,6 +52,7 @@ RUN apt-get update -y \
 COPY --from=builder /out/rag-admin /app/
 COPY --from=builder /out/site /app/site
 COPY --from=builder /app/Cargo.toml /app/
+COPY --from=builder /app/docs /app/docs
 
 ENV RUST_LOG="info"
 ENV LEPTOS_SITE_ADDR="0.0.0.0:3000"

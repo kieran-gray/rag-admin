@@ -65,6 +65,7 @@ pub fn title_for_path(path: &str) -> String {
         "/maintenance/chunk-sets" => "Chunk sets".into(),
         "/evaluation/maps" => "Maps".into(),
         "/evaluation/datasets" => "Datasets".into(),
+        "/docs" => "Docs".into(),
         other => prefix_title(other),
     }
 }
@@ -85,7 +86,20 @@ fn prefix_title(path: &str) -> String {
     if let Some(rest) = path.strip_prefix("/evaluate/") {
         return format!("Evaluate · {}", document_label(rest));
     }
+    if let Some(rest) = path.strip_prefix("/docs/") {
+        return guide_title(rest);
+    }
     path.to_string()
+}
+
+fn guide_title(rest: &str) -> String {
+    let slug = rest.split('/').next().unwrap_or(rest);
+    let cleaned = percent_decode(slug).replace('-', " ");
+    let mut chars = cleaned.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => "Docs".into(),
+    }
 }
 
 fn document_title(rest: &str) -> String {

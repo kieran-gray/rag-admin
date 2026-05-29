@@ -6,6 +6,7 @@ pub mod comprehension;
 pub mod configuration;
 pub mod connector;
 pub mod discovery;
+pub mod docs;
 pub mod error;
 pub mod evaluation;
 pub mod events;
@@ -57,6 +58,7 @@ pub use discovery::{
     DiscoveredIndexDto, DiscoveredModelDto, DiscoveryOutcomeDto, DiscoveryResponseDto,
     IndexDiscoveryOutcomeDto, IndexDiscoveryResponseDto,
 };
+pub use docs::{GuideDto, GuideSectionDto, GuideSummaryDto};
 pub use error::{ApiError, ApiErrorKind};
 pub use evaluation::{
     AxisWeightDto, BestVariantDto, DatasetListItemDto, DatasetListPageDto, DatasetListQueryDto,

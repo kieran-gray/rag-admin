@@ -4,6 +4,7 @@ pub mod chat;
 pub mod comprehension;
 pub mod connector;
 pub mod discovery;
+pub mod docs;
 pub mod evaluation;
 pub mod indexing;
 pub mod ingestion;
@@ -38,6 +39,7 @@ use self::chat::{ChatDeps, ChatServices};
 use self::comprehension::{ComprehensionDeps, ComprehensionServices};
 use self::connector::{ConnectorDeps, ConnectorServices};
 use self::discovery::{DiscoveryDeps, DiscoveryServices};
+use self::docs::{DocsDeps, DocsServices};
 use self::evaluation::{EvaluationDeps, EvaluationServices};
 use self::indexing::{IndexingDeps, IndexingServices};
 use self::ingestion::{IngestionDeps, IngestionServices};
@@ -56,6 +58,7 @@ pub struct App {
     pub chat: Arc<ChatServices>,
     pub comprehension: Arc<ComprehensionServices>,
     pub evaluation: Arc<EvaluationServices>,
+    pub docs: Arc<DocsServices>,
 }
 
 pub async fn bootstrap() -> Result<App, SetupError> {
@@ -215,6 +218,11 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         wakeups: &mut wakeups,
     })?;
 
+    let docs = DocsServices::build(DocsDeps {
+        guides_dir: config.docs_guides_dir.clone(),
+        markdown_parser: Arc::clone(&platform.markdown_parser),
+    })?;
+
     spawn_postgres_event_listener(pool, wakeups);
 
     let app = App {
@@ -228,6 +236,7 @@ pub async fn bootstrap() -> Result<App, SetupError> {
         chat: Arc::new(chat),
         comprehension: Arc::new(comprehension),
         evaluation: Arc::new(evaluation),
+        docs: Arc::new(docs),
     };
 
     app.seed_if_empty().await;
@@ -246,6 +255,7 @@ impl App {
         provide_context(Arc::clone(&self.chat));
         provide_context(Arc::clone(&self.comprehension));
         provide_context(Arc::clone(&self.evaluation));
+        provide_context(Arc::clone(&self.docs));
     }
 
     pub fn apply_axum_extensions(&self, router: Router) -> Router {

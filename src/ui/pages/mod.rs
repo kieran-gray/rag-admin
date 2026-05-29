@@ -1,5 +1,6 @@
 pub mod artifacts;
 pub mod configuration;
+pub mod docs;
 pub mod document_detail;
 pub mod documents;
 pub mod evaluate;

@@ -14,6 +14,7 @@ use crate::ui::pages::{
         catalog::CatalogPage, chunking::ChunkingPage, connectors::ConnectorsPage,
         profiles::ProfilesPage,
     },
+    docs::DocsPage,
     document_detail::{DocumentDetailPage, DocumentIngestPage, DocumentMapPage},
     documents::{ConnectorPullPage, DocumentByIdRedirect, DocumentsPage},
     evaluate::{EvaluateByIdRedirect, EvaluatePage},
@@ -208,6 +209,11 @@ pub fn App() -> impl IntoView {
                     <Route
                         path=(StaticSegment("workflows"), StaticSegment("evaluate"))
                         view=EvaluateWorkflowPage
+                    />
+                    <Route path=StaticSegment("docs") view=DocsPage />
+                    <Route
+                        path=(StaticSegment("docs"), ParamSegment("slug"))
+                        view=DocsPage
                     />
                 </Routes>
             </AppShell>

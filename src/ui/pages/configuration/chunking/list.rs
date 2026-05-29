@@ -3,6 +3,7 @@ use leptos::prelude::*;
 use crate::shared::contracts::{
     ChunkingConfigurationCommandDto, ChunkingConfigurationDto, DeleteChunkingConfigurationDto,
 };
+use crate::shared::reference_data::{ChunkStrategy, ChunkerDefinition};
 use crate::ui::components::primitives::{Dialog, EmptyState, InlineStatusMessage, Surface};
 use crate::ui::pages::configuration::commands::run_chunking_configuration_command;
 
@@ -25,14 +26,52 @@ pub(super) fn ChunkingList(
         .into_any();
     }
 
+    let mut groups: Vec<StrategyGroup> = ChunkStrategy::all()
+        .iter()
+        .map(StrategyGroup::empty)
+        .collect();
+    for cc in configurations {
+        let strategy = cc.config.strategy();
+        if let Some(group) = groups.iter_mut().find(|group| group.strategy == strategy) {
+            group.members.push(cc);
+        }
+    }
+
     view! {
-        <div class="space-y-3">
-            {configurations.into_iter().map(|cc| view! {
-                <ChunkingCard cc=cc on_edit=on_edit on_delete=on_delete busy=busy />
-            }).collect_view()}
+        <div class="chunking-groups">
+            {groups
+                .into_iter()
+                .filter(|group| !group.members.is_empty())
+                .map(|group| view! {
+                    <section class="chunking-group">
+                        <p class="eyebrow chunking-group-label">{group.label}</p>
+                        <div class="chunking-card-grid">
+                            {group.members.into_iter().map(|cc| view! {
+                                <ChunkingCard cc=cc on_edit=on_edit on_delete=on_delete busy=busy />
+                            }).collect_view()}
+                        </div>
+                    </section>
+                })
+                .collect_view()}
         </div>
     }
     .into_any()
+}
+
+struct StrategyGroup {
+    strategy: ChunkStrategy,
+    label: &'static str,
+    members: Vec<ChunkingConfigurationDto>,
+}
+
+impl StrategyGroup {
+    fn empty(definition: &ChunkerDefinition) -> Self {
+        Self {
+            strategy: definition.strategy,
+            label: definition.label,
+            members: Vec::new(),
+        }
+    }
 }
 
 #[component]
@@ -45,28 +84,42 @@ fn ChunkingCard(
     let cc_edit = cc.clone();
     let cc_delete = cc.clone();
     let name = cc.name.clone();
-    let strategy_id = cc.config.strategy().as_str();
-    let descriptor = cc.config.describe();
+    let name_attr = name.clone();
     let is_default = cc.is_default;
+    let card_class = if is_default {
+        "chunking-card is-default"
+    } else {
+        "chunking-card"
+    };
+    let specs: Vec<(&'static str, u32)> = cc
+        .config
+        .strategy()
+        .definition()
+        .params
+        .iter()
+        .map(|param| (param.label, cc.config.param_value(param.key)))
+        .collect();
 
     view! {
-        <div class="surface p-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div class="space-y-2 min-w-0">
-                <h3 class="section-title flex items-center gap-2">
-                    {name}
-                    {is_default.then(|| view! {
-                        <span class="pill pill-accent text-xs">"default"</span>
-                    })}
-                </h3>
-                <div class="flex gap-1.5 flex-wrap text-sm muted">
-                    <span class="pill pill-neutral">{format!("strategy · {strategy_id}")}</span>
-                    <span class="pill pill-neutral">{descriptor}</span>
-                </div>
+        <div class=card_class>
+            <div class="chunking-card-head">
+                <span class="chunking-card-name" title=name_attr>{name}</span>
+                {is_default.then(|| view! {
+                    <span class="eyebrow chunking-card-default">"default"</span>
+                })}
             </div>
-            <div class="flex gap-2 shrink-0">
+            <dl class="chunking-card-specs">
+                {specs.into_iter().map(|(label, value)| view! {
+                    <div class="chunking-spec">
+                        <dt>{label}</dt>
+                        <dd>{value}</dd>
+                    </div>
+                }).collect_view()}
+            </dl>
+            <div class="chunking-card-actions">
                 <button
                     type="button"
-                    class="btn"
+                    class="btn btn-compact"
                     disabled=busy
                     on:click=move |_| on_edit.run(cc_edit.clone())
                 >
@@ -74,7 +127,7 @@ fn ChunkingCard(
                 </button>
                 <button
                     type="button"
-                    class="btn"
+                    class="btn btn-compact"
                     disabled=busy
                     on:click=move |_| on_delete.run(cc_delete.clone())
                 >

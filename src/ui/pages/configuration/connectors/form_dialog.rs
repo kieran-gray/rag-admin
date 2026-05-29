@@ -15,13 +15,13 @@ use crate::shared::contracts::{
 use crate::ui::components::primitives::{Dialog, InlineStatusMessage};
 
 #[derive(Clone)]
-pub(super) enum ConnectorForm {
+pub enum ConnectorForm {
     Add,
     Edit(ConnectorDto),
 }
 
 #[component]
-pub(super) fn ConnectorFormDialog(
+pub fn ConnectorFormDialog(
     form: ReadSignal<Option<ConnectorForm>>,
     set_form: WriteSignal<Option<ConnectorForm>>,
     busy: ReadSignal<bool>,

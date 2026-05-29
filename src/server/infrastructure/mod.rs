@@ -4,6 +4,7 @@ pub mod configuration;
 pub mod connector;
 pub mod connector_sync;
 pub mod discovery;
+pub mod docs;
 pub mod embedding;
 pub mod embedding_set;
 pub mod evaluation;

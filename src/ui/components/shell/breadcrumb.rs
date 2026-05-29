@@ -25,6 +25,7 @@ const LEAVES: &[(&str, &str, &str)] = &[
     ("/pipeline/chunking", "Pipeline", "Chunking"),
     ("/pipeline/catalog", "Pipeline", "Catalog"),
     ("/maintenance/chunk-sets", "Maintenance", "Chunk sets"),
+    ("/docs", "Help", "Docs"),
 ];
 
 fn section(label: &str) -> Crumb {
@@ -83,6 +84,13 @@ fn crumbs_for_path(path: &str) -> Vec<Crumb> {
         return vec![
             section("Corpus"),
             parent("Documents", "/documents"),
+            current(title_for_path(trimmed)),
+        ];
+    }
+    if trimmed.starts_with("/docs/") {
+        return vec![
+            section("Help"),
+            parent("Docs", "/docs"),
             current(title_for_path(trimmed)),
         ];
     }
