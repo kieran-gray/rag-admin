@@ -2,6 +2,7 @@ use leptos::prelude::*;
 use leptos_router::components::A;
 use leptos_router::hooks::use_location;
 
+use crate::ui::state::launcher::use_launcher_state;
 use crate::ui::state::recent::title_for_path;
 
 #[derive(Clone)]
@@ -93,10 +94,12 @@ fn crumbs_for_path(path: &str) -> Vec<Crumb> {
 pub fn Breadcrumb() -> impl IntoView {
     let location = use_location();
     let crumbs = Signal::derive(move || crumbs_for_path(&location.pathname.get()));
+    let launcher = use_launcher_state();
 
     view! {
         <div class="breadcrumb-bar">
-            <nav class="breadcrumb-inner max-w-6xl mx-auto px-8" aria-label="Breadcrumb">
+            <div class="breadcrumb-inner max-w-6xl mx-auto px-8">
+            <nav class="breadcrumb-trail" aria-label="Breadcrumb">
                 {move || {
                     let list = crumbs.get();
                     let last = list.len().saturating_sub(1);
@@ -124,6 +127,17 @@ pub fn Breadcrumb() -> impl IntoView {
                     }).collect_view()
                 }}
             </nav>
+            <button
+                type="button"
+                class="launcher-trigger"
+                aria-label="Open command launcher"
+                on:click=move |_| launcher.open()
+            >
+                <span class="launcher-trigger-icon" aria-hidden="true">"⌕"</span>
+                <span class="launcher-trigger-label">"Search"</span>
+                <span class="launcher-trigger-kbd" aria-hidden="true">"⌘K"</span>
+            </button>
+            </div>
         </div>
     }
 }

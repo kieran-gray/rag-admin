@@ -127,3 +127,11 @@ fn write_dom_theme(is_light: bool) {
         _ = storage.set_item(STORAGE_KEY, value);
     }
 }
+
+#[cfg(feature = "hydrate")]
+pub fn toggle_theme() {
+    write_dom_theme(!current_dom_theme_is_light());
+}
+
+#[cfg(not(feature = "hydrate"))]
+pub fn toggle_theme() {}

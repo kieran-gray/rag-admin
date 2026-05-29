@@ -6,6 +6,7 @@
 @import "./playground.css";
 @import "./ingest.css";
 @import "./documents.css";
+@import "./launcher.css";
 
 @theme {
     --color-page-bg: #0b0d10;
