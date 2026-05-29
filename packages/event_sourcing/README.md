@@ -1,6 +1,6 @@
 # event_sourcing
 
-Generic event-sourcing framework used by `rag-admin`.
+Generic event-sourcing framework used by `search-crucible`.
 
 Provides:
 

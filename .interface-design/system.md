@@ -1,4 +1,4 @@
-# rag-admin interface design system
+# search-crucible interface design system
 
 Extracted from `src/ui/styles/global.css` and component usage in `src/ui/`.
 The CSS holds the runtime truth; this file holds the *intent* behind it.
@@ -96,7 +96,7 @@ The app ships two themes. Default is dark; light mode opts in via `data-theme="l
 
 **Overlay shadows soften in light mode.** Black drop-shadows punch holes in a white interface. The light theme rebinds the activity tray, popover, modal, and search-focus shadows to slate-tinted `rgba(15, 23, 42, 0.10–0.22)`. New floating overlays should reuse one of the existing classes rather than introduce a new shadow value.
 
-**The toggle.** A pre-paint `<script>` in `<head>` reads `localStorage('rag-admin-theme')` (falling back to `prefers-color-scheme`) and sets `data-theme` before first paint, so there's no flash. The `<ThemeToggle />` in `nav.rs` mutates the same attribute and persists to storage. No global state, no context — the DOM attribute *is* the source of truth.
+**The toggle.** A pre-paint `<script>` in `<head>` reads `localStorage('search-crucible-theme')` (falling back to `prefers-color-scheme`) and sets `data-theme` before first paint, so there's no flash. The `<ThemeToggle />` in `nav.rs` mutates the same attribute and persists to storage. No global state, no context — the DOM attribute *is* the source of truth.
 
 ### Radius
 

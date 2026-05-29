@@ -476,7 +476,7 @@ fn ConnectorPane(connectors: Vec<ConnectorDto>, on_navigate: Callback<()>) -> im
         return view! {
             <div class="text-sm muted py-4 flex flex-col gap-2">
                 <p>"No connectors configured yet."</p>
-                <A href="/connectors">"Add a connector →"</A>
+                <A href="/connectors" attr:class="btn self-start">"Add a connector →"</A>
             </div>
         }
         .into_any();

@@ -1,6 +1,6 @@
 services:
-  rag-admin:
-    image: 'rag-admin:dev'
+  search-crucible:
+    image: 'search-crucible:dev'
     build:
       target: dev
     environment:

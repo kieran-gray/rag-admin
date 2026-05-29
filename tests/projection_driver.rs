@@ -19,7 +19,7 @@ use event_sourcing::event_store::EventStore;
 use event_sourcing::policy::HasPolicies;
 use event_sourcing::projection_driver::ProjectionDriver;
 use event_sourcing::projector::Projector;
-use rag_admin::server::infrastructure::shared::event_sourcing::{
+use search_crucible::server::infrastructure::shared::event_sourcing::{
     PostgresCheckpointRepository, PostgresEventStore,
 };
 

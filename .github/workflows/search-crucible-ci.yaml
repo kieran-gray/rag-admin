@@ -1,4 +1,4 @@
-name: RAG Admin CI
+name: Search Crucible CI
 
 on:
   push:
@@ -47,7 +47,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: .
-          shared-key: rag-admin-lint
+          shared-key: search-crucible-lint
 
       - name: Clippy (SSR)
         run: cargo clippy --features ssr -- -D warnings
@@ -68,7 +68,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: .
-          shared-key: rag-admin-test
+          shared-key: search-crucible-test
 
       - name: Run tests (SSR)
         run: cargo test --features ssr

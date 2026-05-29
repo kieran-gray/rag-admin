@@ -1,4 +1,4 @@
-const LS_KEY: &str = "rag-admin.recent";
+const LS_KEY: &str = "search-crucible.recent";
 const CAP: usize = 8;
 
 #[derive(Clone, Debug, PartialEq, Eq)]

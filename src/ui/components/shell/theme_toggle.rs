@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 
 #[cfg(feature = "hydrate")]
-const STORAGE_KEY: &str = "rag-admin-theme";
+const STORAGE_KEY: &str = "search-crucible-theme";
 
 #[component]
 pub fn ThemeToggle() -> impl IntoView {

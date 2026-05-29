@@ -1,6 +1,6 @@
 services:
-  rag-admin:
-    image: 'rag-admin:latest'
+  search-crucible:
+    image: 'search-crucible:latest'
     build:
       context: .
       target: runtime

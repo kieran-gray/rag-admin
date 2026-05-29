@@ -33,7 +33,7 @@ fmt-check:
 
 up:
     docker compose --profile ollama up -d --build
-    docker compose logs -f rag-admin
+    docker compose logs -f search-crucible
 
 down:
     docker compose down
@@ -46,4 +46,4 @@ db-up:
 
 coverage:
     cargo llvm-cov clean --workspace
-    cargo llvm-cov --package rag-admin --lib --summary-only --features ssr
+    cargo llvm-cov --package search-crucible --lib --summary-only --features ssr

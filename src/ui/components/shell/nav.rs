@@ -68,8 +68,8 @@ pub fn AppSidebar() -> impl IntoView {
     view! {
         <aside class="app-sidebar">
             <div class="app-sidebar-head">
-                <A href="/" attr:class="wordmark app-sidebar-brand" attr:aria-label="rag-admin home">
-                    <span class="wordmark-text">"rag-admin"</span>
+                <A href="/" attr:class="wordmark app-sidebar-brand" attr:aria-label="SearchCrucible home">
+                    <span class="wordmark-text">"SearchCrucible"</span>
                 </A>
                 <button
                     type="button"

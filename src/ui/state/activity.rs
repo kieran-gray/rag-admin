@@ -16,9 +16,9 @@ const MIN_TRAY_HEIGHT_PX: f64 = 140.0;
 const MAX_TRAY_HEIGHT_FRACTION: f64 = 0.75;
 
 #[cfg(feature = "hydrate")]
-const LS_OPEN_KEY: &str = "rag-admin.tray.open";
+const LS_OPEN_KEY: &str = "search-crucible.tray.open";
 #[cfg(feature = "hydrate")]
-const LS_HEIGHT_KEY: &str = "rag-admin.tray.height";
+const LS_HEIGHT_KEY: &str = "search-crucible.tray.height";
 
 #[derive(Clone, Copy)]
 pub struct ActivityState {

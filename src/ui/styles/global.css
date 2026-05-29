@@ -53,12 +53,12 @@
 }
 
 :root {
-    color-scheme: dark;
+    color-scheme: light;
     --sidebar-w: 15rem;
 }
 
-[data-theme="light"] {
-    color-scheme: light;
+[data-theme="dark"] {
+    color-scheme: dark;
 }
 
 html,
@@ -257,7 +257,12 @@ a:hover {
     font-family: inherit;
     font-size: 0.8125rem;
     cursor: pointer;
+    text-decoration: none;
     transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.btn:hover {
+    text-decoration: none;
 }
 
 .btn:hover:not(:disabled) {

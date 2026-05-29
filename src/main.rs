@@ -11,13 +11,13 @@ async fn main() {
     use axum::Router;
     use leptos::prelude::*;
     use leptos_axum::{generate_route_list, LeptosRoutes};
-    use rag_admin::app::{shell, App as LeptosApp};
-    use rag_admin::server::api::chat_stream::chat_stream_handler;
-    use rag_admin::server::api::events_ws::events_ws_handler;
-    use rag_admin::server::api::health::health_check;
-    use rag_admin::server::api::sse::job_logs_handler;
-    use rag_admin::server::api::upload::upload_document;
-    use rag_admin::server::setup::bootstrap;
+    use search_crucible::app::{shell, App as LeptosApp};
+    use search_crucible::server::api::chat_stream::chat_stream_handler;
+    use search_crucible::server::api::events_ws::events_ws_handler;
+    use search_crucible::server::api::health::health_check;
+    use search_crucible::server::api::sse::job_logs_handler;
+    use search_crucible::server::api::upload::upload_document;
+    use search_crucible::server::setup::bootstrap;
     use std::sync::Arc;
     use tokio::net::TcpListener;
     use tracing_subscriber::EnvFilter;
@@ -62,7 +62,7 @@ async fn main() {
     let router = app.apply_axum_extensions(router);
 
     let listener = TcpListener::bind(&addr).await.unwrap();
-    tracing::info!("rag-admin listening on http://{}", &addr);
+    tracing::info!("search-crucible listening on http://{}", &addr);
     axum::serve(listener, router.into_make_service())
         .await
         .unwrap();

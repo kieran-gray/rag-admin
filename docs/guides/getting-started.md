@@ -1,13 +1,13 @@
 ---
 title: Getting started
-summary: What rag-admin does and how the pieces fit together.
+summary: What SearchCrucible does and how the pieces fit together.
 section: Getting started
 order: 1
 ---
 
 # Getting started
 
-rag-admin helps you build a retrieval pipeline and measure how well it works. You add documents, index them, then evaluate and tune the settings that control retrieval quality.
+SearchCrucible helps you build a retrieval pipeline and measure how well it works. You add documents, index them, then evaluate and tune the settings that control retrieval quality.
 
 ## The main areas
 

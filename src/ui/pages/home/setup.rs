@@ -5,7 +5,7 @@ use crate::server_functions::configuration::get_configuration;
 use crate::server_functions::evaluation::get_recent_runs;
 use crate::server_functions::source_document::list_documents;
 
-const HIDE_KEY: &str = "rag-admin.setup.hidden";
+const HIDE_KEY: &str = "search-crucible.setup.hidden";
 
 #[component]
 pub(super) fn SetupPanel() -> impl IntoView {

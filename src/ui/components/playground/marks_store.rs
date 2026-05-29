@@ -24,7 +24,7 @@ pub fn next_kind(current: Option<MarkKind>) -> Option<MarkKind> {
 }
 
 #[cfg(feature = "hydrate")]
-const STORAGE_PREFIX: &str = "rag-admin:marks";
+const STORAGE_PREFIX: &str = "search-crucible:marks";
 
 #[cfg(feature = "hydrate")]
 fn storage_key(profile_id: Uuid) -> String {

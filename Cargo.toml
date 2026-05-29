@@ -2,12 +2,12 @@
 members = [".", "packages/event_sourcing"]
 
 [package]
-name = "rag-admin"
+name = "search-crucible"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
 description = "Retrieval Augmented Generation Admin app for chunking, embedding, and indexing documents, with evaluations and autotuning to find optimal settings."
-repository = "https://github.com/kieran-gray/rag-admin"
+repository = "https://github.com/kieran-gray/search-crucible"
 categories = ["RAG", "leptos", "dashboard"]
 keywords = ["RAG", "leptos", "dashboard"]
 
@@ -206,7 +206,7 @@ denylist = [
 skip_feature_sets = [["ssr", "hydrate"], []]
 
 [package.metadata.leptos]
-output-name = "rag_admin"
+output-name = "search_crucible"
 site-root = "target/site"
 site-pkg-dir = "pkg"
 tailwind-input-file = "./src/ui/styles/global.css"

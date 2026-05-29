@@ -55,7 +55,6 @@ web/node_modules/
 
 .codex
 settings.toml
-rag-admin/data/evaluations/*
 
 local_docs
 data

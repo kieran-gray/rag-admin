@@ -6,7 +6,7 @@ use crate::ui::components::primitives::Surface;
 use super::shared::preview;
 
 #[cfg(feature = "hydrate")]
-const PAIRWISE_HISTORY_KEY: &str = "rag-admin:embed-history";
+const PAIRWISE_HISTORY_KEY: &str = "search-crucible:embed-history";
 pub(super) const PAIRWISE_HISTORY_LIMIT: usize = 8;
 
 #[derive(Clone, Serialize, Deserialize)]

@@ -25,10 +25,10 @@ COPY . .
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/app/target,id=rag-admin-target \
+    --mount=type=cache,target=/app/target,id=search-crucible-target \
     cargo leptos build --release -vv \
     && mkdir -p /out \
-    && cp /app/target/release/rag-admin /out/ \
+    && cp /app/target/release/search-crucible /out/ \
     && cp -r /app/target/site /out/site
 
 FROM base AS dev
@@ -49,7 +49,7 @@ RUN apt-get update -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /out/rag-admin /app/
+COPY --from=builder /out/search-crucible /app/
 COPY --from=builder /out/site /app/site
 COPY --from=builder /app/Cargo.toml /app/
 COPY --from=builder /app/docs /app/docs
@@ -59,4 +59,4 @@ ENV LEPTOS_SITE_ADDR="0.0.0.0:3000"
 ENV LEPTOS_SITE_ROOT="site"
 EXPOSE 3000
 
-CMD ["/app/rag-admin"]
+CMD ["/app/search-crucible"]

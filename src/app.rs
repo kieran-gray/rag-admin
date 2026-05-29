@@ -49,8 +49,8 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
                 <script inner_html=THEME_BOOT_SCRIPT />
                 <AutoReload options=options.clone() />
                 <HydrationScripts options />
-                <link rel="stylesheet" id="leptos" href="/pkg/rag_admin.css" />
-                <link rel="shortcut icon" type="image/ico" href="/favicon.ico" />
+                <link rel="stylesheet" id="leptos" href="/pkg/search_crucible.css" />
+                <link rel="shortcut icon" type="image/svg" href="/favicon.svg" />
                 <MetaTags />
             </head>
             <body>
@@ -60,7 +60,7 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
     }
 }
 
-const THEME_BOOT_SCRIPT: &str = "(function(){try{var s=localStorage.getItem('rag-admin-theme');var t=s?s:(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');if(t==='light'){document.documentElement.setAttribute('data-theme','light');}}catch(e){}})();";
+const THEME_BOOT_SCRIPT: &str = "(function(){try{var s=localStorage.getItem('search-crucible-theme');var t=s?s:'light';if(t==='light'){document.documentElement.setAttribute('data-theme','light');}}catch(e){}})();";
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -69,7 +69,7 @@ pub fn App() -> impl IntoView {
     provide_playground_context();
 
     view! {
-        <Title text="rag-admin" />
+        <Title text="SearchCrucible" />
         <Router>
             <AppShell>
                 <Routes fallback=|| view! { <p class="p-8 muted">"Page not found."</p> }>

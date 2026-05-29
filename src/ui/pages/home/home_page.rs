@@ -11,7 +11,7 @@ pub fn HomePage() -> impl IntoView {
     view! {
         <div>
             <PageHeader
-                title="rag-admin"
+                title="SearchCrucible"
                 subtitle="Populate your vector store, then prove its retrieval quality.".to_string()
             />
             <div class="grid gap-6 lg:grid-cols-2">

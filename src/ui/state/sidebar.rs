@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 
 #[cfg(feature = "hydrate")]
-const LS_COLLAPSED_KEY: &str = "rag-admin.sidebar.collapsed";
+const LS_COLLAPSED_KEY: &str = "search-crucible.sidebar.collapsed";
 
 #[derive(Clone, Copy)]
 pub struct SidebarState {
