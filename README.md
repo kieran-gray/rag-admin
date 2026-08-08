@@ -1,4 +1,4 @@
-# search-crucible
+# Chunk evaluation
 
 A Work-In-Progress local-only Leptos app for evaluating retrieval pipelines against your own
 documents. Pull source documents in, run different chunking strategies and
